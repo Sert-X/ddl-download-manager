@@ -41,6 +41,12 @@
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <Button Content="🔄 Aggiorna"
+                            Command="{Binding CheckUpdatesCommand}"
+                            Margin="0,0,12,0"
+                            FontSize="12"
+                            Padding="10,4"
+                            ToolTip.Tip="Controlla aggiornamenti"/>
                     <Border CornerRadius="6" Padding="10,4"
                             Background="{Binding IsProxyActive, Converter={x:Static vm:EnabledProxyToBackgroundConverter.Default}}"
                             BorderBrush="{Binding IsProxyActive, Converter={x:Static vm:EnabledProxyToBrushConverter.Default}}"

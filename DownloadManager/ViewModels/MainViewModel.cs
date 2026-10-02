@@ -953,6 +953,48 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     // ============================================================
+    //  Aggiornamenti
+    // ============================================================
+
+    [RelayCommand]
+    private async Task CheckUpdatesAsync()
+    {
+        try
+        {
+            StatusMessage = "Controllo aggiornamenti...";
+            System.Diagnostics.Debug.WriteLine("[UPDATE] Avvio check aggiornamenti...");
+
+            var mgr = new Velopack.UpdateManager(
+                new Velopack.Sources.GithubSource(
+                    "https://github.com/Sert-X/ddl-download-manager",
+                    accessToken: null,
+                    prerelease: false));
+
+            var update = await mgr.CheckForUpdatesAsync();
+
+            if (update == null)
+            {
+                StatusMessage = "Nessun aggiornamento disponibile.";
+                System.Diagnostics.Debug.WriteLine("[UPDATE] Nessun aggiornamento disponibile");
+                return;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[UPDATE] Trovata versione {update.TargetFullRelease.Version}");
+            StatusMessage = $"Aggiornamento {update.TargetFullRelease.Version} disponibile. Download in corso...";
+
+            await mgr.DownloadUpdatesAsync(update);
+
+            System.Diagnostics.Debug.WriteLine("[UPDATE] Download completato, riavvio...");
+            mgr.ApplyUpdatesAndRestart(update);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Errore update: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"[UPDATE] ECCEZIONE: {ex}");
+        }
+    }
+
+    // ============================================================
     //  ORGANIZZA — ROUTER LOCALE/REMOTO
     // ============================================================
 

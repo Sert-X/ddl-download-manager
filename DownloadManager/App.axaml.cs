@@ -143,24 +143,29 @@ public partial class App : Application
 
             desktop.MainWindow = Services.GetRequiredService<MainWindow>();
 
-            // Check aggiornamenti in background (non blocca l'avvio)
+           // Check aggiornamenti in background (non blocca l'avvio)
             _ = Task.Run(async () =>
             {
                 try
                 {
+                    System.Diagnostics.Debug.WriteLine("[UPDATE] Avvio check aggiornamenti...");
+
                     var mgr = new Velopack.UpdateManager(
                         new Velopack.Sources.GithubSource(
-                            "https://github.com/TUO-UTENTE/ddl-download-manager",
-                            accessToken: null,   // metti un PAT qui se il repo è privato
+                            "https://github.com/Sert-X/ddl-download-manager",
+                            accessToken: null,
                             prerelease: false));
 
+                    System.Diagnostics.Debug.WriteLine("[UPDATE] Chiamo CheckForUpdatesAsync...");
                     var update = await mgr.CheckForUpdatesAsync();
+                    System.Diagnostics.Debug.WriteLine($"[UPDATE] CheckForUpdatesAsync ritornato: {(update == null ? "NULL (nessun update)" : "TROVATO " + update.TargetFullRelease.Version)}");
+
                     if (update == null) return;
 
                     await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
                     {
                         var win = Services!.GetRequiredService<MainWindow>();
-                        var ok = await ConfirmDialog.ShowAsync(
+                        var ok = await Views.ConfirmDialog.ShowAsync(
                             win,
                             $"Nuova versione {update.TargetFullRelease.Version} disponibile.\n\n" +
                             $"Scaricare e installare ora? L'app si riavvierà.",
@@ -168,13 +173,15 @@ public partial class App : Application
 
                         if (!ok) return;
 
+                        System.Diagnostics.Debug.WriteLine("[UPDATE] Scarico...");
                         await mgr.DownloadUpdatesAsync(update);
+                        System.Diagnostics.Debug.WriteLine("[UPDATE] Applico e riavvio...");
                         mgr.ApplyUpdatesAndRestart(update);
                     });
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[UPDATE] {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"[UPDATE] ECCEZIONE: {ex}");
                 }
             });
 
