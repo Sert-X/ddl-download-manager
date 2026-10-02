@@ -1,0 +1,29 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="DownloadManager.Views.ConfirmDialog"
+        Width="460" Height="180"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Title="Conferma">
+    <DockPanel Margin="20">
+        <TextBlock x:Name="PromptText"
+                   DockPanel.Dock="Top"
+                   TextWrapping="Wrap"
+                   FontSize="13"
+                   Margin="0,0,0,12"/>
+
+        <StackPanel DockPanel.Dock="Bottom"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Spacing="10"
+                    Margin="0,15,0,0">
+            <Button x:Name="CancelButton" Content="Annulla" Width="100"
+                    Click="OnCancelClick" IsCancel="True"/>
+            <Button x:Name="OkButton" Content="Conferma" Width="100"
+                    IsDefault="True" Click="OnOkClick"
+                    Background="#F44336" Foreground="White"/>
+        </StackPanel>
+
+        <Border/>
+    </DockPanel>
+</Window>

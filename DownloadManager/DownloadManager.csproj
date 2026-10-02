@@ -1,0 +1,103 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+
+    <!-- ============================================================ -->
+    <!--  METADATI APPLICAZIONE                                        -->
+    <!-- ============================================================ -->
+    <AssemblyName>DDLDownloadManager</AssemblyName>
+    <RootNamespace>DownloadManager</RootNamespace>
+    <Version>1.0.0</Version>
+    <FileVersion>1.0.0.0</FileVersion>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <Product>DDL Download Manager</Product>
+    <Company>DDL</Company>
+    <Description>Download manager per AnimeWorld con organizer locale/remoto e SFTP.</Description>
+    <Copyright>Copyright © 2026</Copyright>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+
+    <!-- ============================================================ -->
+    <!--  PUBLISH — SINGLE FILE SELF-CONTAINED                         -->
+    <!-- ============================================================ -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+
+    <!-- Disattiva AOT: Playwright usa reflection, la rompe -->
+    <PublishAot>false</PublishAot>
+
+    <!-- NON attivare il trimming: rompe Avalonia, Playwright, WinSCP -->
+    <PublishTrimmed>false</PublishTrimmed>
+
+    <!-- ReadyToRun accelera l'avvio (opzionale ma consigliato) -->
+    <PublishReadyToRun>true</PublishReadyToRun>
+
+    <!-- Percorso di WinSCP.exe per la copia accanto all'exe pubblicato -->
+    <WinscpExePath Condition="'$(WinscpExePath)' == ''">$(NuGetPackageRoot)winscp\6.5.7\tools\WinSCP.exe</WinscpExePath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.3" />
+    <PackageReference Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.3">
+      <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
+      <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="Dapper" Version="2.1.89" />
+    <PackageReference Include="ManagedCode.Playwright.Stealth" Version="1.0.1" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Playwright" Version="1.63.0" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
+    <PackageReference Include="WinSCP" Version="6.5.7" />
+  </ItemGroup>
+
+  <!-- ============================================================ -->
+  <!--  COPIA WinSCP.exe ACCANTO ALL'EXE PUBBLICATO                  -->
+  <!-- ============================================================ -->
+  <Target Name="CopyWinscpExe" AfterTargets="Publish"
+          Condition="'$(PublishSingleFile)' == 'true' AND Exists('$(WinscpExePath)')">
+    <Copy SourceFiles="$(WinscpExePath)"
+          DestinationFolder="$(PublishDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <!-- ============================================================ -->
+  <!--  COPIA LA CARTELLA .playwright NELLA CARTELLA DI PUBBLICAZIONE -->
+  <!-- ============================================================ -->
+  <Target Name="CopyPlaywrightFilesToPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <PlaywrightFiles Include="$(OutputPath).playwright\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(PlaywrightFiles)"
+          DestinationFiles="@(PlaywrightFiles->'$(PublishDir).playwright\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyPlaywrightBrowsers" AfterTargets="Publish">
+  <ItemGroup>
+    <PlaywrightBrowsers Include="$(LOCALAPPDATA)\ms-playwright\**\*" />
+  </ItemGroup>
+  <Copy SourceFiles="@(PlaywrightBrowsers)"
+        DestinationFiles="@(PlaywrightBrowsers->'$(PublishDir)ms-playwright\%(RecursiveDir)%(Filename)%(Extension)')"
+        SkipUnchangedFiles="true" />
+</Target>
+</Project>

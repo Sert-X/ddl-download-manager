@@ -1,0 +1,333 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="DownloadManager.App"
+             RequestedThemeVariant="Dark">
+
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+
+                <!-- ============================================ -->
+                <!--  TEMA SCURO (Netflix-like)                   -->
+                <!-- ============================================ -->
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="AppBackgroundBrush">#0B0B0F</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppSurfaceBrush">#16161C</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppSurface2Brush">#1E1E26</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppBorderBrush">#2A2A35</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppTextBrush">#F5F5F7</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppTextMutedBrush">#8E8EA0</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppAccentBrush">#E50914</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppAccentHoverBrush">#F6121D</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppSuccessBrush">#22C55E</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppWarningBrush">#F59E0B</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppDangerBrush">#EF4444</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppInfoBrush">#3B82F6</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppHoverBrush">#22222C</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppSelectedBrush">#2A2A3A</SolidColorBrush>
+                </ResourceDictionary>
+
+                <!-- ============================================ -->
+                <!--  TEMA CHIARO (Netflix-like)                  -->
+                <!-- ============================================ -->
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="AppBackgroundBrush">#F7F7FA</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppSurfaceBrush">#FFFFFF</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppSurface2Brush">#F0F0F5</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppBorderBrush">#E0E0E8</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppTextBrush">#0F0F17</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppTextMutedBrush">#6B6B7B</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppAccentBrush">#E50914</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppAccentHoverBrush">#C50812</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppSuccessBrush">#16A34A</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppWarningBrush">#D97706</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppDangerBrush">#DC2626</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppInfoBrush">#2563EB</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppHoverBrush">#EAEAF0</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppSelectedBrush">#DCDCE8</SolidColorBrush>
+                </ResourceDictionary>
+
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme />
+        <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml"/>
+
+        <!-- ============================================================ -->
+        <!--  WINDOW BACKGROUND                                             -->
+        <!-- ============================================================ -->
+        <Style Selector="Window">
+            <Setter Property="Background" Value="{DynamicResource AppBackgroundBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+            <Setter Property="FontFamily" Value="Inter, Segoe UI, sans-serif"/>
+            <Setter Property="FontSize" Value="13"/>
+        </Style>
+
+        <Style Selector="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+        </Style>
+
+        <!-- ============================================================ -->
+        <!--  TABCONTROL — header grandi in stile streaming                -->
+        <!-- ============================================================ -->
+        <Style Selector="TabControl">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+
+        <Style Selector="TabControl > TabItem">
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}"/>
+            <Setter Property="Padding" Value="18,10"/>
+            <Setter Property="Margin" Value="0,0,4,0"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+
+        <Style Selector="TabControl > TabItem:pointerover /template/ Border#PART_SelectedPipe">
+            <Setter Property="Background" Value="{DynamicResource AppTextMutedBrush}"/>
+        </Style>
+
+        <Style Selector="TabControl > TabItem:selected">
+            <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
+
+        <Style Selector="TabControl > TabItem:selected /template/ Border#PART_SelectedPipe">
+            <Setter Property="Background" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
+
+        <!-- ============================================================ -->
+        <!--  BUTTONS                                                       -->
+        <!-- ============================================================ -->
+        <Style Selector="Button">
+            <Setter Property="Background" Value="{DynamicResource AppSurface2Brush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+        <Style Selector="Button:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppHoverBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
+
+        <Style Selector="Button:pressed /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppSelectedBrush}"/>
+        </Style>
+
+        <!-- Button accento rosso (Netflix style) -->
+        <Style Selector="Button.accent">
+            <Setter Property="Background" Value="{DynamicResource AppAccentBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
+        <Style Selector="Button.accent:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppAccentHoverBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentHoverBrush}"/>
+        </Style>
+
+        <Style Selector="Button.success">
+            <Setter Property="Background" Value="{DynamicResource AppSuccessBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppSuccessBrush}"/>
+        </Style>
+
+        <Style Selector="Button.warning">
+            <Setter Property="Background" Value="{DynamicResource AppWarningBrush}"/>
+            <Setter Property="Foreground" Value="Black"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppWarningBrush}"/>
+        </Style>
+
+        <Style Selector="Button.danger">
+            <Setter Property="Background" Value="{DynamicResource AppDangerBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppDangerBrush}"/>
+        </Style>
+
+        <Style Selector="Button.info">
+            <Setter Property="Background" Value="{DynamicResource AppInfoBrush}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppInfoBrush}"/>
+        </Style>
+
+        <Style Selector="Button.ghost">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+        </Style>
+        <Style Selector="Button.ghost:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppHoverBrush}"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+        </Style>
+
+        <!-- Button circolare per toolbar -->
+        <Style Selector="Button.iconCircle">
+            <Setter Property="Width" Value="36"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="CornerRadius" Value="18"/>
+            <Setter Property="FontSize" Value="14"/>
+        </Style>
+
+        <!-- ============================================================ -->
+        <!--  TEXTBOX                                                       -->
+        <!-- ============================================================ -->
+        <Style Selector="TextBox">
+            <Setter Property="Background" Value="{DynamicResource AppSurface2Brush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="MinHeight" Value="32"/>
+        </Style>
+
+        <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
+
+        <!-- ============================================================ -->
+        <!--  COMBOBOX                                                      -->
+        <!-- ============================================================ -->
+        <Style Selector="ComboBox">
+            <Setter Property="Background" Value="{DynamicResource AppSurface2Brush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="MinHeight" Value="32"/>
+        </Style>
+
+        <Style Selector="ComboBox:pointerover /template/ Border#Background">
+            <Setter Property="Background" Value="{DynamicResource AppHoverBrush}"/>
+        </Style>
+
+        <!-- ============================================================ -->
+        <!--  CHECKBOX / RADIOBUTTON                                        -->
+        <!-- ============================================================ -->
+        <Style Selector="CheckBox">
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+        </Style>
+        <Style Selector="RadioButton">
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+        </Style>
+
+        <!-- ============================================================ -->
+        <!--  CARD / BORDER                                                 -->
+        <!-- ============================================================ -->
+        <Style Selector="Border.card">
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="14"/>
+        </Style>
+
+        <Style Selector="Border.cardElevated">
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="14"/>
+            <Setter Property="BoxShadow" Value="0 4 20 0 #20000000"/>
+        </Style>
+
+        <!-- ============================================================ -->
+        <!--  DATAGRID                                                      -->
+        <!-- ============================================================ -->
+        <Style Selector="DataGrid">
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="GridLinesVisibility" Value="Horizontal"/>
+            <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource AppBorderBrush}"/>
+            <Setter Property="RowBackground" Value="Transparent"/>
+        </Style>
+
+        <Style Selector="DataGridColumnHeader">
+            <Setter Property="Background" Value="{DynamicResource AppSurface2Brush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="10,8"/>
+        </Style>
+
+        <Style Selector="DataGridRow">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="DataGridRow:pointerover /template/ Rectangle#BackgroundRectangle">
+            <Setter Property="Fill" Value="{DynamicResource AppHoverBrush}"/>
+        </Style>
+        <Style Selector="DataGridRow:selected /template/ Rectangle#BackgroundRectangle">
+            <Setter Property="Fill" Value="{DynamicResource AppSelectedBrush}"/>
+        </Style>
+
+        <!-- ============================================================ -->
+        <!--  EXPANDER                                                      -->
+        <!-- ============================================================ -->
+        <Style Selector="Expander">
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
+        </Style>
+
+        <Style Selector="Expander /template/ ToggleButton#PART_toggle">
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}"/>
+        </Style>
+
+        <!-- ============================================================ -->
+        <!--  PROGRESSBAR                                                   -->
+        <!-- ============================================================ -->
+        <Style Selector="ProgressBar">
+            <Setter Property="Background" Value="{DynamicResource AppSurface2Brush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="MinHeight" Value="14"/>
+        </Style>
+
+        <!-- ============================================================ -->
+        <!--  SLIDER                                                        -->
+        <!-- ============================================================ -->
+        <Style Selector="Slider">
+            <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
+
+        <!-- ============================================================ -->
+        <!--  SEPARATOR                                                     -->
+        <!-- ============================================================ -->
+        <Style Selector="Separator">
+            <Setter Property="Background" Value="{DynamicResource AppBorderBrush}"/>
+        </Style>
+
+        <!-- ============================================================ -->
+        <!--  LISTBOX                                                       -->
+        <!-- ============================================================ -->
+        <Style Selector="ListBox">
+            <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>
+        </Style>
+
+        <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppHoverBrush}"/>
+        </Style>
+        <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppSelectedBrush}"/>
+        </Style>
+
+        <!-- ============================================================ -->
+        <!--  SCROLLBAR                                                     -->
+        <!-- ============================================================ -->
+        <Style Selector="ScrollBar">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+    </Application.Styles>
+</Application>

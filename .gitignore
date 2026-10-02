@@ -1,0 +1,30 @@
+# Build
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+.vs/
+.idea/
+.vscode/
+
+# Publish / Releases
+publish/
+[Rr]eleases/
+*.nupkg
+RELEASES*
+
+# NuGet
+packages/
+
+# Sistema
+Thumbs.db
+Desktop.ini
+*.log
+
+# Playwright (scaricato a runtime)
+.playwright/
+
+# Archivi
+*.zip
+*.7z
+*.rar
