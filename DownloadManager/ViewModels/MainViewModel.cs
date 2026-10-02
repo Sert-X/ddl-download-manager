@@ -962,7 +962,6 @@ public partial class MainWindowViewModel : ViewModelBase
         try
         {
             StatusMessage = "Controllo aggiornamenti...";
-            System.Diagnostics.Debug.WriteLine("[UPDATE] Avvio check aggiornamenti...");
 
             var mgr = new Velopack.UpdateManager(
                 new Velopack.Sources.GithubSource(
@@ -970,27 +969,36 @@ public partial class MainWindowViewModel : ViewModelBase
                     accessToken: null,
                     prerelease: false));
 
-            var update = await mgr.CheckForUpdatesAsync();
+            // DIAGNOSTICA: cosa pensa Velopack di essere?
+            var currentVersion = mgr.CurrentVersion;
+            System.Diagnostics.Debug.WriteLine($"[UPDATE] Versione corrente letta da Velopack: {currentVersion}");
 
-            if (update == null)
+            // DIAGNOSTICA: cosa vede GitHub?
+            try
             {
-                StatusMessage = "Nessun aggiornamento disponibile.";
-                System.Diagnostics.Debug.WriteLine("[UPDATE] Nessun aggiornamento disponibile");
-                return;
+                var releases = await mgr.CheckForUpdatesAsync();
+                System.Diagnostics.Debug.WriteLine($"[UPDATE] CheckForUpdatesAsync ritornato: {(releases == null ? "NULL" : releases.TargetFullRelease.Version.ToString())}");
+
+                if (releases == null)
+                {
+                    StatusMessage = $"Nessun aggiornamento. Versione installata: {currentVersion}";
+                    return;
+                }
+
+                StatusMessage = $"Aggiornamento {releases.TargetFullRelease.Version} disponibile (da {currentVersion}). Download...";
+                await mgr.DownloadUpdatesAsync(releases);
+                mgr.ApplyUpdatesAndRestart(releases);
             }
-
-            System.Diagnostics.Debug.WriteLine($"[UPDATE] Trovata versione {update.TargetFullRelease.Version}");
-            StatusMessage = $"Aggiornamento {update.TargetFullRelease.Version} disponibile. Download in corso...";
-
-            await mgr.DownloadUpdatesAsync(update);
-
-            System.Diagnostics.Debug.WriteLine("[UPDATE] Download completato, riavvio...");
-            mgr.ApplyUpdatesAndRestart(update);
+            catch (Exception ex)
+            {
+                StatusMessage = $"Errore check: {ex.Message}";
+                System.Diagnostics.Debug.WriteLine($"[UPDATE] ECCEZIONE check: {ex}");
+            }
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Errore update: {ex.Message}";
-            System.Diagnostics.Debug.WriteLine($"[UPDATE] ECCEZIONE: {ex}");
+            StatusMessage = $"Errore generico: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"[UPDATE] ECCEZIONE generica: {ex}");
         }
     }
 
