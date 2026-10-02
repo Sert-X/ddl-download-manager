@@ -14,9 +14,9 @@
     <!-- ============================================================ -->
     <AssemblyName>DDLDownloadManager</AssemblyName>
     <RootNamespace>DownloadManager</RootNamespace>
-    <Version>1.0.0</Version>
-    <FileVersion>1.0.0.0</FileVersion>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <Version>1.0.1</Version>
+    <FileVersion>1.0.1.0</FileVersion>
+    <AssemblyVersion>1.0.1.0</AssemblyVersion>
     <Product>DDL Download Manager</Product>
     <Company>DDL</Company>
     <Description>Download manager per AnimeWorld con organizer locale/remoto e SFTP.</Description>
@@ -28,9 +28,6 @@
     <!-- ============================================================ -->
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
-    <PublishSingleFile>true</PublishSingleFile>
-    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
 
     <!-- Disattiva AOT: Playwright usa reflection, la rompe -->
     <PublishAot>false</PublishAot>
@@ -68,17 +65,15 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.12" />
     <PackageReference Include="Microsoft.Playwright" Version="1.63.0" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0" />
+    <PackageReference Include="Velopack" Version="1.2.161" />
     <PackageReference Include="WinSCP" Version="6.5.7" />
   </ItemGroup>
 
   <!-- ============================================================ -->
   <!--  COPIA WinSCP.exe ACCANTO ALL'EXE PUBBLICATO                  -->
   <!-- ============================================================ -->
-  <Target Name="CopyWinscpExe" AfterTargets="Publish"
-          Condition="'$(PublishSingleFile)' == 'true' AND Exists('$(WinscpExePath)')">
-    <Copy SourceFiles="$(WinscpExePath)"
-          DestinationFolder="$(PublishDir)"
-          SkipUnchangedFiles="true" />
+  <Target Name="CopyWinscpExe" AfterTargets="Publish" Condition="'$(PublishSingleFile)' == 'true' AND Exists('$(WinscpExePath)')">
+    <Copy SourceFiles="$(WinscpExePath)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
   </Target>
 
   <!-- ============================================================ -->
@@ -88,16 +83,12 @@
     <ItemGroup>
       <PlaywrightFiles Include="$(OutputPath).playwright\**\*" />
     </ItemGroup>
-    <Copy SourceFiles="@(PlaywrightFiles)"
-          DestinationFiles="@(PlaywrightFiles->'$(PublishDir).playwright\%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(PlaywrightFiles)" DestinationFiles="@(PlaywrightFiles->'$(PublishDir).playwright\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
   <Target Name="CopyPlaywrightBrowsers" AfterTargets="Publish">
   <ItemGroup>
     <PlaywrightBrowsers Include="$(LOCALAPPDATA)\ms-playwright\**\*" />
   </ItemGroup>
-  <Copy SourceFiles="@(PlaywrightBrowsers)"
-        DestinationFiles="@(PlaywrightBrowsers->'$(PublishDir)ms-playwright\%(RecursiveDir)%(Filename)%(Extension)')"
-        SkipUnchangedFiles="true" />
+  <Copy SourceFiles="@(PlaywrightBrowsers)" DestinationFiles="@(PlaywrightBrowsers->'$(PublishDir)ms-playwright\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
 </Target>
 </Project>

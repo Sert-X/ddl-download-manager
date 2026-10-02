@@ -143,6 +143,41 @@ public partial class App : Application
 
             desktop.MainWindow = Services.GetRequiredService<MainWindow>();
 
+            // Check aggiornamenti in background (non blocca l'avvio)
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var mgr = new Velopack.UpdateManager(
+                        new Velopack.Sources.GithubSource(
+                            "https://github.com/TUO-UTENTE/ddl-download-manager",
+                            accessToken: null,   // metti un PAT qui se il repo è privato
+                            prerelease: false));
+
+                    var update = await mgr.CheckForUpdatesAsync();
+                    if (update == null) return;
+
+                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+                    {
+                        var win = Services!.GetRequiredService<MainWindow>();
+                        var ok = await ConfirmDialog.ShowAsync(
+                            win,
+                            $"Nuova versione {update.TargetFullRelease.Version} disponibile.\n\n" +
+                            $"Scaricare e installare ora? L'app si riavvierà.",
+                            "Aggiornamento disponibile");
+
+                        if (!ok) return;
+
+                        await mgr.DownloadUpdatesAsync(update);
+                        mgr.ApplyUpdatesAndRestart(update);
+                    });
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[UPDATE] {ex.Message}");
+                }
+            });
+
             desktop.ShutdownRequested += (s, e) =>
             {
                 try
