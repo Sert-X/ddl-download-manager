@@ -150,34 +150,52 @@ public partial class App : Application
                 {
                     System.Diagnostics.Debug.WriteLine("[UPDATE] Avvio check aggiornamenti...");
 
+                    // Attendi che la MainWindow sia effettivamente visibile
+                    await Task.Delay(3000);
+
                     var mgr = new Velopack.UpdateManager(
                         new Velopack.Sources.GithubSource(
                             "https://github.com/Sert-X/ddl-download-manager",
                             accessToken: null,
                             prerelease: false));
 
-                    System.Diagnostics.Debug.WriteLine("[UPDATE] Chiamo CheckForUpdatesAsync...");
                     var update = await mgr.CheckForUpdatesAsync();
-                    System.Diagnostics.Debug.WriteLine($"[UPDATE] CheckForUpdatesAsync ritornato: {(update == null ? "NULL (nessun update)" : "TROVATO " + update.TargetFullRelease.Version)}");
 
-                    if (update == null) return;
-
-                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+                    if (update == null)
                     {
-                        var win = Services!.GetRequiredService<MainWindow>();
-                        var ok = await Views.ConfirmDialog.ShowAsync(
+                        System.Diagnostics.Debug.WriteLine("[UPDATE] Nessun aggiornamento.");
+                        return;
+                    }
+
+                    System.Diagnostics.Debug.WriteLine($"[UPDATE] Trovata versione {update.TargetFullRelease.Version}");
+
+                    var newVersion = update.TargetFullRelease.Version.ToString();
+                    var packageSize = update.TargetFullRelease.Size;
+
+                    var choice = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+                    {
+                        var win = desktop.MainWindow;
+                        if (win == null) return UpdateChoice.Cancel;
+
+                        return await Views.UpdateDialog.ShowAsync(
                             win,
-                            $"Nuova versione {update.TargetFullRelease.Version} disponibile.\n\n" +
-                            $"Scaricare e installare ora? L'app si riavvierà.",
-                            "Aggiornamento disponibile");
-
-                        if (!ok) return;
-
-                        System.Diagnostics.Debug.WriteLine("[UPDATE] Scarico...");
-                        await mgr.DownloadUpdatesAsync(update);
-                        System.Diagnostics.Debug.WriteLine("[UPDATE] Applico e riavvio...");
-                        mgr.ApplyUpdatesAndRestart(update);
+                            newVersion,
+                            packageSize,
+                            async progress =>
+                            {
+                                await mgr.DownloadUpdatesAsync(update, p => progress(p));
+                            });
                     });
+
+                    switch (choice)
+                    {
+                        case UpdateChoice.InstallNow:
+                            mgr.ApplyUpdatesAndRestart(update);
+                            break;
+                        case UpdateChoice.InstallLater:
+                            mgr.WaitExitThenApplyUpdates(update);
+                            break;
+                    }
                 }
                 catch (Exception ex)
                 {

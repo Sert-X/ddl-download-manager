@@ -12,6 +12,7 @@ using DownloadManager.Services.Download;
 using DownloadManager.Services.FileOrganizer;
 using DownloadManager.Services.Logging;
 using DownloadManager.Services.Sftp;
+using Avalonia.Controls;
 
 namespace DownloadManager.ViewModels;
 
@@ -969,37 +970,72 @@ public partial class MainWindowViewModel : ViewModelBase
                     accessToken: null,
                     prerelease: false));
 
-            // DIAGNOSTICA: cosa pensa Velopack di essere?
-            var currentVersion = mgr.CurrentVersion;
-            System.Diagnostics.Debug.WriteLine($"[UPDATE] Versione corrente letta da Velopack: {currentVersion}");
+            var update = await mgr.CheckForUpdatesAsync();
 
-            // DIAGNOSTICA: cosa vede GitHub?
-            try
+            if (update == null)
             {
-                var releases = await mgr.CheckForUpdatesAsync();
-                System.Diagnostics.Debug.WriteLine($"[UPDATE] CheckForUpdatesAsync ritornato: {(releases == null ? "NULL" : releases.TargetFullRelease.Version.ToString())}");
-
-                if (releases == null)
-                {
-                    StatusMessage = $"Nessun aggiornamento. Versione installata: {currentVersion}";
-                    return;
-                }
-
-                StatusMessage = $"Aggiornamento {releases.TargetFullRelease.Version} disponibile (da {currentVersion}). Download...";
-                await mgr.DownloadUpdatesAsync(releases);
-                mgr.ApplyUpdatesAndRestart(releases);
+                StatusMessage = "Nessun aggiornamento disponibile.";
+                return;
             }
-            catch (Exception ex)
+
+            var newVersion = update.TargetFullRelease.Version.ToString();
+            var packageSize = update.TargetFullRelease.Size;
+
+            System.Diagnostics.Debug.WriteLine($"[UPDATE] Trovata versione {newVersion} ({packageSize} bytes)");
+
+            // Mostra il dialog. La logica di download è passata come callback al dialog.
+            var choice = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
             {
-                StatusMessage = $"Errore check: {ex.Message}";
-                System.Diagnostics.Debug.WriteLine($"[UPDATE] ECCEZIONE check: {ex}");
+                var win = GetOwnerWindow();
+                if (win == null) return UpdateChoice.Cancel;
+
+                return await Views.UpdateDialog.ShowAsync(
+                    win,
+                    newVersion,
+                    packageSize,
+                    async progress =>
+                    {
+                        // Velopack chiama progress(0..100)
+                        await mgr.DownloadUpdatesAsync(update, p => progress(p));
+                    });
+            });
+
+            switch (choice)
+            {
+                case UpdateChoice.InstallNow:
+                    StatusMessage = $"Riavvio per installare la versione {newVersion}...";
+                    mgr.ApplyUpdatesAndRestart(update);
+                    break;
+
+                case UpdateChoice.InstallLater:
+                    StatusMessage = $"L'aggiornamento {newVersion} verrà applicato al prossimo avvio.";
+                    mgr.WaitExitThenApplyUpdates(update);
+                    break;
+
+                case UpdateChoice.Cancel:
+                default:
+                    StatusMessage = "Aggiornamento annullato.";
+                    break;
             }
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Errore generico: {ex.Message}";
-            System.Diagnostics.Debug.WriteLine($"[UPDATE] ECCEZIONE generica: {ex}");
+            StatusMessage = $"Errore update: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"[UPDATE] ECCEZIONE: {ex}");
         }
+    }
+
+    /// <summary>
+    /// Ritorna la finestra principale per far aprire i dialog modali al centro di essa.
+    /// </summary>
+    private Window? GetOwnerWindow()
+    {
+        if (Avalonia.Application.Current?.ApplicationLifetime
+            is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            return desktop.MainWindow;
+        }
+        return null;
     }
 
     // ============================================================

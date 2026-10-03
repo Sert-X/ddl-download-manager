@@ -1,0 +1,133 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="DownloadManager.Views.UpdateDialog"
+        Title="Aggiornamento disponibile"
+        Width="520" Height="360"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        ShowInTaskbar="False"
+        Background="{DynamicResource AppSurfaceBrush}">
+
+    <Grid RowDefinitions="Auto, *, Auto" Margin="24">
+
+        <!-- Intestazione -->
+        <StackPanel Grid.Row="0" Spacing="6" Margin="0,0,0,16">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+                <TextBlock Text="🔄" FontSize="28" VerticalAlignment="Center"/>
+                <TextBlock x:Name="TitleText"
+                           Text="Aggiornamento disponibile"
+                           FontSize="18" FontWeight="Bold"
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+            <TextBlock x:Name="SubtitleText"
+                       Text=""
+                       FontSize="13"
+                       Foreground="{DynamicResource AppTextMutedBrush}"
+                       TextWrapping="Wrap"/>
+        </StackPanel>
+
+        <!-- Contenuto variabile per fase -->
+        <Border Grid.Row="1"
+                Background="{DynamicResource AppSurface2Brush}"
+                CornerRadius="8"
+                Padding="16">
+
+            <Grid>
+
+                <!-- FASE 1: conferma -->
+                <StackPanel x:Name="ConfirmPanel" Spacing="12" VerticalAlignment="Center">
+                    <TextBlock x:Name="VersionInfoText"
+                            FontSize="14"
+                            TextWrapping="Wrap"/>
+
+                    <TextBlock Text="Cosa vuoi fare?"
+                            FontWeight="SemiBold" Margin="0,8,0,0"/>
+
+                    <TextBlock Text="• Aggiorna ora: scarica e installa subito"
+                            FontSize="12"
+                            Foreground="{DynamicResource AppTextMutedBrush}"/>
+                    <TextBlock Text="• Più tardi: nessuna azione adesso"
+                            FontSize="12"
+                            Foreground="{DynamicResource AppTextMutedBrush}"/>
+                </StackPanel>
+
+                <!-- FASE 2: download in corso -->
+                <StackPanel x:Name="DownloadPanel" Spacing="14" VerticalAlignment="Center" IsVisible="False">
+                    <TextBlock Text="Download in corso..."
+                            FontWeight="SemiBold" FontSize="14"/>
+
+                    <ProgressBar x:Name="ProgressBarCtrl"
+                                Minimum="0" Maximum="100"
+                                Value="0"
+                                Height="20"/>
+
+                    <Grid ColumnDefinitions="*, *, *">
+                        <StackPanel Grid.Column="0" Spacing="2">
+                            <TextBlock Text="Scaricato" FontSize="11"
+                                    Foreground="{DynamicResource AppTextMutedBrush}"/>
+                            <TextBlock x:Name="BytesText" Text="0 B / 0 B"
+                                    FontWeight="SemiBold" FontSize="12"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Spacing="2">
+                            <TextBlock Text="Velocità" FontSize="11"
+                                    Foreground="{DynamicResource AppTextMutedBrush}"/>
+                            <TextBlock x:Name="SpeedText" Text="-"
+                                    FontWeight="SemiBold" FontSize="12"
+                                    Foreground="{DynamicResource AppSuccessBrush}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Spacing="2">
+                            <TextBlock Text="Tempo rimanente" FontSize="11"
+                                    Foreground="{DynamicResource AppTextMutedBrush}"/>
+                            <TextBlock x:Name="EtaText" Text="-"
+                                    FontWeight="SemiBold" FontSize="12"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock x:Name="PercentText" Text="0%"
+                            FontSize="11"
+                            HorizontalAlignment="Right"
+                            Foreground="{DynamicResource AppTextMutedBrush}"/>
+                </StackPanel>
+
+                <!-- FASE 3: pronto per riavvio -->
+                <StackPanel x:Name="ReadyPanel" Spacing="12" VerticalAlignment="Center" IsVisible="False">
+                    <TextBlock Text="✅ Download completato!"
+                            FontWeight="Bold" FontSize="14"
+                            Foreground="{DynamicResource AppSuccessBrush}"/>
+
+                    <TextBlock Text="L'app deve riavviarsi per applicare l'aggiornamento."
+                            TextWrapping="Wrap"/>
+
+                    <TextBlock Text="• Riavvia ora: l'app si chiude e si riapre subito aggiornata"
+                            FontSize="12"
+                            Foreground="{DynamicResource AppTextMutedBrush}"/>
+                    <TextBlock Text="• Al prossimo avvio: l'aggiornamento verrà applicato quando chiudi l'app"
+                            FontSize="12"
+                            Foreground="{DynamicResource AppTextMutedBrush}"/>
+                </StackPanel>
+
+                <!-- FASE 4: errore -->
+                <StackPanel x:Name="ErrorPanel" Spacing="12" VerticalAlignment="Center" IsVisible="False">
+                    <TextBlock Text="❌ Errore durante l'aggiornamento"
+                            FontWeight="Bold" FontSize="14"
+                            Foreground="{DynamicResource AppDangerBrush}"/>
+                    <TextBlock x:Name="ErrorText"
+                            TextWrapping="Wrap"
+                            FontFamily="Consolas,Menlo,monospace"
+                            FontSize="11"/>
+                </StackPanel>
+
+            </Grid>
+        </Border>
+
+        <!-- Bottoni -->
+        <StackPanel Grid.Row="2"
+                    x:Name="ButtonsPanel"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Spacing="10"
+                    Margin="0,16,0,0">
+            <!-- I bottoni vengono popolati dal code-behind -->
+        </StackPanel>
+    </Grid>
+</Window>
