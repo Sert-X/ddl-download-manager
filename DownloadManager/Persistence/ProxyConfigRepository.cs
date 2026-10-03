@@ -40,7 +40,7 @@ public class ProxyConfigRepository
             );
         ");
 
-        // Migrazione: aggiungi le colonne se non esistono
+        // Migrazione per DB esistenti creati prima che TestResult/LastTested esistessero
         await TryAddColumnAsync(conn, "Proxies", "TestResult", "TEXT");
         await TryAddColumnAsync(conn, "Proxies", "LastTested", "TEXT");
     }
@@ -87,8 +87,8 @@ public class ProxyConfigRepository
     {
         using var conn = Open();
         var id = await conn.ExecuteScalarAsync<long>(@"
-            INSERT INTO Proxies (Name, Protocol, Host, Port, Auth, Username, PasswordEnc, IsEnabled, LastTested)
-            VALUES (@Name, @Protocol, @Host, @Port, @Auth, @Username, @PasswordEnc, @IsEnabled, @LastTested);
+            INSERT INTO Proxies (Name, Protocol, Host, Port, Auth, Username, PasswordEnc, IsEnabled, TestResult, LastTested)
+            VALUES (@Name, @Protocol, @Host, @Port, @Auth, @Username, @PasswordEnc, @IsEnabled, @TestResult, @LastTested);
             SELECT last_insert_rowid();",
             new
             {
@@ -113,7 +113,7 @@ public class ProxyConfigRepository
             UPDATE Proxies SET
                 Name = @Name, Protocol = @Protocol, Host = @Host, Port = @Port,
                 Auth = @Auth, Username = @Username, PasswordEnc = @PasswordEnc,
-                IsEnabled = @IsEnabled, LastTested = @LastTested
+                IsEnabled = @IsEnabled, TestResult = @TestResult, LastTested = @LastTested
             WHERE Id = @Id",
             new
             {
