@@ -50,6 +50,18 @@ public partial class MainWindow : Window
             if (ToggleLogButton != null) ToggleLogButton.Content = "▼";
         }
     }
+    private bool _sftpConfigCollapsed;
+
+    private void OnToggleSftpConfigClick(object? sender, RoutedEventArgs e)
+    {
+        _sftpConfigCollapsed = !_sftpConfigCollapsed;
+
+        if (SftpConfigBody != null)
+            SftpConfigBody.IsVisible = !_sftpConfigCollapsed;
+
+        if (ToggleSftpConfigButton != null)
+            ToggleSftpConfigButton.Content = _sftpConfigCollapsed ? "▼" : "▲";
+    }
 
     public MainWindow(MainWindowViewModel viewModel, ISftpService sftpService)
     {

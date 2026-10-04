@@ -35,7 +35,7 @@
                                 CornerRadius="4"
                                 Padding="6,2"
                                 VerticalAlignment="Center">
-                            <TextBlock Text="v1.0.4" FontSize="11" FontWeight="Bold" Foreground="White"/>
+                            <TextBlock Text="v1.0.6" FontSize="11" FontWeight="Bold" Foreground="White"/>
                         </Border>
                     </StackPanel>
                 </StackPanel>
@@ -47,7 +47,7 @@
                             FontSize="12"
                             Padding="10,4"
                             ToolTip.Tip="Controlla aggiornamenti"/>
-                            
+
                     <Border Classes="proxyBadge"
                             Classes.proxyActive="{Binding IsProxyActive}"
                             Margin="0,0,12,0">
@@ -995,8 +995,17 @@
                     <!-- Configurazione SFTP -->
                     <Border DockPanel.Dock="Top" Classes="cardElevated" Margin="0,0,0,12">
                         <StackPanel Spacing="12">
-                            <TextBlock Text="Configurazione connessione SFTP"
-                                       FontWeight="Bold" FontSize="14"/>
+                            <Grid ColumnDefinitions="*, Auto">
+                                <TextBlock Grid.Column="0" Text="Configurazione connessione SFTP"
+                                        FontWeight="Bold" FontSize="14"
+                                        VerticalAlignment="Center"/>
+                                <Button Grid.Column="1" x:Name="ToggleSftpConfigButton"
+                                        Content="▲" FontSize="11" Padding="8,3"
+                                        Click="OnToggleSftpConfigClick"
+                                        ToolTip.Tip="Mostra / nascondi dettagli configurazione"/>
+                            </Grid>
+
+                            <StackPanel x:Name="SftpConfigBody" Spacing="12">
 
                             <Grid ColumnDefinitions="Auto, *, Auto, Auto, Auto">
                                 <TextBlock Grid.Column="0" Text="Profilo:" VerticalAlignment="Center"
@@ -1088,9 +1097,10 @@
                                         IsVisible="{Binding IsSftpConnected}"/>
                             </StackPanel>
 
-                            <TextBlock Text="{Binding SftpStatusMessage}"
+                                <TextBlock Text="{Binding SftpStatusMessage}"
                                        Foreground="{DynamicResource AppTextMutedBrush}"
                                        FontStyle="Italic"/>
+                            </StackPanel>
                         </StackPanel>
                     </Border>
 
@@ -1150,6 +1160,7 @@
                                         </Grid>
 
                                         <DataGrid Name="LocalFilesGrid"
+                                                  Height="500"
                                                   ItemsSource="{Binding SftpLocalEntries}"
                                                   ScrollViewer.HorizontalScrollBarVisibility="Auto"
                                                   SelectedItem="{Binding SftpSelectedLocalEntry, Mode=TwoWay}"
@@ -1277,29 +1288,20 @@
                                                 CornerRadius="6"
                                                 Padding="10,4"
                                                 Margin="0,0,0,6">
-                                            <Grid ColumnDefinitions="Auto, *">
-                                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8"
-                                                            IsVisible="{Binding IsCheckingZeroByte}">
-                                                    <TextBlock Text="🔍" FontSize="12" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="{Binding ZeroByteCheckStatus}"
-                                                            FontSize="11"
-                                                            FontStyle="Italic"
-                                                            Foreground="{DynamicResource AppTextMutedBrush}"
-                                                            VerticalAlignment="Center"/>
-                                                </StackPanel>
-                                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8"
-                                                            IsVisible="{Binding IsRefreshingRemote}">
-                                                    <TextBlock Text="🔄" FontSize="12" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="Lettura cartella in corso..."
-                                                            FontSize="11"
-                                                            FontStyle="Italic"
-                                                            Foreground="{DynamicResource AppTextMutedBrush}"
-                                                            VerticalAlignment="Center"/>
-                                                </StackPanel>
-                                            </Grid>
+                                            <StackPanel Orientation="Horizontal" Spacing="8"
+                                                        IsVisible="{Binding HasRemoteStatus}">
+                                                <TextBlock Text="{Binding RemoteStatusIcon}"
+                                                        FontSize="12" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{Binding RemoteStatusText}"
+                                                        FontSize="11"
+                                                        FontStyle="Italic"
+                                                        Foreground="{DynamicResource AppTextMutedBrush}"
+                                                        VerticalAlignment="Center"/>
+                                            </StackPanel>
                                         </Border>
 
                                         <DataGrid Name="RemoteFilesGrid"
+                                                  Height="500"
                                                   ItemsSource="{Binding SftpRemoteEntries}"
                                                   ScrollViewer.HorizontalScrollBarVisibility="Auto"
                                                   SelectedItem="{Binding SftpSelectedRemoteEntry, Mode=TwoWay}"
@@ -1555,9 +1557,8 @@
             </TabItem>
 
 
-                    <!-- ================================================ -->
-            <!--  TAB PROXY                                       -->
             <!-- ================================================ -->
+            <!--  TAB PROXY                                       -->
             <TabItem Header="🌐  Proxy">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <DockPanel Margin="0,10,0,0">

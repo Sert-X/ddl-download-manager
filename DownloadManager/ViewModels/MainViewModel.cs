@@ -39,7 +39,9 @@ public partial class MainWindowViewModel : ViewModelBase
     // Cache dell'esito del check 0-byte per le cartelle già controllate.
     // Chiave: FullPath della cartella. Valore: true se contiene file da 0 byte.
     private readonly Dictionary<string, bool> _zeroByteFolderCache = new(StringComparer.OrdinalIgnoreCase);
-
+    // Cache dei conteggi (ContentsInfo) per le cartelle già controllate.
+    // Chiave: FullPath normalizzato. Valore: "N cartelle, M file".
+    private readonly Dictionary<string, string> _folderContentsCache = new(StringComparer.OrdinalIgnoreCase);
     // --- Ricerca ---
     [ObservableProperty] private string _searchQuery = string.Empty;
     [ObservableProperty] private string _statusMessage = "Pronto. Premi 'Cerca' per iniziare.";
@@ -1992,9 +1994,18 @@ public partial class MainWindowViewModel : ViewModelBase
                 foreach (var e in entries)
                 {
                     if (!e.IsDirectory)
+                    {
                         e.HasZeroByteIssue = e.Size == 0;
+                    }
                     else
-                        e.HasZeroByteIssue = _zeroByteFolderCache.TryGetValue(e.FullPath, out var flag) && flag;
+                    {
+                        var normalized = e.FullPath.TrimEnd('/');
+                        e.HasZeroByteIssue = _zeroByteFolderCache.TryGetValue(normalized, out var flag) && flag;
+
+                        // Applica ContentsInfo se il check 🔍 ha già processato questa cartella
+                        if (_folderContentsCache.TryGetValue(normalized, out var cachedInfo))
+                            e.ContentsInfo = cachedInfo;
+                    }
                 }
 
                 var sorted = SortRemoteEntries(entries, RemoteSortOption.Mode, RemoteSortAscending);
@@ -2198,13 +2209,6 @@ public partial class MainWindowViewModel : ViewModelBase
         if (IsCheckingZeroByte) return;
 
         var folders = SftpRemoteEntries.Where(e => e.IsDirectory).ToList();
-
-        // Popola ContentsInfo anche per i file visibili (solo data ultima modifica)
-        foreach (var file in SftpRemoteEntries.Where(e => !e.IsDirectory))
-        {
-            file.ContentsInfo = $"Ultima modifica: {file.Modified:dd/MM/yyyy HH:mm}";
-        }
-
         if (folders.Count == 0)
         {
             SftpStatusMessage = "Nessuna cartella da controllare.";
@@ -2212,82 +2216,112 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         IsCheckingZeroByte = true;
+        ZeroByteCheckStatus = "Avvio check 0-byte in corso...";   // ← nuova riga
         _zeroByteCheckCts = new CancellationTokenSource();
         var token = _zeroByteCheckCts.Token;
 
         int scanned = 0;
         int flagged = 0;
         int checkedTop = 0;
-        int totalFiles = 0;
-        int totalDirs = 0;
+        int consecutiveErrors = 0;
+        const int maxConsecutiveErrors = 5;
         const int maxDepth = 3;
         const int maxFolders = 300;
-
-        var logLines = new List<string>();
 
         try
         {
             foreach (var folder in folders)
             {
-                if (!IsSftpConnected) break;
+                if (!IsSftpConnected)
+                {
+                    System.Diagnostics.Debug.WriteLine("[ZERO-BYTE-CHECK] Fermato: SFTP disconnesso");
+                    break;
+                }
                 if (scanned >= maxFolders) break;
                 if (token.IsCancellationRequested) break;
+                if (consecutiveErrors >= maxConsecutiveErrors)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[ZERO-BYTE-CHECK] Fermato: {consecutiveErrors} errori consecutivi (server giù?)");
+                    SftpStatusMessage = $"Check interrotto dopo {consecutiveErrors} errori consecutivi. Il server è ancora raggiungibile?";
+                    break;
+                }
 
                 checkedTop++;
 
-                ZeroByteCheckStatus = $"Controllo {checkedTop}/{folders.Count}: {folder.Name}...";
-
-                var (hasZero, fileCount, dirCount, lastModified) =
-                    await ScanFolderForZeroBytesAsync(
-                        folder.FullPath, maxDepth, maxFolders,
-                        () => scanned, v => scanned = v,
-                        token);
-
-                totalFiles += fileCount;
-                totalDirs += dirCount;
-
-                var summary = $"{dirCount} cartelle, {fileCount} file";
-
-                await Dispatcher.UIThread.InvokeAsync(() =>
+                try
                 {
-                    folder.HasZeroByteIssue = hasZero;
-                    folder.ContentsInfo = summary;
-                });
+                    ZeroByteCheckStatus = $"Controllo {checkedTop}/{folders.Count}: {folder.Name}...";
 
-                _zeroByteFolderCache[folder.FullPath] = hasZero;
-                if (hasZero) flagged++;
+                    var (hasZero, fileCount, dirCount, lastModified) =
+                        await ScanFolderForZeroBytesAsync(
+                            folder.FullPath, maxDepth, maxFolders,
+                            () => scanned, v => scanned = v,
+                            token);
 
-                logLines.Add($"{folder.Name}: {summary}{(hasZero ? " ⚠️ file a 0 byte" : "")}");
+                    // Se nessun elemento è stato letto E il conteggio era 0/0, sospetto errore
+                    if (fileCount == 0 && dirCount == 0)
+                        consecutiveErrors++;
+                    else
+                        consecutiveErrors = 0;
 
-                ZeroByteCheckStatus = $"Controllo {checkedTop}/{folders.Count}: {folder.Name} — {summary}";
-            }
+                    var summary = $"{dirCount} cartelle, {fileCount} file";
 
-            // Scrivi riepilogo nel log globale
-            foreach (var line in logLines)
-            {
-                System.Diagnostics.Debug.WriteLine($"[ZERO-BYTE-CHECK] {line}");
+                    await Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        folder.HasZeroByteIssue = hasZero;
+                        folder.ContentsInfo = summary;
+
+                        var normalized = folder.FullPath.TrimEnd('/');
+                        var visible = SftpRemoteEntries.FirstOrDefault(x =>
+                            string.Equals(x.FullPath.TrimEnd('/'), normalized, StringComparison.OrdinalIgnoreCase));
+
+                        if (visible != null && !ReferenceEquals(visible, folder))
+                        {
+                            visible.HasZeroByteIssue = hasZero;
+                            visible.ContentsInfo = summary;
+                        }
+                    });
+
+                    var normalizedPath = folder.FullPath.TrimEnd('/');
+                    _zeroByteFolderCache[normalizedPath] = hasZero;
+                    _folderContentsCache[normalizedPath] = summary;
+
+                    if (hasZero) flagged++;
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    consecutiveErrors++;
+                    System.Diagnostics.Debug.WriteLine($"[ZERO-BYTE-CHECK] Errore su {folder.FullPath}: {ex.Message}");
+                }
             }
 
             if (token.IsCancellationRequested)
             {
-                SftpStatusMessage = $"Check interrotto: controllate {checkedTop}/{folders.Count} cartelle ({flagged} con file vuoti).";
+                SftpStatusMessage = $"Check interrotto: {checkedTop}/{folders.Count} cartelle ({flagged} con file vuoti).";
             }
             else if (scanned >= maxFolders)
             {
-                SftpStatusMessage = $"Controllate {checkedTop} cartelle (raggiunto limite {maxFolders}): {flagged} con file vuoti.";
+                SftpStatusMessage = $"Controllate {checkedTop} cartelle (limite {maxFolders}): {flagged} con file vuoti.";
+            }
+            else if (consecutiveErrors >= maxConsecutiveErrors)
+            {
+                // già impostato sopra
             }
             else
             {
                 SftpStatusMessage = flagged == 0
-                    ? $"Controllate {checkedTop} cartelle ({totalDirs} sottocartelle, {totalFiles} file): nessuna contiene file vuoti."
-                    : $"Controllate {checkedTop} cartelle ({totalDirs} sottocartelle, {totalFiles} file): {flagged} contengono file vuoti (evidenziate in rosso).";
+                    ? $"Controllate {checkedTop} cartelle: nessuna contiene file vuoti."
+                    : $"Controllate {checkedTop} cartelle: {flagged} contengono file vuoti (evidenziate in rosso).";
             }
         }
         finally
         {
             IsCheckingZeroByte = false;
             ZeroByteCheckStatus = string.Empty;
-
             _zeroByteCheckCts?.Dispose();
             _zeroByteCheckCts = null;
         }
@@ -2461,6 +2495,45 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         SftpCurrentLocalPath = path;
         _ = SftpRefreshLocalAsync();
+    }
+
+    // Status bar remoto (unico, con priorità al check)
+    public string RemoteStatusText
+    {
+        get
+        {
+            if (IsCheckingZeroByte)
+            {
+                return string.IsNullOrEmpty(ZeroByteCheckStatus)
+                    ? "Avvio check 0-byte in corso..."
+                    : ZeroByteCheckStatus;
+            }
+            if (IsRefreshingRemote) return "Lettura cartella in corso...";
+            return "";
+        }
+    }
+
+    public string RemoteStatusIcon => IsCheckingZeroByte ? "🔍" : "🔄";
+
+    public bool HasRemoteStatus => !string.IsNullOrEmpty(RemoteStatusText);
+
+    partial void OnIsCheckingZeroByteChanged(bool value)
+    {
+        OnPropertyChanged(nameof(RemoteStatusText));
+        OnPropertyChanged(nameof(RemoteStatusIcon));
+        OnPropertyChanged(nameof(HasRemoteStatus));
+    }
+
+    partial void OnZeroByteCheckStatusChanged(string value)
+    {
+        OnPropertyChanged(nameof(RemoteStatusText));
+    }
+
+    partial void OnIsRefreshingRemoteChanged(bool value)
+    {
+        OnPropertyChanged(nameof(RemoteStatusText));
+        OnPropertyChanged(nameof(RemoteStatusIcon));
+        OnPropertyChanged(nameof(HasRemoteStatus));
     }
 
     // ============================================================

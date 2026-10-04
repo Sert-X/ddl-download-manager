@@ -1013,14 +1013,27 @@ public class FileOrganizerService : IFileOrganizerService
 
     private static string ExtractSeriesName(string fileName)
     {
-        var match = EpisodeStartRegex.Match(fileName);
-        if (match.Success && match.Index > 0)
-            return CleanSeriesName(fileName.Substring(0, match.Index));
+        // 1. Preferisci tagliare prima di un marker esplicito (Ep 5, Episode 5, Puntata 5)
+        var marker = EpisodeMarkerRegex.Match(fileName);
+        if (marker.Success && marker.Index > 0)
+            return CleanSeriesName(fileName.Substring(0, marker.Index));
+
+        // 2. Altrimenti taglia prima dell'ULTIMO numero isolato
+        // (che è l'episodio), non del primo che potrebbe essere parte del titolo.
+        var isolated = IsolatedNumberRegex.Matches(fileName);
+        if (isolated.Count > 0)
+        {
+            var last = isolated[isolated.Count - 1];
+            if (last.Index > 0)
+                return CleanSeriesName(fileName.Substring(0, last.Index));
+        }
+
         return CleanSeriesName(fileName);
     }
 
     private static EpisodeInfo ExtractEpisodeInfo(string fileName)
     {
+        // 1. Marker esplicito (Ep, Episode, Puntata, E, P)
         var m1 = EpisodeMarkerRegex.Match(fileName);
         if (m1.Success)
         {
@@ -1028,13 +1041,18 @@ public class FileOrganizerService : IFileOrganizerService
             if (info.Start > 0) return info;
         }
 
+        // 2. Numeri isolati: prendi L'ULTIMO, non il primo.
+        // L'episodio è quasi sempre l'ultimo numero prima dell'estensione/tag,
+        // mentre il primo numero può far parte del titolo (es. "L'Uomo Tigre 2 (ITA) - 001").
         var isolatedMatches = IsolatedNumberRegex.Matches(fileName);
-        foreach (Match m in isolatedMatches)
+        if (isolatedMatches.Count > 0)
         {
-            var info = ParseEpisodeString(m.Groups[1].Value);
+            var last = isolatedMatches[isolatedMatches.Count - 1];
+            var info = ParseEpisodeString(last.Groups[1].Value);
             if (info.Start > 0) return info;
         }
 
+        // 3. Fallback: primo numero qualsiasi
         var firstNumber = FirstNumberRegex.Match(fileName);
         if (firstNumber.Success && int.TryParse(firstNumber.Groups[1].Value, out var n3) && n3 > 0)
             return new EpisodeInfo(n3, n3, 1, n3.ToString(), false);
