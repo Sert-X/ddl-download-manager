@@ -30,6 +30,12 @@ public partial class SftpUploadJob : ObservableObject
 
     public string FileName => Path.GetFileName(LocalPath);
 
+    /// <summary>Cartella locale da cui viene caricato il file.</summary>
+    public string SourceFolder => Path.GetDirectoryName(LocalPath) ?? "";
+
+    /// <summary>Cartella remota di destinazione.</summary>
+    public string DestinationFolder => GetRemoteParent(RemotePath);
+
     public double Percentage => TotalBytes > 0
         ? Math.Min(100, (double)UploadedBytes / TotalBytes * 100)
         : 0;
@@ -54,6 +60,14 @@ public partial class SftpUploadJob : ObservableObject
             var seconds = remaining / SpeedBytesPerSecond;
             return SftpDownloadJob.FormatEta(seconds);
         }
+    }
+
+    private static string GetRemoteParent(string remotePath)
+    {
+        if (string.IsNullOrEmpty(remotePath)) return "/";
+        var trimmed = remotePath.TrimEnd('/');
+        int lastSlash = trimmed.LastIndexOf('/');
+        return lastSlash <= 0 ? "/" : trimmed.Substring(0, lastSlash);
     }
 
     partial void OnUploadedBytesChanged(long value)

@@ -143,6 +143,24 @@ public partial class App : Application
 
             desktop.MainWindow = Services.GetRequiredService<MainWindow>();
 
+            // Ripristina i download non completati in modo asincrono, DOPO che la finestra
+            // è stata creata. NON bloccare il thread UI con .GetAwaiter().GetResult(),
+            // altrimenti si crea un deadlock con Dispatcher.UIThread.InvokeAsync.
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var queue = Services!.GetRequiredService<DownloadQueueService>();
+                    await queue.RestoreFromDatabaseAsync();
+
+                    System.Diagnostics.Debug.WriteLine("[RESTORE] Ripristino completato");
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[RESTORE] Errore: {ex}");
+                }
+            });
+
            // Check aggiornamenti in background (non blocca l'avvio)
             _ = Task.Run(async () =>
             {
@@ -172,6 +190,9 @@ public partial class App : Application
                     var newVersion = update.TargetFullRelease.Version.ToString();
                     var packageSize = update.TargetFullRelease.Size;
 
+                    var changelog = await DownloadManager.Services.Update.GitHubReleaseFetcher.FetchChangelogAsync(
+                        "Sert-X", "ddl-download-manager", "v" + newVersion);
+
                     var choice = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
                     {
                         var win = desktop.MainWindow;
@@ -181,6 +202,7 @@ public partial class App : Application
                             win,
                             newVersion,
                             packageSize,
+                            changelog,
                             async progress =>
                             {
                                 await mgr.DownloadUpdatesAsync(update, p => progress(p));
@@ -192,6 +214,7 @@ public partial class App : Application
                         case UpdateChoice.InstallNow:
                             mgr.ApplyUpdatesAndRestart(update);
                             break;
+
                         case UpdateChoice.InstallLater:
                             mgr.WaitExitThenApplyUpdates(update);
                             break;

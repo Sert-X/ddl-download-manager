@@ -27,9 +27,65 @@ public partial class MainWindow : Window
     private PointerPressedEventArgs? _localPressedArgs;
     private PointerPressedEventArgs? _remotePressedArgs;
 
+    private bool _logCollapsed;
+    private double _logHeightBeforeCollapse = 150;
+
+    private void OnToggleLogClick(object? sender, RoutedEventArgs e)
+    {
+        _logCollapsed = !_logCollapsed;
+
+        if (_logCollapsed)
+        {
+            _logHeightBeforeCollapse = LogPanel.Height;
+            LogPanel.Height = 40;
+            LogPanel.MaxHeight = 40;
+            if (LogScrollViewer != null) LogScrollViewer.IsVisible = false;
+            if (ToggleLogButton != null) ToggleLogButton.Content = "▲";
+        }
+        else
+        {
+            LogPanel.MaxHeight = 400;
+            LogPanel.Height = _logHeightBeforeCollapse;
+            if (LogScrollViewer != null) LogScrollViewer.IsVisible = true;
+            if (ToggleLogButton != null) ToggleLogButton.Content = "▼";
+        }
+    }
+
     public MainWindow(MainWindowViewModel viewModel, ISftpService sftpService)
     {
         InitializeComponent();
+
+        // Adatta la finestra alla dimensione dello schermo.
+        // Se lo schermo è più piccolo di 1500x950 DIP, riduci o massimizza.
+        Opened += (s, e) =>
+        {
+            try
+            {
+                var screen = Screens.ScreenFromWindow(this) ?? Screens.Primary;
+                if (screen == null) return;
+
+                var workingArea = screen.WorkingArea;
+                double screenWidthDip = workingArea.Width / screen.Scaling;
+                double screenHeightDip = workingArea.Height / screen.Scaling;
+
+                // Se lo schermo è più piccolo della finestra di default, massimizza
+                if (screenWidthDip < 1500 || screenHeightDip < 950)
+                {
+                    WindowState = WindowState.Maximized;
+                }
+                else
+                {
+                    // Altrimenti, posiziona la finestra al centro con le dimensioni di default
+                    Width = Math.Min(1500, screenWidthDip - 40);
+                    Height = Math.Min(950, screenHeightDip - 40);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AUTOSIZE] {ex.Message}");
+            }
+        };
+
         DataContext = viewModel;
         _sftpService = sftpService;
 

@@ -35,20 +35,27 @@
             <Grid>
 
                 <!-- FASE 1: conferma -->
-                <StackPanel x:Name="ConfirmPanel" Spacing="12" VerticalAlignment="Center">
-                    <TextBlock x:Name="VersionInfoText"
-                            FontSize="14"
-                            TextWrapping="Wrap"/>
+                <StackPanel x:Name="ConfirmPanel" Spacing="10" VerticalAlignment="Center">
+                <TextBlock x:Name="VersionInfoText"
+                        FontSize="14"
+                        TextWrapping="Wrap"/>
 
-                    <TextBlock Text="Cosa vuoi fare?"
-                            FontWeight="SemiBold" Margin="0,8,0,0"/>
+                <TextBlock Text="Novità di questa versione:"
+                        FontWeight="SemiBold" Margin="0,6,0,0"/>
 
-                    <TextBlock Text="• Aggiorna ora: scarica e installa subito"
-                            FontSize="12"
-                            Foreground="{DynamicResource AppTextMutedBrush}"/>
-                    <TextBlock Text="• Più tardi: nessuna azione adesso"
-                            FontSize="12"
-                            Foreground="{DynamicResource AppTextMutedBrush}"/>
+                <Border Background="{DynamicResource AppSurfaceBrush}"
+                        BorderBrush="{DynamicResource AppBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        MaxHeight="140"
+                        Padding="10">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <TextBlock x:Name="ChangelogText"
+                                TextWrapping="Wrap"
+                                FontSize="12"
+                                Foreground="{DynamicResource AppTextBrush}"/>
+                        </ScrollViewer>
+                </Border>
                 </StackPanel>
 
                 <!-- FASE 2: download in corso -->
@@ -61,32 +68,26 @@
                                 Value="0"
                                 Height="20"/>
 
-                    <Grid ColumnDefinitions="*, *, *">
+                    <Grid ColumnDefinitions="*, *">
                         <StackPanel Grid.Column="0" Spacing="2">
-                            <TextBlock Text="Scaricato" FontSize="11"
-                                    Foreground="{DynamicResource AppTextMutedBrush}"/>
-                            <TextBlock x:Name="BytesText" Text="0 B / 0 B"
-                                    FontWeight="SemiBold" FontSize="12"/>
+                                <TextBlock Text="Scaricato" FontSize="11"
+                                        Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                <TextBlock x:Name="BytesText" Text="0%"
+                                        FontWeight="SemiBold" FontSize="12"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Spacing="2">
-                            <TextBlock Text="Velocità" FontSize="11"
-                                    Foreground="{DynamicResource AppTextMutedBrush}"/>
-                            <TextBlock x:Name="SpeedText" Text="-"
-                                    FontWeight="SemiBold" FontSize="12"
-                                    Foreground="{DynamicResource AppSuccessBrush}"/>
+                                <TextBlock Text="Velocità" FontSize="11"
+                                        Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                <TextBlock x:Name="SpeedText" Text="-"
+                                        FontWeight="SemiBold" FontSize="12"
+                                        Foreground="{DynamicResource AppSuccessBrush}"/>
                         </StackPanel>
-                        <StackPanel Grid.Column="2" Spacing="2">
-                            <TextBlock Text="Tempo rimanente" FontSize="11"
-                                    Foreground="{DynamicResource AppTextMutedBrush}"/>
-                            <TextBlock x:Name="EtaText" Text="-"
-                                    FontWeight="SemiBold" FontSize="12"/>
-                        </StackPanel>
-                    </Grid>
+                        </Grid>
 
-                    <TextBlock x:Name="PercentText" Text="0%"
-                            FontSize="11"
-                            HorizontalAlignment="Right"
-                            Foreground="{DynamicResource AppTextMutedBrush}"/>
+                        <TextBlock x:Name="PercentText" Text="0%"
+                                FontSize="11"
+                                HorizontalAlignment="Right"
+                                Foreground="{DynamicResource AppTextMutedBrush}"/>
                 </StackPanel>
 
                 <!-- FASE 3: pronto per riavvio -->

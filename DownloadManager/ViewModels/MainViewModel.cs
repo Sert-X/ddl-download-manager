@@ -29,12 +29,13 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly SftpDownloadQueueService _sftpDownloadQueue;
     private readonly DownloadManager.Services.Proxy.ProxyService _proxyService;
     private readonly LogService _logService;
+    // Serializza i refresh locali per evitare race condition
+    private readonly SemaphoreSlim _localRefreshLock = new(1, 1);
 
     private Episode? _currentEpisode;
     private CancellationTokenSource? _batchCts;
+    private CancellationTokenSource? _zeroByteCheckCts;
     private readonly DispatcherTimer _statsTimer;
-    private readonly DispatcherTimer _sftpLocalAutoRefreshTimer;
-    private readonly DispatcherTimer _sftpRemoteAutoRefreshTimer;
     // Cache dell'esito del check 0-byte per le cartelle già controllate.
     // Chiave: FullPath della cartella. Valore: true se contiene file da 0 byte.
     private readonly Dictionary<string, bool> _zeroByteFolderCache = new(StringComparer.OrdinalIgnoreCase);
@@ -45,6 +46,8 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private ObservableCollection<AnimeSearchResult> _searchResults = new();
     [ObservableProperty] private AnimeSearchResult? _selectedAnime;
     [ObservableProperty] private ObservableCollection<Episode> _episodes = new();
+    [ObservableProperty] private bool _isLoadingSearchResults;
+    [ObservableProperty] private bool _isLoadingEpisodes;
 
     // --- Download (Anime) ---
     [ObservableProperty] private int _maxConcurrency = 3;
@@ -109,7 +112,10 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private ObservableCollection<SftpRemoteEntry> _sftpRemoteEntries = new();
     [ObservableProperty] private SftpRemoteEntry? _sftpSelectedRemoteEntry;
     [ObservableProperty] private bool _isRefreshingRemote;
-
+    [ObservableProperty] private string _localBrowserStats = "";
+    [ObservableProperty] private string _remoteBrowserStats = "";
+    [ObservableProperty] private string _uploadQueueStats = "";
+    [ObservableProperty] private string _downloadQueueStats = "";
     [ObservableProperty] private string _sftpUploadLocalFolder = string.Empty;
     [ObservableProperty] private string _sftpUploadRemoteFolder = "/";
     [ObservableProperty] private int _sftpMaxUploadConcurrency = 6;
@@ -308,6 +314,35 @@ public partial class MainWindowViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Riepilogo testuale della tab "Download per serie":
+    /// "N serie · M episodi totali (X completati, Y in corso, Z in attesa)"
+    /// </summary>
+    public string SeriesSummaryText
+    {
+        get
+        {
+            var groups = SeriesGroups;
+            if (groups.Count == 0) return "Nessuna serie in coda.";
+
+            int totalEpisodes = groups.Sum(g => g.Items.Count);
+            int completed = groups.Sum(g => g.Items.Count(i => i.Status == DownloadStatus.Completed));
+            int downloading = groups.Sum(g => g.Items.Count(i => i.Status == DownloadStatus.Downloading));
+            int pending = groups.Sum(g => g.Items.Count(i => i.Status == DownloadStatus.Pending || i.Status == DownloadStatus.Paused));
+            int failed = groups.Sum(g => g.Items.Count(i => i.Status == DownloadStatus.Failed));
+            int cancelled = groups.Sum(g => g.Items.Count(i => i.Status == DownloadStatus.Cancelled));
+
+            var parts = new List<string> { $"{totalEpisodes} episodi" };
+            if (completed > 0) parts.Add($"{completed} completati");
+            if (downloading > 0) parts.Add($"{downloading} in corso");
+            if (pending > 0) parts.Add($"{pending} in attesa");
+            if (failed > 0) parts.Add($"{failed} falliti");
+            if (cancelled > 0) parts.Add($"{cancelled} annullati");
+
+            return $"{groups.Count} serie · {string.Join(" · ", parts)}";
+        }
+    }
+
     public string ActiveProxyBadgeText => Proxies.Any(p => p.IsEnabled)
         ? $"🌐 {Proxies.First(p => p.IsEnabled).Name}"
         : "🌐 off";
@@ -384,24 +419,12 @@ public partial class MainWindowViewModel : ViewModelBase
             OnPropertyChanged(nameof(GlobalEtaText));
             OnPropertyChanged(nameof(GlobalSpeedText));
             OnPropertyChanged(nameof(GlobalSizeText));
+            OnPropertyChanged(nameof(SeriesSummaryText));
         };
         _statsTimer.Start();
 
-        // Auto-refresh locale (ogni 3s)
-        _sftpLocalAutoRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
-        _sftpLocalAutoRefreshTimer.Tick += async (s, e) =>
-        {
-            try { await SftpAutoRefreshLocalAsync(); } catch { }
-        };
-        _sftpLocalAutoRefreshTimer.Start();
-
-        // Auto-refresh remoto (ogni 5s)
-        _sftpRemoteAutoRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
-        _sftpRemoteAutoRefreshTimer.Tick += async (s, e) =>
-        {
-            try { await SftpAutoRefreshRemoteAsync(); } catch { }
-        };
-        _sftpRemoteAutoRefreshTimer.Start();
+        // Auto-refresh SFTP rimosso: ora è manuale o su azione.
+        // Vedi SftpForceReloadCommand, OnUploadQueueChanged, e i comandi di delete/rename/upload
 
         AddSplitSegment();
 
@@ -417,7 +440,27 @@ public partial class MainWindowViewModel : ViewModelBase
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             "Downloads");
 
-        _ = Task.Run(SftpRefreshLocalAsync);
+                // Piccolo delay per assicurarsi che tutto il costruttore sia finito prima
+                // che il primo refresh parta (evita refresh concorrenti con altre init async).
+                Task.Delay(300).ContinueWith(_ => SftpRefreshLocalAsync(),
+                    TaskScheduler.FromCurrentSynchronizationContext());
+
+                // Dopo un attimo, controlla se ci sono item ripristinati e avvisa l'utente
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(1500); // aspetta che il DB sia stato letto
+
+                    await Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        var restored = _queueService.AllItems.Count(i =>
+                            i.Status == DownloadStatus.Pending || i.Status == DownloadStatus.Paused);
+
+                        if (restored > 0)
+                        {
+                            StatusMessage = $"Ripristinati {restored} download in coda dalla sessione precedente. Premi ▶ Avvia tutti per riprenderli.";
+                        }
+                    });
+                });        
     }
 
     // ============================================================
@@ -527,6 +570,77 @@ public partial class MainWindowViewModel : ViewModelBase
 
         HasActiveDownloads = _sftpDownloadQueue.AllJobs.Any(j =>
             j.Status == SftpJobStatus.Downloading || j.Status == SftpJobStatus.Pending);
+
+        UpdateUploadQueueStats();
+        UpdateDownloadQueueStats();
+    }
+
+    private void UpdateRemoteBrowserStats()
+    {
+        int dirs = SftpRemoteEntries.Count(e => e.IsDirectory);
+        int files = SftpRemoteEntries.Count - dirs;
+
+        RemoteBrowserStats = SftpRemoteEntries.Count == 0
+            ? "Cartella vuota"
+            : $"{dirs} cartelle, {files} file ({SftpRemoteEntries.Count} totali)";
+    }
+
+    private void UpdateLocalBrowserStats()
+    {
+        int dirs = SftpLocalEntries.Count(e => e.IsDirectory);
+        int files = SftpLocalEntries.Count - dirs;
+
+        LocalBrowserStats = SftpLocalEntries.Count == 0
+            ? "Cartella vuota"
+            : $"{dirs} cartelle, {files} file ({SftpLocalEntries.Count} totali)";
+    }
+
+    private void UpdateUploadQueueStats()
+    {
+        var jobs = _sftpUploadQueue.AllJobs;
+        int total = jobs.Count;
+        if (total == 0) { UploadQueueStats = ""; return; }
+
+        int pending = jobs.Count(j => j.Status == SftpJobStatus.Pending);
+        int uploading = jobs.Count(j => j.Status == SftpJobStatus.Uploading);
+        int paused = jobs.Count(j => j.Status == SftpJobStatus.Paused);
+        int completed = jobs.Count(j => j.Status == SftpJobStatus.Completed);
+        int failed = jobs.Count(j => j.Status == SftpJobStatus.Failed);
+        int cancelled = jobs.Count(j => j.Status == SftpJobStatus.Cancelled);
+
+        var parts = new List<string> { $"{total} totali" };
+        if (uploading > 0) parts.Add($"{uploading} in corso");
+        if (pending > 0) parts.Add($"{pending} in attesa");
+        if (paused > 0) parts.Add($"{paused} in pausa");
+        if (completed > 0) parts.Add($"{completed} completati");
+        if (failed > 0) parts.Add($"{failed} falliti");
+        if (cancelled > 0) parts.Add($"{cancelled} annullati");
+
+        UploadQueueStats = string.Join(" · ", parts);
+    }
+
+    private void UpdateDownloadQueueStats()
+    {
+        var jobs = _sftpDownloadQueue.AllJobs;
+        int total = jobs.Count;
+        if (total == 0) { DownloadQueueStats = ""; return; }
+
+        int pending = jobs.Count(j => j.Status == SftpJobStatus.Pending);
+        int downloading = jobs.Count(j => j.Status == SftpJobStatus.Downloading);
+        int paused = jobs.Count(j => j.Status == SftpJobStatus.Paused);
+        int completed = jobs.Count(j => j.Status == SftpJobStatus.Completed);
+        int failed = jobs.Count(j => j.Status == SftpJobStatus.Failed);
+        int cancelled = jobs.Count(j => j.Status == SftpJobStatus.Cancelled);
+
+        var parts = new List<string> { $"{total} totali" };
+        if (downloading > 0) parts.Add($"{downloading} in corso");
+        if (pending > 0) parts.Add($"{pending} in attesa");
+        if (paused > 0) parts.Add($"{paused} in pausa");
+        if (completed > 0) parts.Add($"{completed} completati");
+        if (failed > 0) parts.Add($"{failed} falliti");
+        if (cancelled > 0) parts.Add($"{cancelled} annullati");
+
+        DownloadQueueStats = string.Join(" · ", parts);
     }
 
     private int _lastCompletedUploads = 0;
@@ -542,6 +656,10 @@ public partial class MainWindowViewModel : ViewModelBase
 
             _ = Task.Run(async () =>
             {
+                // Invalida la cache della cartella corrente e di tutte le parent
+                // (l'upload potrebbe aver riempito un file che era a 0 byte).
+                InvalidateZeroByteCacheRecursive(SftpCurrentRemotePath);
+
                 await SftpRefreshInternalAsync(silent: true);
                 await Dispatcher.UIThread.InvokeAsync(RefreshZeroByteFlagsAsync);
             });
@@ -578,6 +696,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         if (!group.Items.Contains(item))
             group.Items.Add(item);
+            OnPropertyChanged(nameof(SeriesSummaryText));
     }
 
     private void RemoveFromGroup(DownloadItem item)
@@ -591,6 +710,7 @@ public partial class MainWindowViewModel : ViewModelBase
             if (group.Items.Count == 0)
                 SeriesGroups.Remove(group);
         }
+        OnPropertyChanged(nameof(SeriesSummaryText));
     }
 
     // ============================================================
@@ -622,6 +742,7 @@ public partial class MainWindowViewModel : ViewModelBase
         SearchQuery = term;
         SaveSearchToHistory(term.Trim());
 
+        IsLoadingSearchResults = true;
         try
         {
             StatusMessage = "Inizializzazione browser...";
@@ -636,6 +757,10 @@ public partial class MainWindowViewModel : ViewModelBase
             StatusMessage = $"Trovati {results.Count} risultati per '{term}'.";
         }
         catch (Exception ex) { StatusMessage = $"Errore: {ex.Message}"; }
+        finally
+        {
+            IsLoadingSearchResults = false;
+        }
     }
 
     [RelayCommand]
@@ -671,6 +796,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         if (anime == null) return;
 
+        IsLoadingEpisodes = true;
         try
         {
             SelectedAnime = anime;
@@ -684,6 +810,10 @@ public partial class MainWindowViewModel : ViewModelBase
             StatusMessage = $"Trovati {episodes.Count} episodi per '{anime.Name}'.";
         }
         catch (Exception ex) { StatusMessage = $"Errore: {ex.Message}"; }
+        finally
+        {
+            IsLoadingEpisodes = false;
+        }
     }
 
     // ============================================================
@@ -962,8 +1092,6 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         try
         {
-            StatusMessage = "Controllo aggiornamenti...";
-
             var mgr = new Velopack.UpdateManager(
                 new Velopack.Sources.GithubSource(
                     "https://github.com/Sert-X/ddl-download-manager",
@@ -972,18 +1100,33 @@ public partial class MainWindowViewModel : ViewModelBase
 
             var update = await mgr.CheckForUpdatesAsync();
 
+            // CASO 1: nessun aggiornamento → InfoDialog
             if (update == null)
             {
-                StatusMessage = "Nessun aggiornamento disponibile.";
+                System.Diagnostics.Debug.WriteLine("[UPDATE] Nessun aggiornamento.");
+
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+                {
+                    var win = GetOwnerWindow();
+                    if (win == null) return;
+
+                    await Views.InfoDialog.ShowAsync(
+                        win,
+                        "Stai già usando la versione più recente di DDL Download Manager.",
+                        "Nessun aggiornamento");
+                });
                 return;
             }
 
+            // CASO 2: aggiornamento disponibile → UpdateDialog
             var newVersion = update.TargetFullRelease.Version.ToString();
             var packageSize = update.TargetFullRelease.Size;
 
-            System.Diagnostics.Debug.WriteLine($"[UPDATE] Trovata versione {newVersion} ({packageSize} bytes)");
+            System.Diagnostics.Debug.WriteLine($"[UPDATE] Trovata versione {newVersion}");
 
-            // Mostra il dialog. La logica di download è passata come callback al dialog.
+            var changelog = await DownloadManager.Services.Update.GitHubReleaseFetcher.FetchChangelogAsync(
+                "Sert-X", "ddl-download-manager", "v" + newVersion);
+
             var choice = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
             {
                 var win = GetOwnerWindow();
@@ -993,9 +1136,9 @@ public partial class MainWindowViewModel : ViewModelBase
                     win,
                     newVersion,
                     packageSize,
+                    changelog,
                     async progress =>
                     {
-                        // Velopack chiama progress(0..100)
                         await mgr.DownloadUpdatesAsync(update, p => progress(p));
                     });
             });
@@ -1003,25 +1146,28 @@ public partial class MainWindowViewModel : ViewModelBase
             switch (choice)
             {
                 case UpdateChoice.InstallNow:
-                    StatusMessage = $"Riavvio per installare la versione {newVersion}...";
                     mgr.ApplyUpdatesAndRestart(update);
                     break;
 
                 case UpdateChoice.InstallLater:
-                    StatusMessage = $"L'aggiornamento {newVersion} verrà applicato al prossimo avvio.";
                     mgr.WaitExitThenApplyUpdates(update);
-                    break;
-
-                case UpdateChoice.Cancel:
-                default:
-                    StatusMessage = "Aggiornamento annullato.";
                     break;
             }
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Errore update: {ex.Message}";
             System.Diagnostics.Debug.WriteLine($"[UPDATE] ECCEZIONE: {ex}");
+
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+            {
+                var win = GetOwnerWindow();
+                if (win == null) return;
+
+                await Views.InfoDialog.ShowAsync(
+                    win,
+                    $"Errore durante il controllo aggiornamenti:\n\n{ex.Message}",
+                    "Errore aggiornamento");
+            });
         }
     }
 
@@ -1237,6 +1383,10 @@ public partial class MainWindowViewModel : ViewModelBase
     /// aggiornando anche la cache. Chiamato dopo un upload che potrebbe aver
     /// cambiato lo stato delle cartelle.
     /// </summary>
+    /// <summary>
+    /// Recheck leggero: ricontrolla SOLO le cartelle visibili (1 livello sotto)
+    /// e aggiorna la loro flag. Usato dopo upload/delete/rename.
+    /// </summary>
     private async Task RefreshZeroByteFlagsAsync()
     {
         if (!IsSftpConnected) return;
@@ -1250,10 +1400,24 @@ public partial class MainWindowViewModel : ViewModelBase
             try
             {
                 var subEntries = await _sftpService.ListDirectoryAsync(folder.FullPath);
+
                 bool hasZero = subEntries.Any(e => !e.IsDirectory && e.Size == 0);
 
-                _zeroByteFolderCache[folder.FullPath] = hasZero;
-                folder.HasZeroByteIssue = hasZero;
+                // Se non ha file a 0 byte diretti, ma ha sottocartelle flaggate in cache,
+                // mantieni il flag (eredita dai figli).
+                if (!hasZero)
+                {
+                    hasZero = subEntries
+                        .Where(e => e.IsDirectory)
+                        .Any(e => _zeroByteFolderCache.TryGetValue(e.FullPath.TrimEnd('/'), out var f) && f);
+                }
+
+                _zeroByteFolderCache[folder.FullPath.TrimEnd('/')] = hasZero;
+
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    folder.HasZeroByteIssue = hasZero;
+                });
             }
             catch { }
         }
@@ -1779,75 +1943,81 @@ public partial class MainWindowViewModel : ViewModelBase
             await _sftpService.DisconnectAsync();
             IsSftpConnected = false;
             SftpRemoteEntries.Clear();
+            RemoteBrowserStats = "";
             SftpStatusMessage = "Disconnesso.";
         }
         catch (Exception ex) { SftpStatusMessage = $"Errore: {ex.Message}"; }
     }
 
-    private async Task SftpAutoRefreshLocalAsync()
-    {
-        if (SelectedLocalEntries.Count > 0 || SftpSelectedLocalEntry != null) return;
-        if (string.IsNullOrWhiteSpace(SftpCurrentLocalPath)) return;
-        if (!Directory.Exists(SftpCurrentLocalPath)) return;
-
-        await SftpRefreshLocalInternalAsync(silent: true);
-    }
-
-    private async Task SftpAutoRefreshRemoteAsync()
-    {
-        if (!IsSftpConnected) return;
-        if (IsSftpBusy) return;
-        // RIMOSSO il check sulla selezione: SyncCollection preserva la selezione
-        // grazie a Move(), quindi il refresh non deve essere bloccato.
-
-        await SftpRefreshInternalAsync(silent: true);
-    }
-
     [RelayCommand]
     private async Task SftpRefreshAsync() => await SftpRefreshInternalAsync(silent: false);
+
+    private readonly SemaphoreSlim _remoteRefreshLock = new(1, 1);
 
     private async Task SftpRefreshInternalAsync(bool silent)
     {
         if (!IsSftpConnected) return;
 
-        if (IsRefreshingRemote && !silent)
-            return; // già in corso
-
+        await _remoteRefreshLock.WaitAsync();
         try
         {
-            IsRefreshingRemote = true;
+            var pathToRead = SftpCurrentRemotePath;
 
-            if (!silent)
+            if (string.IsNullOrWhiteSpace(pathToRead))
+                pathToRead = "/";
+
+            if (IsRefreshingRemote && !silent)
+                return;
+
+            try
             {
-                IsSftpBusy = true;
-                SftpStatusMessage = $"Lettura {SftpCurrentRemotePath}...";
+                IsRefreshingRemote = true;
+
+                if (!silent)
+                {
+                    IsSftpBusy = true;
+                    SftpStatusMessage = $"Lettura {pathToRead}...";
+                }
+
+                var entries = await _sftpService.ListDirectoryAsync(pathToRead);
+
+                // Verifica stale
+                if (SftpCurrentRemotePath != pathToRead)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[REMOTE-REFRESH] Scartato risultato stale: path era '{pathToRead}', ora è '{SftpCurrentRemotePath}'");
+                    return;
+                }
+
+                foreach (var e in entries)
+                {
+                    if (!e.IsDirectory)
+                        e.HasZeroByteIssue = e.Size == 0;
+                    else
+                        e.HasZeroByteIssue = _zeroByteFolderCache.TryGetValue(e.FullPath, out var flag) && flag;
+                }
+
+                var sorted = SortRemoteEntries(entries, RemoteSortOption.Mode, RemoteSortAscending);
+                SyncCollection(SftpRemoteEntries, sorted, e => e.FullPath, UpdateRemoteEntryFromSource);
+
+                UpdateRemoteBrowserStats();
+
+                if (!silent)
+                    SftpStatusMessage = $"{entries.Count} elementi in {pathToRead} ({DateTime.Now:HH:mm:ss})";
             }
-
-            var entries = await _sftpService.ListDirectoryAsync(SftpCurrentRemotePath);
-
-            foreach (var e in entries)
+            catch (Exception ex)
             {
-                if (!e.IsDirectory)
-                    e.HasZeroByteIssue = e.Size == 0;
-                else
-                    e.HasZeroByteIssue = _zeroByteFolderCache.TryGetValue(e.FullPath, out var flag) && flag;
+                if (!silent) SftpStatusMessage = $"Errore: {ex.Message}";
             }
-
-            var sorted = SortRemoteEntries(entries, RemoteSortOption.Mode, RemoteSortAscending);
-
-            SyncCollection(SftpRemoteEntries, sorted, e => e.FullPath, UpdateRemoteEntryFromSource);
-
-            if (!silent)
-                SftpStatusMessage = $"{entries.Count} elementi in {SftpCurrentRemotePath} ({DateTime.Now:HH:mm:ss})";
-        }
-        catch (Exception ex)
-        {
-            if (!silent) SftpStatusMessage = $"Errore: {ex.Message}";
+            finally
+            {
+                IsRefreshingRemote = false;
+                if (!silent) IsSftpBusy = false;
+            }
         }
         finally
         {
-            IsRefreshingRemote = false;
-            if (!silent) IsSftpBusy = false;
+            _remoteRefreshLock.Release();
         }
     }
 
@@ -1927,58 +2097,92 @@ public partial class MainWindowViewModel : ViewModelBase
 
     private async Task SftpRefreshLocalInternalAsync(bool silent)
     {
-        if (string.IsNullOrWhiteSpace(SftpCurrentLocalPath) || !Directory.Exists(SftpCurrentLocalPath))
-            SftpCurrentLocalPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-
+        // Serializza i refresh: un secondo refresh concorrente aspetta il primo
+        // invece di sovrapporsi e mescolare i risultati.
+        await _localRefreshLock.WaitAsync();
         try
         {
-            var entries = await Task.Run(() =>
+            // Cattura il path QUI. Se qualcuno lo cambia durante il refresh,
+            // noi continuiamo a leggere dallo stesso path.
+            var pathToRead = SftpCurrentLocalPath;
+
+            if (string.IsNullOrWhiteSpace(pathToRead))
             {
-                var list = new List<LocalFileEntry>();
+                pathToRead = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                SftpCurrentLocalPath = pathToRead;
+            }
+            else if (!Directory.Exists(pathToRead))
+            {
+                // NON ricadere sulla home: se la cartella non esiste, mostra errore.
+                if (!silent) SftpStatusMessage = $"Cartella non trovata: {pathToRead}";
+                return;
+            }
 
-                foreach (var dir in Directory.GetDirectories(SftpCurrentLocalPath))
+            try
+            {
+                var entries = await Task.Run(() =>
                 {
-                    try
+                    var list = new List<LocalFileEntry>();
+
+                    foreach (var dir in Directory.GetDirectories(pathToRead))
                     {
-                        var info = new DirectoryInfo(dir);
-                        list.Add(new LocalFileEntry
+                        try
                         {
-                            Name = info.Name,
-                            FullPath = info.FullName,
-                            IsDirectory = true,
-                            Size = 0,
-                            Modified = info.LastWriteTime
-                        });
+                            var info = new DirectoryInfo(dir);
+                            list.Add(new LocalFileEntry
+                            {
+                                Name = info.Name,
+                                FullPath = info.FullName,
+                                IsDirectory = true,
+                                Size = 0,
+                                Modified = info.LastWriteTime
+                            });
+                        }
+                        catch { }
                     }
-                    catch { }
+
+                    foreach (var file in Directory.GetFiles(pathToRead))
+                    {
+                        try
+                        {
+                            var info = new FileInfo(file);
+                            list.Add(new LocalFileEntry
+                            {
+                                Name = info.Name,
+                                FullPath = info.FullName,
+                                IsDirectory = false,
+                                Size = info.Length,
+                                Modified = info.LastWriteTime
+                            });
+                        }
+                        catch { }
+                    }
+
+                    return list;
+                });
+
+                // Controlla che il path non sia cambiato durante il Task.Run.
+                // Se è cambiato, un altro refresh è in arrivo e sovrascriverà
+                // la lista con i dati giusti: noi scartiamo questo risultato stale.
+                if (SftpCurrentLocalPath != pathToRead)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[LOCAL-REFRESH] Scartato risultato stale: path era '{pathToRead}', ora è '{SftpCurrentLocalPath}'");
+                    return;
                 }
 
-                foreach (var file in Directory.GetFiles(SftpCurrentLocalPath))
-                {
-                    try
-                    {
-                        var info = new FileInfo(file);
-                        list.Add(new LocalFileEntry
-                        {
-                            Name = info.Name,
-                            FullPath = info.FullName,
-                            IsDirectory = false,
-                            Size = info.Length,
-                            Modified = info.LastWriteTime
-                        });
-                    }
-                    catch { }
-                }
-
-                return list;
-            });
-
-            var sorted = SortLocalEntries(entries, LocalSortOption.Mode, LocalSortAscending);
-            SyncCollection(SftpLocalEntries, sorted, e => e.FullPath, UpdateLocalEntryFromSource);
+                var sorted = SortLocalEntries(entries, LocalSortOption.Mode, LocalSortAscending);
+                SyncCollection(SftpLocalEntries, sorted, e => e.FullPath, UpdateLocalEntryFromSource);
+                UpdateLocalBrowserStats();
+            }
+            catch (Exception ex)
+            {
+                if (!silent) SftpStatusMessage = $"Errore lettura locale: {ex.Message}";
+            }
         }
-        catch (Exception ex)
+        finally
         {
-            if (!silent) SftpStatusMessage = $"Errore lettura locale: {ex.Message}";
+            _localRefreshLock.Release();
         }
     }
 
@@ -1994,6 +2198,13 @@ public partial class MainWindowViewModel : ViewModelBase
         if (IsCheckingZeroByte) return;
 
         var folders = SftpRemoteEntries.Where(e => e.IsDirectory).ToList();
+
+        // Popola ContentsInfo anche per i file visibili (solo data ultima modifica)
+        foreach (var file in SftpRemoteEntries.Where(e => !e.IsDirectory))
+        {
+            file.ContentsInfo = $"Ultima modifica: {file.Modified:dd/MM/yyyy HH:mm}";
+        }
+
         if (folders.Count == 0)
         {
             SftpStatusMessage = "Nessuna cartella da controllare.";
@@ -2001,47 +2212,182 @@ public partial class MainWindowViewModel : ViewModelBase
         }
 
         IsCheckingZeroByte = true;
-        int checked_ = 0;
+        _zeroByteCheckCts = new CancellationTokenSource();
+        var token = _zeroByteCheckCts.Token;
+
+        int scanned = 0;
         int flagged = 0;
+        int checkedTop = 0;
+        int totalFiles = 0;
+        int totalDirs = 0;
+        const int maxDepth = 3;
+        const int maxFolders = 300;
+
+        var logLines = new List<string>();
 
         try
         {
             foreach (var folder in folders)
             {
                 if (!IsSftpConnected) break;
+                if (scanned >= maxFolders) break;
+                if (token.IsCancellationRequested) break;
 
-                checked_++;
-                ZeroByteCheckStatus = $"Controllo {checked_}/{folders.Count}: {folder.Name}";
+                checkedTop++;
 
-                try
+                ZeroByteCheckStatus = $"Controllo {checkedTop}/{folders.Count}: {folder.Name}...";
+
+                var (hasZero, fileCount, dirCount, lastModified) =
+                    await ScanFolderForZeroBytesAsync(
+                        folder.FullPath, maxDepth, maxFolders,
+                        () => scanned, v => scanned = v,
+                        token);
+
+                totalFiles += fileCount;
+                totalDirs += dirCount;
+
+                var summary = $"{dirCount} cartelle, {fileCount} file";
+
+                await Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    var subEntries = await _sftpService.ListDirectoryAsync(folder.FullPath);
-                    bool hasZero = subEntries.Any(e => !e.IsDirectory && e.Size == 0);
+                    folder.HasZeroByteIssue = hasZero;
+                    folder.ContentsInfo = summary;
+                });
 
-                    _zeroByteFolderCache[folder.FullPath] = hasZero;
+                _zeroByteFolderCache[folder.FullPath] = hasZero;
+                if (hasZero) flagged++;
 
-                    await Dispatcher.UIThread.InvokeAsync(() =>
-                    {
-                        folder.HasZeroByteIssue = hasZero;
-                    });
+                logLines.Add($"{folder.Name}: {summary}{(hasZero ? " ⚠️ file a 0 byte" : "")}");
 
-                    if (hasZero) flagged++;
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[ZERO-BYTE-CHECK] fallito su {folder.FullPath}: {ex.Message}");
-                }
+                ZeroByteCheckStatus = $"Controllo {checkedTop}/{folders.Count}: {folder.Name} — {summary}";
             }
 
-            SftpStatusMessage = flagged == 0
-                ? $"Controllate {checked_} cartelle: nessuna contiene file vuoti."
-                : $"Controllate {checked_} cartelle: {flagged} contengono file vuoti (evidenziate in rosso).";
+            // Scrivi riepilogo nel log globale
+            foreach (var line in logLines)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ZERO-BYTE-CHECK] {line}");
+            }
+
+            if (token.IsCancellationRequested)
+            {
+                SftpStatusMessage = $"Check interrotto: controllate {checkedTop}/{folders.Count} cartelle ({flagged} con file vuoti).";
+            }
+            else if (scanned >= maxFolders)
+            {
+                SftpStatusMessage = $"Controllate {checkedTop} cartelle (raggiunto limite {maxFolders}): {flagged} con file vuoti.";
+            }
+            else
+            {
+                SftpStatusMessage = flagged == 0
+                    ? $"Controllate {checkedTop} cartelle ({totalDirs} sottocartelle, {totalFiles} file): nessuna contiene file vuoti."
+                    : $"Controllate {checkedTop} cartelle ({totalDirs} sottocartelle, {totalFiles} file): {flagged} contengono file vuoti (evidenziate in rosso).";
+            }
         }
         finally
         {
             IsCheckingZeroByte = false;
             ZeroByteCheckStatus = string.Empty;
+
+            _zeroByteCheckCts?.Dispose();
+            _zeroByteCheckCts = null;
         }
+    }
+
+    [RelayCommand]
+    private void StopZeroByteCheck()
+    {
+        if (_zeroByteCheckCts == null || _zeroByteCheckCts.IsCancellationRequested)
+        {
+            SftpStatusMessage = "Nessun check in corso.";
+            return;
+        }
+
+        _zeroByteCheckCts.Cancel();
+        ZeroByteCheckStatus = "Interruzione in corso...";
+        SftpStatusMessage = "Interruzione del check...";
+    }
+
+    /// <summary>
+    /// Scansiona ricorsivamente una cartella remota.
+    /// Ritorna (hasZeroByte, fileCount, dirCount, lastModified) dove:
+    ///   - hasZeroByte: true se in qualsiasi livello sotto (fino a maxDepth) esiste un file di 0 byte
+    ///   - fileCount, dirCount: numero totale di file/cartelle trovati (ricorsivo)
+    ///   - lastModified: data/ora più recente trovata tra file e cartelle
+    /// Popola la cache 0-byte per le sottocartelle intermedie.
+    /// </summary>
+    private async Task<(bool hasZero, int fileCount, int dirCount, DateTime lastModified)>
+        ScanFolderForZeroBytesAsync(
+            string folderPath, int remainingDepth, int maxFolders,
+            Func<int> getScanned, Action<int> setScanned,
+            CancellationToken ct)
+    {
+        if (!IsSftpConnected) return (false, 0, 0, DateTime.MinValue);
+        if (remainingDepth <= 0) return (false, 0, 0, DateTime.MinValue);
+        if (getScanned() >= maxFolders) return (false, 0, 0, DateTime.MinValue);
+        if (ct.IsCancellationRequested) return (false, 0, 0, DateTime.MinValue);
+
+        setScanned(getScanned() + 1);
+
+        List<SftpRemoteEntry> subEntries;
+        try
+        {
+            subEntries = await _sftpService.ListDirectoryAsync(folderPath, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            return (false, 0, 0, DateTime.MinValue);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ZERO-BYTE-SCAN] fallito su {folderPath}: {ex.Message}");
+            return (false, 0, 0, DateTime.MinValue);
+        }
+
+        if (ct.IsCancellationRequested) return (false, 0, 0, DateTime.MinValue);
+
+        bool hasZero = subEntries.Any(e => !e.IsDirectory && e.Size == 0);
+
+        int fileCount = subEntries.Count(e => !e.IsDirectory);
+        int dirCount = subEntries.Count(e => e.IsDirectory);
+
+        DateTime lastModified = subEntries
+            .Where(e => e.Modified > DateTime.MinValue)
+            .Select(e => e.Modified)
+            .DefaultIfEmpty(DateTime.MinValue)
+            .Max();
+
+        // Ricorsione nelle sottocartelle
+        if (remainingDepth > 1)
+        {
+            foreach (var sub in subEntries.Where(e => e.IsDirectory))
+            {
+                if (getScanned() >= maxFolders) break;
+                if (ct.IsCancellationRequested) break;
+
+                var (subHas, subFiles, subDirs, subModified) =
+                    await ScanFolderForZeroBytesAsync(
+                        sub.FullPath, remainingDepth - 1, maxFolders,
+                        getScanned, setScanned, ct);
+
+                fileCount += subFiles;
+                dirCount += subDirs;
+
+                if (subModified > lastModified)
+                    lastModified = subModified;
+
+                if (subHas)
+                {
+                    hasZero = true;
+                    _zeroByteFolderCache[sub.FullPath] = true;
+                }
+                else
+                {
+                    _zeroByteFolderCache[sub.FullPath] = false;
+                }
+            }
+        }
+
+        return (hasZero, fileCount, dirCount, lastModified);
     }
 
     /// <summary>
@@ -2049,11 +2395,38 @@ public partial class MainWindowViewModel : ViewModelBase
     /// La prossima refresh considererà la cartella "non flagged" finché
     /// l'utente non preme di nuovo 🔍.
     /// </summary>
+    /// <summary>
+    /// Invalida la cache 0-byte per una cartella specifica (senza ricorsione).
+    /// </summary>
     private void InvalidateZeroByteCacheForFolder(string? folderPath)
     {
         if (string.IsNullOrEmpty(folderPath)) return;
         var normalized = folderPath.TrimEnd('/');
         _zeroByteFolderCache.Remove(normalized);
+    }
+
+    /// <summary>
+    /// Invalida la cache 0-byte per una cartella e TUTTE le sue parent.
+    /// Utile dopo un'azione che modifica il contenuto: la flag della cartella
+    /// modificata e di tutte le cartelle sopra di lei va ricalcolata.
+    /// </summary>
+    private void InvalidateZeroByteCacheRecursive(string? folderPath)
+    {
+        if (string.IsNullOrEmpty(folderPath)) return;
+        var current = folderPath.TrimEnd('/');
+
+        while (!string.IsNullOrEmpty(current))
+        {
+            _zeroByteFolderCache.Remove(current);
+
+            int lastSlash = current.LastIndexOf('/');
+            if (lastSlash <= 0)
+            {
+                _zeroByteFolderCache.Remove("/");
+                break;
+            }
+            current = current.Substring(0, lastSlash);
+        }
     }
 
     [RelayCommand]
@@ -2168,7 +2541,7 @@ public partial class MainWindowViewModel : ViewModelBase
         if (list.Count == 0) return;
 
         int success = 0, failed = 0;
-        string? firstError = null;
+        var errors = new List<string>();
 
         foreach (var entry in list)
         {
@@ -2179,26 +2552,46 @@ public partial class MainWindowViewModel : ViewModelBase
                 else
                     await _sftpService.DeleteFileAsync(entry.FullPath);
                 success++;
+
+                // Invalida la cache 0-byte per la cartella genitore e le sue parent
+                InvalidateZeroByteCacheRecursive(GetParentPath(entry.FullPath));
             }
             catch (Exception ex)
             {
                 failed++;
-                firstError ??= ex.Message;
+                errors.Add($"{entry.Name}: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"[DEL-REMOTE] fallito su {entry.FullPath}: {ex.Message}");
             }
         }
 
         await SftpRefreshInternalAsync(silent: true);
-
-        // Invalida la cache della cartella corrente: potrebbe aver perso
-        // il suo ultimo file da 0 byte (o averlo ancora, lo scopriremo al 🔍).
-        InvalidateZeroByteCacheForFolder(SftpCurrentRemotePath);
+        InvalidateZeroByteCacheRecursive(SftpCurrentRemotePath);
 
         if (failed == 0)
-            SftpStatusMessage = success == 1 ? "Elemento eliminato dal server." : $"{success} elementi eliminati dal server.";
+        {
+            SftpStatusMessage = success == 1
+                ? "Elemento eliminato dal server."
+                : $"{success} elementi eliminati dal server.";
+        }
         else if (success == 0)
-            SftpStatusMessage = $"Eliminazione fallita: {firstError}";
+        {
+            SftpStatusMessage = $"Eliminazione fallita: {errors.First()}";
+        }
         else
-            SftpStatusMessage = $"Eliminati {success}, falliti {failed}: {firstError}";
+        {
+            SftpStatusMessage = $"Eliminati {success}, falliti {failed}. Primo errore: {errors.First()}";
+        }
+    }
+
+    /// <summary>
+    /// Ritorna il path della cartella genitore di un path remoto.
+    /// </summary>
+    private static string GetParentPath(string fullPath)
+    {
+        if (string.IsNullOrEmpty(fullPath)) return "/";
+        var trimmed = fullPath.TrimEnd('/');
+        int lastSlash = trimmed.LastIndexOf('/');
+        return lastSlash <= 0 ? "/" : trimmed.Substring(0, lastSlash);
     }
 
     public async Task SftpRemoteCreateFolderAsync(string name)
@@ -2211,7 +2604,7 @@ public partial class MainWindowViewModel : ViewModelBase
             await _sftpService.CreateDirectoryAsync(full);
             SftpStatusMessage = $"Cartella remota creata: {name}";
             await SftpRefreshAsync();
-            InvalidateZeroByteCacheForFolder(SftpCurrentRemotePath);
+            InvalidateZeroByteCacheRecursive(SftpCurrentRemotePath);
             SftpStatusMessage = $"Cartella remota creata: {name}";
         }
         catch (Exception ex) { SftpStatusMessage = $"Errore: {ex.Message}"; }
@@ -2229,7 +2622,7 @@ public partial class MainWindowViewModel : ViewModelBase
             await _sftpService.RenameAsync(entry.FullPath, newPath);
             SftpStatusMessage = $"Rinominato in: {newName}";
             await SftpRefreshAsync();
-            InvalidateZeroByteCacheForFolder(SftpCurrentRemotePath);
+            InvalidateZeroByteCacheRecursive(SftpCurrentRemotePath);
             SftpStatusMessage = $"Rinominato in: {newName}";
         }
         catch (Exception ex) { SftpStatusMessage = $"Errore: {ex.Message}"; }
@@ -2336,7 +2729,7 @@ public partial class MainWindowViewModel : ViewModelBase
             SftpStatusMessage = $"{totalQueued} file accodati per upload (drag & drop).";
             _sftpUploadQueue.StartAll();
             // Invalida la cache della destinazione (potrebbe aver ricevuto file non-zero).
-            InvalidateZeroByteCacheForFolder(targetDir);
+            InvalidateZeroByteCacheRecursive(targetDir);
         }
         catch (Exception ex)
         {
@@ -2439,7 +2832,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
             var count = await _sftpUploadQueue.EnqueueFolderAsync(SftpUploadLocalFolder, SftpUploadRemoteFolder);
             SftpStatusMessage = $"{count} file accodati per upload.";
-            InvalidateZeroByteCacheForFolder(SftpUploadRemoteFolder);
+            InvalidateZeroByteCacheRecursive(SftpUploadRemoteFolder);
         }
         catch (Exception ex) { SftpStatusMessage = $"Errore: {ex.Message}"; }
     }

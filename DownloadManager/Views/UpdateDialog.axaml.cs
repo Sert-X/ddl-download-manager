@@ -3,7 +3,6 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
-using DownloadManager.Models;
 using DownloadManager.ViewModels;
 
 namespace DownloadManager.Views;
@@ -15,13 +14,12 @@ public partial class UpdateDialog : Window
     private Phase _phase = Phase.Confirm;
     private string _newVersion = "";
     private long _totalBytes;
+    private string _changelog = "";
     private Func<Action<int>, Task>? _downloadAction;
     private int _lastPercent;
 
-    // Per calcolo velocità/ETA
     private DateTime _downloadStartTime;
     private DateTime _lastSampleTime;
-    private long _lastSampleBytes;
 
     public UpdateChoice Choice { get; private set; } = UpdateChoice.Cancel;
 
@@ -32,18 +30,19 @@ public partial class UpdateDialog : Window
 
     /// <summary>
     /// Mostra il dialog e gestisce l'intero flusso (conferma → download → riavvio).
-    /// Ritorna la scelta finale dell'utente.
     /// </summary>
     public static async Task<UpdateChoice> ShowAsync(
         Window owner,
         string newVersion,
         long packageBytes,
+        string changelog,
         Func<Action<int>, Task> downloadAction)
     {
         var dlg = new UpdateDialog
         {
             _newVersion = newVersion,
             _totalBytes = packageBytes,
+            _changelog = changelog ?? "",
             _downloadAction = downloadAction
         };
 
@@ -72,9 +71,17 @@ public partial class UpdateDialog : Window
             case Phase.Confirm:
                 SubtitleText.Text = $"Versione {_newVersion} pronta per l'installazione";
                 VersionInfoText.Text =
-                    $"È disponibile una nuova versione di DDL Download Manager.\n\n" +
-                    $"Nuova versione: {_newVersion}\n" +
-                    $"Dimensione pacchetto: {SftpRemoteEntry.FormatSize(_totalBytes)}";
+                    $"È disponibile una nuova versione di DDL Download Manager.\n" +
+                    $"Nuova versione: {_newVersion}";
+
+                if (string.IsNullOrWhiteSpace(_changelog))
+                {
+                    ChangelogText.Text = "Nessun dettaglio disponibile per questa versione.";
+                }
+                else
+                {
+                    ChangelogText.Text = _changelog;
+                }
 
                 AddButton("Più tardi", "ghost", () => { Choice = UpdateChoice.Cancel; Close(); });
                 AddButton("Aggiorna ora", "accent", () => _ = StartDownloadAsync());
@@ -149,20 +156,19 @@ public partial class UpdateDialog : Window
     private void ResetProgress()
     {
         ProgressBarCtrl.Value = 0;
-        BytesText.Text = $"0 B / {SftpRemoteEntry.FormatSize(_totalBytes)}";
+        BytesText.Text = "0%";
         SpeedText.Text = "-";
-        EtaText.Text = "-";
         PercentText.Text = "0%";
 
         _lastPercent = 0;
         _downloadStartTime = DateTime.UtcNow;
         _lastSampleTime = DateTime.UtcNow;
-        _lastSampleBytes = 0;
     }
 
     /// <summary>
     /// Callback chiamata da Velopack con la percentuale 0-100.
-    /// Aggiorna la UI con percentuale, velocità e ETA.
+    /// Velopack non fornisce byte reali, solo percentuale del download da fare.
+    /// Mostriamo % + velocità stimata in %/s.
     /// </summary>
     private void OnProgress(int percent)
     {
@@ -173,46 +179,28 @@ public partial class UpdateDialog : Window
 
             ProgressBarCtrl.Value = percent;
             PercentText.Text = $"{percent}%";
+            BytesText.Text = $"{percent}%";
 
-            long downloadedBytes = (long)(_totalBytes * (percent / 100.0));
-            BytesText.Text = $"{SftpRemoteEntry.FormatSize(downloadedBytes)} / {SftpRemoteEntry.FormatSize(_totalBytes)}";
-
-            // Calcola velocità (misurata da inizio download, con campioni periodici)
             var now = DateTime.UtcNow;
             var elapsed = (now - _lastSampleTime).TotalSeconds;
 
-            if (elapsed >= 0.3 && percent != _lastPercent) // aggiorna max ~3 volte al secondo
+            if (elapsed >= 0.5 && percent != _lastPercent)
             {
-                long deltaBytes = downloadedBytes - _lastSampleBytes;
-                double speed = deltaBytes / Math.Max(0.001, elapsed);
+                double deltaPercent = percent - _lastPercent;
+                double speedPercent = deltaPercent / elapsed;
 
-                SpeedText.Text = speed > 0
-                    ? $"{speed / 1024 / 1024:F2} MB/s"
-                    : "-";
-
-                if (speed > 0 && downloadedBytes < _totalBytes)
+                if (speedPercent > 0)
                 {
-                    long remaining = _totalBytes - downloadedBytes;
-                    double etaSec = remaining / speed;
-                    EtaText.Text = FormatEta(etaSec);
+                    SpeedText.Text = $"{speedPercent:F1} %/s";
                 }
-                else if (percent >= 100)
+                else
                 {
-                    EtaText.Text = "0s";
+                    SpeedText.Text = "-";
                 }
 
                 _lastSampleTime = now;
-                _lastSampleBytes = downloadedBytes;
                 _lastPercent = percent;
             }
         });
-    }
-
-    private static string FormatEta(double seconds)
-    {
-        if (seconds < 1) return "<1s";
-        if (seconds < 60) return $"{(int)seconds}s";
-        if (seconds < 3600) return $"{(int)(seconds / 60)}m {(int)(seconds % 60)}s";
-        return $"{(int)(seconds / 3600)}h {(int)((seconds % 3600) / 60)}m";
     }
 }

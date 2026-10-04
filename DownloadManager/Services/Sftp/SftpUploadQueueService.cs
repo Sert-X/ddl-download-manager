@@ -224,22 +224,34 @@ public class SftpUploadQueueService
     public void ClearCompleted()
     {
         var toRemove = AllJobs.Where(j => j.Status == SftpJobStatus.Completed).ToList();
-        foreach (var job in toRemove)
-            AllJobs.Remove(job);
+        Dispatcher.UIThread.Post(() =>
+        {
+            foreach (var job in toRemove)
+                AllJobs.Remove(job);
+            QueueChanged?.Invoke();
+        });
     }
 
     public void ClearCancelled()
     {
         var toRemove = AllJobs.Where(j => j.Status == SftpJobStatus.Cancelled).ToList();
-        foreach (var job in toRemove)
-            AllJobs.Remove(job);
+        Dispatcher.UIThread.Post(() =>
+        {
+            foreach (var job in toRemove)
+                AllJobs.Remove(job);
+            QueueChanged?.Invoke();
+        });
     }
 
     public void ClearFailed()
     {
         var toRemove = AllJobs.Where(j => j.Status == SftpJobStatus.Failed).ToList();
-        foreach (var job in toRemove)
-            AllJobs.Remove(job);
+        Dispatcher.UIThread.Post(() =>
+        {
+            foreach (var job in toRemove)
+                AllJobs.Remove(job);
+            QueueChanged?.Invoke();
+        });
     }
 
     // ============================================================
@@ -324,8 +336,11 @@ public class SftpUploadQueueService
 
         lock (_queueLock) { _pendingIds.Remove(job.Id); }
 
-        Dispatcher.UIThread.Post(() => AllJobs.Remove(job));
-        QueueChanged?.Invoke();
+        Dispatcher.UIThread.Post(() =>
+        {
+            AllJobs.Remove(job);
+            QueueChanged?.Invoke();
+        });
     }
 
     // ============================================================

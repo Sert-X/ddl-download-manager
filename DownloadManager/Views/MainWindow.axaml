@@ -8,10 +8,10 @@
         x:Class="DownloadManager.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="DDL Download Manager"
-        Width="1500" Height="950"
-        MinWidth="1100" MinHeight="700">
+        Width="600" Height="600"
+        MinWidth="900" MinHeight="500">
 
-    <Grid RowDefinitions="Auto, *, Auto, Auto" Margin="0">
+    <Grid RowDefinitions="Auto, *, Auto, Auto, Auto" Margin="0">
 
         <!-- ==================================================== -->
         <!--  TOP BAR — brand + selettore tema globale            -->
@@ -43,10 +43,11 @@
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                     <Button Content="🔄 Aggiorna"
                             Command="{Binding CheckUpdatesCommand}"
-                            Margin="0,0,12,0"
+                            Margin="0,0,8,0"
                             FontSize="12"
                             Padding="10,4"
                             ToolTip.Tip="Controlla aggiornamenti"/>
+                            
                     <Border Classes="proxyBadge"
                             Classes.proxyActive="{Binding IsProxyActive}"
                             Margin="0,0,12,0">
@@ -78,119 +79,53 @@
             <!--  TAB DOWNLOAD                                     -->
             <!-- ================================================ -->
             <TabItem Header="🏠  Download">
-                <DockPanel Margin="0,10,0,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="0,10,0,0">
 
-                    <!-- Status banner (solo in Download) -->
-                    <Border DockPanel.Dock="Top"
-                            Background="{DynamicResource AppSurfaceBrush}"
-                            BorderBrush="{DynamicResource AppBorderBrush}"
-                            BorderThickness="1"
-                            CornerRadius="8"
-                            Padding="14,10"
-                            Margin="0,0,0,12">
-                        <Grid ColumnDefinitions="Auto, *">
-                            <TextBlock Grid.Column="0" Text="ℹ"
-                                       FontSize="16" FontWeight="Bold"
-                                       Foreground="{DynamicResource AppAccentBrush}"
-                                       VerticalAlignment="Center"
-                                       Margin="0,0,10,0"/>
-                            <TextBlock Grid.Column="1"
-                                       Text="{Binding StatusMessage}"
-                                       Foreground="{DynamicResource AppTextBrush}"
-                                       FontStyle="Italic"
-                                       VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"/>
-                        </Grid>
-                    </Border>
+                    <!-- Barra ricerca + status (uniti in una sola card) -->
+                    <Border Classes="cardElevated" Margin="0,0,0,12">
+                        <StackPanel Spacing="10">
+                            <!-- Status message spostato qui dentro -->
+                            <Border Background="{DynamicResource AppSurface2Brush}"
+                                    BorderBrush="{DynamicResource AppBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="10,6">
+                                <Grid ColumnDefinitions="Auto, *">
+                                    <TextBlock Grid.Column="0" Text="ℹ"
+                                            FontSize="14" FontWeight="Bold"
+                                            Foreground="{DynamicResource AppAccentBrush}"
+                                            VerticalAlignment="Center"
+                                            Margin="0,0,8,0"/>
+                                    <TextBlock Grid.Column="1"
+                                            Text="{Binding StatusMessage}"
+                                            Foreground="{DynamicResource AppTextBrush}"
+                                            FontStyle="Italic"
+                                            VerticalAlignment="Center"
+                                            TextWrapping="Wrap"/>
+                                </Grid>
+                            </Border>
 
-                    <!-- Barra ricerca + comandi globali -->
-                    <Border DockPanel.Dock="Top" Classes="cardElevated" Margin="0,0,0,12">
-                        <StackPanel Spacing="12">
                             <Grid ColumnDefinitions="*, Auto, Auto">
                                 <ComboBox Grid.Column="0" Name="SearchComboBox" IsEditable="True"
-                                          ItemsSource="{Binding SearchHistory}"
-                                          PlaceholderText="🔎 Cerca un anime..."
-                                          KeyDown="OnSearchKeyDown"
-                                          HorizontalAlignment="Stretch"
-                                          Margin="0,0,8,0"
-                                          MinHeight="40"/>
+                                        ItemsSource="{Binding SearchHistory}"
+                                        PlaceholderText="🔎 Cerca un anime..."
+                                        KeyDown="OnSearchKeyDown"
+                                        HorizontalAlignment="Stretch"
+                                        Margin="0,0,8,0"
+                                        MinHeight="40"/>
                                 <Button Grid.Column="1" Content="Cerca" Classes="accent"
                                         Click="OnSearchButtonClick"
                                         MinWidth="110" Height="40" Margin="0,0,8,0"/>
                                 <Button Grid.Column="2" Content="🗑" Classes="iconCircle"
                                         ToolTip.Tip="Svuota cronologia"
                                         Click="OnClearSearchHistoryClick"/>
-                            </Grid>
-
-                            <!-- Pannello controlli + info download -->
-                            <Border Background="{DynamicResource AppSurface2Brush}"
-                                    CornerRadius="8" Padding="12">
-                                <Grid ColumnDefinitions="Auto, Auto, Auto, *, Auto, Auto, Auto" RowDefinitions="Auto, Auto">
-                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Download paralleli"
-                                               FontWeight="SemiBold"
-                                               VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                    <Slider Grid.Row="0" Grid.Column="1"
-                                            Value="{Binding MaxConcurrency}" Minimum="1" Maximum="20" Width="160"
-                                            TickFrequency="1" IsSnapToTickEnabled="True"
-                                            VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Row="0" Grid.Column="2"
-                                               Text="{Binding MaxConcurrency}"
-                                               Width="30" VerticalAlignment="Center"
-                                               HorizontalAlignment="Center"
-                                               FontWeight="Bold"
-                                               Foreground="{DynamicResource AppAccentBrush}"/>
-                                    <Border Grid.Row="0" Grid.Column="3" Width="1"
-                                            Background="{DynamicResource AppBorderBrush}"
-                                            Margin="14,0"/>
-                                    <StackPanel Grid.Row="0" Grid.Column="4"
-                                                Orientation="Horizontal" Spacing="8">
-                                        <Button Content="▶ Avvia tutti" Classes="success"
-                                                Command="{Binding StartAllCommand}"/>
-                                        <Button Content="⏸ Pausa tutti" Classes="warning"
-                                                Command="{Binding PauseAllCommand}"/>
-                                        <Button Content="✕ Annulla tutti" Classes="danger"
-                                                Command="{Binding CancelAllDownloadsCommand}"/>
-                                        <Button Content="🗑 Elimina tutti"
-                                                Command="{Binding DeleteEverythingCommand}"/>
-                                    </StackPanel>
-                                    <StackPanel Grid.Row="0" Grid.Column="5"
-                                                Orientation="Horizontal" Spacing="8" Margin="8,0,0,0">
-                                        <Button Content="🧹 Completati"
-                                                Command="{Binding ClearCompletedCommand}"/>
-                                        <Button Content="🧹 Annullati"
-                                                Command="{Binding ClearCancelledDownloadsCommand}"/>
-                                        <Button Content="🧹 Failed"
-                                                Command="{Binding ClearFailedDownloadsCommand}"/>
-                                    </StackPanel>
-                                    <Button Grid.Row="0" Grid.Column="6"
-                                            Content="✋ Stop accodamento" Classes="danger"
-                                            Command="{Binding CancelBatchCommand}"
-                                            IsVisible="{Binding IsBatchActive}"
-                                            Margin="8,0,0,0"/>
-
-                                    <!-- Riga 2: totals -->
-                                    <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="7"
-                                                Orientation="Horizontal" Spacing="24" Margin="0,10,0,0">
-                                        <TextBlock FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}">
-                                            <Run Text="Totale:" FontWeight="Bold"/>
-                                            <Run Text="{Binding GlobalSizeText}"/>
-                                        </TextBlock>
-                                        <TextBlock FontSize="12" Foreground="{DynamicResource AppSuccessBrush}">
-                                            <Run Text="Velocità:" FontWeight="Bold"/>
-                                            <Run Text="{Binding GlobalSpeedText}"/>
-                                        </TextBlock>
-                                        <TextBlock FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}">
-                                            <Run Text="ETA:" FontWeight="Bold"/>
-                                            <Run Text="{Binding GlobalEtaText}"/>
-                                        </TextBlock>
-                                    </StackPanel>
-                                </Grid>
-                            </Border>
+                            </Grid>                            
                         </StackPanel>
                     </Border>
 
                     <!-- Pattern + cartella base -->
-                    <Border DockPanel.Dock="Top" Classes="cardElevated" Margin="0,0,0,12">
+                    <Border Classes="cardElevated" Margin="0,0,0,12">
                         <Grid ColumnDefinitions="Auto, *, Auto, Auto, Auto" RowDefinitions="Auto, Auto">
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Pattern"
                                        VerticalAlignment="Center" FontWeight="SemiBold"
@@ -238,14 +173,27 @@
                     </Border>
 
                     <!-- Risultati + Episodi -->
-                    <Grid DockPanel.Dock="Top" ColumnDefinitions="2*, 3*" Height="280" Margin="0,0,0,12">
+                    <Grid ColumnDefinitions="2*, 3*" Height="280" Margin="0,0,0,12">
                         <Border Grid.Column="0" Classes="cardElevated" Margin="0,0,6,0">
                             <DockPanel>
-                                <TextBlock DockPanel.Dock="Top" Text="🎬 Risultati ricerca"
-                                           FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
+                                <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto, *" Margin="0,0,0,8">
+                                    <TextBlock Grid.Column="0" Text="🎬 Risultati ricerca"
+                                            FontWeight="Bold" FontSize="14"
+                                            VerticalAlignment="Center"/>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
+                                                HorizontalAlignment="Right"
+                                                IsVisible="{Binding IsLoadingSearchResults}">
+                                        <ProgressBar IsIndeterminate="True" Width="80" Height="4"
+                                                    VerticalAlignment="Center"/>
+                                        <TextBlock Text="Ricerca in corso..." FontSize="11"
+                                                FontStyle="Italic"
+                                                Foreground="{DynamicResource AppTextMutedBrush}"
+                                                VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Grid>
                                 <DataGrid ItemsSource="{Binding SearchResults}"
-                                          AutoGenerateColumns="False" IsReadOnly="True"
-                                          DoubleTapped="OnSearchResultDoubleTapped">
+                                        AutoGenerateColumns="False" IsReadOnly="True"
+                                        DoubleTapped="OnSearchResultDoubleTapped">
                                     <DataGrid.Columns>
                                         <DataGridTextColumn Header="Nome" Binding="{Binding Name}" Width="*"/>
                                     </DataGrid.Columns>
@@ -255,8 +203,21 @@
 
                         <Border Grid.Column="1" Classes="cardElevated" Margin="6,0,0,0">
                             <DockPanel>
-                                <TextBlock DockPanel.Dock="Top" Text="📺 Episodi"
-                                           FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
+                                <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto, *" Margin="0,0,0,8">
+                                    <TextBlock Grid.Column="0" Text="📺 Episodi"
+                                            FontWeight="Bold" FontSize="14"
+                                            VerticalAlignment="Center"/>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
+                                                HorizontalAlignment="Right"
+                                                IsVisible="{Binding IsLoadingEpisodes}">
+                                        <ProgressBar IsIndeterminate="True" Width="80" Height="4"
+                                                    VerticalAlignment="Center"/>
+                                        <TextBlock Text="Caricamento..." FontSize="11"
+                                                FontStyle="Italic"
+                                                Foreground="{DynamicResource AppTextMutedBrush}"
+                                                VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Grid>
 
                                 <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="6" Margin="0,0,0,8">
                                     <Button Content="⬇ Scarica selezionati" Classes="success"
@@ -293,10 +254,86 @@
                     </Grid>
 
                     <!-- Download per serie -->
-                    <Border Classes="cardElevated">
+                    <Border Classes="cardElevated" Height="550" Margin="0,0,0,12">
                         <DockPanel>
-                            <TextBlock DockPanel.Dock="Top" Text="📥 Download per serie"
-                                       FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
+                            <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto, *" Margin="0,0,0,8">
+                                <TextBlock Grid.Column="0" Text="📥 Download per serie"
+                                        FontWeight="Bold" FontSize="14"
+                                        VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" Text="{Binding SeriesSummaryText}"
+                                        FontSize="12"
+                                        Foreground="{DynamicResource AppTextMutedBrush}"
+                                        Margin="12,0,0,0"
+                                        VerticalAlignment="Center"
+                                        TextTrimming="CharacterEllipsis"/>
+                            </Grid>
+
+                            <!-- Pannello controlli + info download (spostato dalla barra di ricerca) -->
+                            <Border DockPanel.Dock="Top"
+                                    Background="{DynamicResource AppSurface2Brush}"
+                                    CornerRadius="8" Padding="12" Margin="0,0,0,10">
+                                <StackPanel Spacing="10">
+
+                                    <!-- Riga 1: slider + tutti i pulsanti con wrap -->
+                                    <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="6">
+
+                                        <!-- Gruppo slider -->
+                                        <StackPanel Orientation="Horizontal" Spacing="6"
+                                                    VerticalAlignment="Center" Margin="0,0,10,0">
+                                            <TextBlock Text="Download paralleli"
+                                                    FontWeight="SemiBold"
+                                                    VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                            <Slider Value="{Binding MaxConcurrency}" Minimum="1" Maximum="20" Width="140"
+                                                    TickFrequency="1" IsSnapToTickEnabled="True"
+                                                    VerticalAlignment="Center"/>
+                                            <TextBlock Text="{Binding MaxConcurrency}"
+                                                    Width="24" VerticalAlignment="Center"
+                                                    HorizontalAlignment="Center"
+                                                    FontWeight="Bold"
+                                                    Foreground="{DynamicResource AppAccentBrush}"/>
+                                        </StackPanel>
+
+                                        <!-- Gruppo azioni principali -->
+                                        <Button Content="▶ Avvia tutti" Classes="success"
+                                                Command="{Binding StartAllCommand}"/>
+                                        <Button Content="⏸ Pausa tutti" Classes="warning"
+                                                Command="{Binding PauseAllCommand}"/>
+                                        <Button Content="✕ Annulla tutti" Classes="danger"
+                                                Command="{Binding CancelAllDownloadsCommand}"/>
+                                        <Button Content="🗑 Elimina tutti"
+                                                Command="{Binding DeleteEverythingCommand}"/>
+
+                                        <!-- Stop accodamento (visibile solo quando batch attivo) -->
+                                        <Button Content="✋ Stop accodamento" Classes="danger"
+                                                Command="{Binding CancelBatchCommand}"
+                                                IsVisible="{Binding IsBatchActive}"/>
+
+                                        <!-- Gruppo pulizia -->
+                                        <Button Content="🧹 Completati"
+                                                Command="{Binding ClearCompletedCommand}"/>
+                                        <Button Content="🧹 Annullati"
+                                                Command="{Binding ClearCancelledDownloadsCommand}"/>
+                                        <Button Content="🧹 Failed"
+                                                Command="{Binding ClearFailedDownloadsCommand}"/>
+                                    </WrapPanel>
+
+                                    <!-- Riga 2: totals -->
+                                    <StackPanel Orientation="Horizontal" Spacing="24">
+                                        <TextBlock FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}">
+                                            <Run Text="Totale:" FontWeight="Bold"/>
+                                            <Run Text="{Binding GlobalSizeText}"/>
+                                        </TextBlock>
+                                        <TextBlock FontSize="12" Foreground="{DynamicResource AppSuccessBrush}">
+                                            <Run Text="Velocità:" FontWeight="Bold"/>
+                                            <Run Text="{Binding GlobalSpeedText}"/>
+                                        </TextBlock>
+                                        <TextBlock FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}">
+                                            <Run Text="ETA:" FontWeight="Bold"/>
+                                            <Run Text="{Binding GlobalEtaText}"/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
 
                             <ScrollViewer VerticalScrollBarVisibility="Auto">
                                 <ItemsControl ItemsSource="{Binding SeriesGroups}">
@@ -439,13 +476,15 @@
                             </ScrollViewer>
                         </DockPanel>
                     </Border>
-                </DockPanel>
+                </StackPanel>
+            </ScrollViewer>
             </TabItem>
 
             <!-- ================================================ -->
             <!--  TAB ORGANIZZA FILE                              -->
             <!-- ================================================ -->
             <TabItem Header="🗂️  Organizza file">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <DockPanel Margin="0,10,0,0">
 
                     <!-- Selettore Locale/Remoto -->
@@ -943,12 +982,14 @@
                         </TabItem>
                     </TabControl>
                 </DockPanel>
+            </ScrollViewer>
             </TabItem>
 
             <!-- ================================================ -->
             <!--  TAB SFTP                                        -->
             <!-- ================================================ -->
             <TabItem Header="☁  SFTP">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <DockPanel Margin="0,10,0,0">
 
                     <!-- Configurazione SFTP -->
@@ -985,13 +1026,13 @@
                                     <TextBox Grid.Row="0" Grid.Column="3" Text="{Binding SftpHost}"
                                              Width="260" Margin="0,0,0,8"/>
 
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Porta:" VerticalAlignment="Center"
-                                               Margin="0,0,10,8"/>
-                                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding SftpPort}" Margin="0,0,10,8"/>
-                                    <TextBlock Grid.Row="1" Grid.Column="2" Text="Username:" VerticalAlignment="Center"
-                                               Margin="20,0,10,8"/>
-                                    <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding SftpUsername}"
-                                             Width="260" Margin="0,0,0,8"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Username:" VerticalAlignment="Center"
+                                            Margin="0,0,10,8"/>
+                                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding SftpUsername}" Margin="0,0,10,8"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="2" Text="Porta:" VerticalAlignment="Center"
+                                            Margin="20,0,10,8"/>
+                                    <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding SftpPort}"
+                                            Width="260" Margin="0,0,0,8"/>
 
                                     <TextBlock Grid.Row="2" Grid.Column="0" Text="Password:" VerticalAlignment="Center"
                                                Margin="0,0,10,8"/>
@@ -1065,41 +1106,52 @@
                                         <TextBlock DockPanel.Dock="Top" Text="💻 File locali"
                                                    FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
 
-                                        <Grid DockPanel.Dock="Top"
-                                              ColumnDefinitions="Auto, Auto, *, Auto, Auto, Auto, Auto"
-                                              Margin="0,0,0,8">
-                                            <Button Grid.Column="0" Content="⬅" Classes="iconCircle"
-                                                    Command="{Binding SftpLocalGoUpCommand}" Margin="0,0,6,0"
-                                                    ToolTip.Tip="Indietro"/>
-                                            <Button Grid.Column="1" Content="🏠" Classes="iconCircle"
-                                                    Command="{Binding SftpLocalHomeCommand}" Margin="0,0,6,0"
-                                                    ToolTip.Tip="Home"/>
-                                            <TextBox Grid.Column="2" Text="{Binding SftpCurrentLocalPath}"
-                                                     Margin="0,0,6,0" IsReadOnly="True"/>
-                                            <Button Grid.Column="3" Content="🔄" Classes="iconCircle"
-                                                    Click="OnSftpLocalRefreshClick" Margin="0,0,6,0"
-                                                    ToolTip.Tip="Aggiorna"/>
-                                            <Button Grid.Column="4" Content="➕" Classes="iconCircle"
-                                                    Click="OnLocalNewFolderClick" Margin="0,0,6,0"
-                                                    ToolTip.Tip="Nuova cartella"/>
-                                            <ComboBox Grid.Column="5"
-                                                    ItemsSource="{Binding SortOptions}"
-                                                    SelectedItem="{Binding LocalSortOption, Mode=TwoWay}"
-                                                    MinWidth="110" Margin="0,0,6,0"
-                                                    ToolTip.Tip="Ordina per">
-                                                <ComboBox.ItemTemplate>
-                                                    <DataTemplate x:DataType="models:SortOption">
-                                                        <TextBlock Text="{Binding Label}"/>
-                                                    </DataTemplate>
-                                                </ComboBox.ItemTemplate>
-                                            </ComboBox>
-                                            <Button Grid.Column="6" Content="↑" Classes="iconCircle" Width="34"
-                                                    Command="{Binding ToggleLocalSortDirectionCommand}"
-                                                    ToolTip.Tip="Inverti direzione"/>
+                                        <Grid DockPanel.Dock="Top" RowDefinitions="Auto,Auto" Margin="0,0,0,8">
+
+                                            <!-- Riga 1: pulsanti + path + sort -->
+                                            <Grid Grid.Row="0" ColumnDefinitions="Auto, Auto, *, Auto, Auto, Auto, Auto">
+                                                <Button Grid.Column="0" Content="⬅" Classes="iconCircle"
+                                                        Command="{Binding SftpLocalGoUpCommand}" Margin="0,0,6,0"
+                                                        ToolTip.Tip="Indietro"/>
+                                                <Button Grid.Column="1" Content="🏠" Classes="iconCircle"
+                                                        Command="{Binding SftpLocalHomeCommand}" Margin="0,0,6,0"
+                                                        ToolTip.Tip="Home"/>
+                                                <TextBox Grid.Column="2" Text="{Binding SftpCurrentLocalPath}"
+                                                        Margin="0,0,6,0" IsReadOnly="True"/>
+                                                <Button Grid.Column="3" Content="🔄" Classes="iconCircle"
+                                                        Click="OnSftpLocalRefreshClick" Margin="0,0,6,0"
+                                                        ToolTip.Tip="Aggiorna"/>
+                                                <Button Grid.Column="4" Content="➕" Classes="iconCircle"
+                                                        Click="OnLocalNewFolderClick" Margin="0,0,6,0"
+                                                        ToolTip.Tip="Nuova cartella"/>
+                                                <ComboBox Grid.Column="5"
+                                                        ItemsSource="{Binding SortOptions}"
+                                                        SelectedItem="{Binding LocalSortOption, Mode=TwoWay}"
+                                                        MinWidth="110" Margin="0,0,6,0"
+                                                        ToolTip.Tip="Ordina per">
+                                                    <ComboBox.ItemTemplate>
+                                                        <DataTemplate x:DataType="models:SortOption">
+                                                            <TextBlock Text="{Binding Label}"/>
+                                                        </DataTemplate>
+                                                    </ComboBox.ItemTemplate>
+                                                </ComboBox>
+                                                <Button Grid.Column="6" Content="↑" Classes="iconCircle" Width="34"
+                                                        Command="{Binding ToggleLocalSortDirectionCommand}"
+                                                        ToolTip.Tip="Inverti direzione"/>
+                                            </Grid>
+
+                                            <!-- Riga 2: contatore, sempre visibile -->
+                                            <TextBlock Grid.Row="1"
+                                                    Text="{Binding LocalBrowserStats}"
+                                                    FontSize="11"
+                                                    Foreground="{DynamicResource AppTextMutedBrush}"
+                                                    Margin="0,4,0,0"
+                                                    HorizontalAlignment="Left"/>
                                         </Grid>
 
                                         <DataGrid Name="LocalFilesGrid"
                                                   ItemsSource="{Binding SftpLocalEntries}"
+                                                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
                                                   SelectedItem="{Binding SftpSelectedLocalEntry, Mode=TwoWay}"
                                                   AutoGenerateColumns="False"
                                                   IsReadOnly="True"
@@ -1109,7 +1161,10 @@
                                                   KeyDown="OnLocalGridKeyDown"
                                                   DragDrop.AllowDrop="True"
                                                   DragDrop.DragOver="OnLocalGridDragOver"
-                                                  DragDrop.Drop="OnLocalGridDrop">
+                                                  DragDrop.Drop="OnLocalGridDrop"
+                                                  CanUserResizeColumns="True"
+                                                  CanUserReorderColumns="True"
+                                                  CanUserSortColumns="False">
                                             <DataGrid.Styles>
                                                 <Style Selector="DataGridRow" x:CompileBindings="False">
                                                     <Setter Property="Background"
@@ -1124,9 +1179,12 @@
                                                 </Style>
                                             </DataGrid.Styles>
                                             <DataGrid.Columns>
-                                                <DataGridTextColumn Header=" " Binding="{Binding Icon}" Width="30"/>
-                                                <DataGridTextColumn Header="Nome" Binding="{Binding Name}" Width="*"/>
-                                                <DataGridTextColumn Header="Dim." Binding="{Binding SizeText}" Width="90"/>
+                                                <DataGridTextColumn Header=" " Binding="{Binding Icon}" Width="34" CanUserResize="False"/>
+                                                <DataGridTextColumn Header="Nome" Binding="{Binding Name}" Width="*" MinWidth="150"/>
+                                                <DataGridTextColumn Header="Dim." Binding="{Binding SizeText}" Width="Auto" MinWidth="70"/>
+                                                <DataGridTextColumn Header="Ultima modifica"
+                                                                    Binding="{Binding Modified, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}"
+                                                                    Width="Auto" MinWidth="120"/>
                                             </DataGrid.Columns>
                                         </DataGrid>
                                     </DockPanel>
@@ -1151,77 +1209,99 @@
                                         <TextBlock DockPanel.Dock="Top" Text="☁ File remoti"
                                                    FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
 
-                                        <Grid DockPanel.Dock="Top"
-                                            ColumnDefinitions="Auto, Auto, *, Auto, Auto, Auto, Auto, Auto"
-                                            Margin="0,0,0,8">
-                                            <Button Grid.Column="0" Content="⬅" Classes="iconCircle"
-                                                    Command="{Binding SftpGoUpCommand}" Margin="0,0,6,0"
-                                                    ToolTip.Tip="Indietro"/>
-                                            <Button Grid.Column="1" Content="🏠" Classes="iconCircle"
-                                                    Command="{Binding SftpGoHomeCommand}" Margin="0,0,6,0"
-                                                    ToolTip.Tip="Home"/>
-                                            <TextBox Grid.Column="2" Text="{Binding SftpCurrentRemotePath}"
-                                                    Margin="0,0,6,0"/>
-                                            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4" Margin="0,0,6,0">
-                                                <Button Content="🔄" Classes="iconCircle"
-                                                        Click="OnSftpRefreshClick"
-                                                        IsEnabled="{Binding !IsRefreshingRemote}"
-                                                        ToolTip.Tip="Aggiorna"/>
-                                                <Button Content="🔁" Classes="iconCircle"
-                                                        Command="{Binding SftpForceReloadCommand}"
-                                                        IsEnabled="{Binding !IsRefreshingRemote}"
-                                                        ToolTip.Tip="Forza ricarica (riconnette al server)"/>
-                                            </StackPanel>
-                                            <Button Grid.Column="4" Content="➕" Classes="iconCircle"
-                                                    Click="OnRemoteNewFolderClick" Margin="0,0,6,0"
-                                                    ToolTip.Tip="Nuova cartella"/>
-                                            <Button Grid.Column="5" Content="🔍" Classes="iconCircle"
-                                                    Command="{Binding CheckZeroByteFoldersCommand}"
-                                                    IsEnabled="{Binding !IsCheckingZeroByte}"
-                                                    Margin="0,0,6,0"
-                                                    ToolTip.Tip="Controlla se le cartelle contengono file vuoti (0 byte)"/>
-                                            <ComboBox Grid.Column="6"
-                                                    ItemsSource="{Binding SortOptions}"
-                                                    SelectedItem="{Binding RemoteSortOption, Mode=TwoWay}"
-                                                    MinWidth="110" Margin="0,0,6,0"
-                                                    ToolTip.Tip="Ordina per">
-                                                <ComboBox.ItemTemplate>
-                                                    <DataTemplate x:DataType="models:SortOption">
-                                                        <TextBlock Text="{Binding Label}"/>
-                                                    </DataTemplate>
-                                                </ComboBox.ItemTemplate>
-                                            </ComboBox>
-                                            <Button Grid.Column="7" Content="↑" Classes="iconCircle" Width="34"
-                                                    Command="{Binding ToggleRemoteSortDirectionCommand}"
-                                                    ToolTip.Tip="Inverti direzione"/>
+                                        <Grid DockPanel.Dock="Top" RowDefinitions="Auto,Auto" Margin="0,0,0,8">
+
+                                            <!-- Riga 1: pulsanti + path + sort -->
+                                            <Grid Grid.Row="0"
+                                                ColumnDefinitions="Auto, Auto, *, Auto, Auto, Auto, Auto, Auto">
+                                                <Button Grid.Column="0" Content="⬅" Classes="iconCircle"
+                                                        Command="{Binding SftpGoUpCommand}" Margin="0,0,6,0"
+                                                        ToolTip.Tip="Indietro"/>
+                                                <Button Grid.Column="1" Content="🏠" Classes="iconCircle"
+                                                        Command="{Binding SftpGoHomeCommand}" Margin="0,0,6,0"
+                                                        ToolTip.Tip="Home"/>
+                                                <TextBox Grid.Column="2" Text="{Binding SftpCurrentRemotePath}"
+                                                        Margin="0,0,6,0"/>
+                                                <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4" Margin="0,0,6,0">
+                                                    <Button Content="🔄" Classes="iconCircle"
+                                                            Click="OnSftpRefreshClick"
+                                                            IsEnabled="{Binding !IsRefreshingRemote}"
+                                                            ToolTip.Tip="Aggiorna"/>
+                                                    <Button Content="🔁" Classes="iconCircle"
+                                                            Command="{Binding SftpForceReloadCommand}"
+                                                            IsEnabled="{Binding !IsRefreshingRemote}"
+                                                            ToolTip.Tip="Forza ricarica (riconnette al server)"/>
+                                                </StackPanel>
+                                                <Button Grid.Column="4" Content="➕" Classes="iconCircle"
+                                                        Click="OnRemoteNewFolderClick" Margin="0,0,6,0"
+                                                        ToolTip.Tip="Nuova cartella"/>
+                                                <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="4" Margin="0,0,6,0">
+                                                    <Button Content="🔍" Classes="iconCircle"
+                                                            Command="{Binding CheckZeroByteFoldersCommand}"
+                                                            IsEnabled="{Binding !IsCheckingZeroByte}"
+                                                            ToolTip.Tip="Controlla se le cartelle contengono file vuoti (0 byte)"/>
+                                                    <Button Content="⏹" Classes="iconCircle danger"
+                                                            Command="{Binding StopZeroByteCheckCommand}"
+                                                            IsVisible="{Binding IsCheckingZeroByte}"
+                                                            ToolTip.Tip="Ferma il check in corso"/>
+                                                </StackPanel>
+                                                <ComboBox Grid.Column="6"
+                                                        ItemsSource="{Binding SortOptions}"
+                                                        SelectedItem="{Binding RemoteSortOption, Mode=TwoWay}"
+                                                        MinWidth="110" Margin="0,0,6,0"
+                                                        ToolTip.Tip="Ordina per">
+                                                    <ComboBox.ItemTemplate>
+                                                        <DataTemplate x:DataType="models:SortOption">
+                                                            <TextBlock Text="{Binding Label}"/>
+                                                        </DataTemplate>
+                                                    </ComboBox.ItemTemplate>
+                                                </ComboBox>
+                                                <Button Grid.Column="7" Content="↑" Classes="iconCircle" Width="34"
+                                                        Command="{Binding ToggleRemoteSortDirectionCommand}"
+                                                        ToolTip.Tip="Inverti direzione"/>
+                                            </Grid>
+
+                                            <!-- Riga 2: contatore, sempre visibile -->
+                                            <TextBlock Grid.Row="1"
+                                                    Text="{Binding RemoteBrowserStats}"
+                                                    FontSize="11"
+                                                    Foreground="{DynamicResource AppTextMutedBrush}"
+                                                    Margin="0,4,0,0"
+                                                    HorizontalAlignment="Left"/>
                                         </Grid>
 
+                                        <!-- Status bar remoto: altezza fissa, non fa scrollare la lista -->
                                         <Border DockPanel.Dock="Top"
-                                                IsVisible="{Binding IsCheckingZeroByte}"
+                                                Height="28"
                                                 Background="{DynamicResource AppSurface2Brush}"
                                                 CornerRadius="6"
                                                 Padding="10,4"
                                                 Margin="0,0,0,6">
-                                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                                <TextBlock Text="🔍" FontSize="12"/>
-                                                <TextBlock Text="{Binding ZeroByteCheckStatus}"
-                                                        FontSize="11"
-                                                        FontStyle="Italic"
-                                                        Foreground="{DynamicResource AppTextMutedBrush}"
-                                                        VerticalAlignment="Center"/>
-                                            </StackPanel>
-                                        </Border>
-                                        <Border DockPanel.Dock="Top"
-                                                IsVisible="{Binding IsRefreshingRemote}"
-                                                Background="{DynamicResource AppSurface2Brush}"
-                                                CornerRadius="6" Padding="10,4" Margin="0,0,0,6">
-                                            <TextBlock Text="🔄 Lettura cartella in corso..."
-                                                    FontSize="11" FontStyle="Italic"
-                                                    Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                            <Grid ColumnDefinitions="Auto, *">
+                                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8"
+                                                            IsVisible="{Binding IsCheckingZeroByte}">
+                                                    <TextBlock Text="🔍" FontSize="12" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="{Binding ZeroByteCheckStatus}"
+                                                            FontSize="11"
+                                                            FontStyle="Italic"
+                                                            Foreground="{DynamicResource AppTextMutedBrush}"
+                                                            VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8"
+                                                            IsVisible="{Binding IsRefreshingRemote}">
+                                                    <TextBlock Text="🔄" FontSize="12" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="Lettura cartella in corso..."
+                                                            FontSize="11"
+                                                            FontStyle="Italic"
+                                                            Foreground="{DynamicResource AppTextMutedBrush}"
+                                                            VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Grid>
                                         </Border>
 
                                         <DataGrid Name="RemoteFilesGrid"
                                                   ItemsSource="{Binding SftpRemoteEntries}"
+                                                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
                                                   SelectedItem="{Binding SftpSelectedRemoteEntry, Mode=TwoWay}"
                                                   AutoGenerateColumns="False" IsReadOnly="True"
                                                   SelectionMode="Extended"
@@ -1230,13 +1310,16 @@
                                                   KeyDown="OnRemoteGridKeyDown"
                                                   DragDrop.AllowDrop="True"
                                                   DragDrop.DragOver="OnRemoteGridDragOver"
-                                                  DragDrop.Drop="OnRemoteGridDrop">
+                                                  DragDrop.Drop="OnRemoteGridDrop"
+                                                  CanUserResizeColumns="True"
+                                                  CanUserReorderColumns="True"
+                                                  CanUserSortColumns="False">
                                             <DataGrid.Styles>
                                                 <Style Selector="DataGridRow" x:CompileBindings="False">
                                                     <Setter Property="Background"
                                                             Value="{Binding HasZeroByteIssue, Converter={x:Static vm:ZeroByteToBrushConverter.Default}}"/>
                                                     <Setter Property="ToolTip.Tip"
-                                                            Value="{Binding ZeroByteTooltip}"/>
+                                                            Value="{Binding FullTooltip}"/>
                                                     <Setter Property="ContextMenu">
                                                         <ContextMenu>
                                                             <MenuItem Header="📂 Apri" Click="OnRemoteOpenClick"/>
@@ -1247,9 +1330,13 @@
                                                 </Style>
                                             </DataGrid.Styles>
                                             <DataGrid.Columns>
-                                                <DataGridTextColumn Header=" " Binding="{Binding Icon}" Width="30"/>
-                                                <DataGridTextColumn Header="Nome" Binding="{Binding Name}" Width="*"/>
-                                                <DataGridTextColumn Header="Dim." Binding="{Binding SizeText}" Width="90"/>
+                                                <DataGridTextColumn Header=" " Binding="{Binding Icon}" Width="34" CanUserResize="False"/>
+                                                <DataGridTextColumn Header="Nome" Binding="{Binding Name}" Width="*" MinWidth="150"/>
+                                                <DataGridTextColumn Header="Contenuto" Binding="{Binding ContentsInfo}" Width="Auto" MinWidth="100"/>
+                                                <DataGridTextColumn Header="Dim." Binding="{Binding SizeText}" Width="Auto" MinWidth="70"/>
+                                                <DataGridTextColumn Header="Ultima modifica"
+                                                                    Binding="{Binding Modified, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}"
+                                                                    Width="Auto" MinWidth="120"/>
                                             </DataGrid.Columns>
                                         </DataGrid>
                                     </DockPanel>
@@ -1296,6 +1383,10 @@
                                                        Foreground="{DynamicResource AppAccentBrush}"/>
                                         </StackPanel>
 
+                                        <TextBlock Text="{Binding UploadQueueStats}"
+                                            FontSize="11"
+                                            Foreground="{DynamicResource AppTextMutedBrush}"
+                                            FontStyle="Italic"/>
                                         <StackPanel Orientation="Horizontal" Spacing="8">
                                             <Button Content="📥 Accoda cartella" Classes="info"
                                                     Command="{Binding SftpEnqueueFolderCommand}"/>
@@ -1333,6 +1424,8 @@
                                         </DataGrid.Styles>
                                         <DataGrid.Columns>
                                             <DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="2*"/>
+                                            <DataGridTextColumn Header="Da" Binding="{Binding SourceFolder}" Width="2*"/>
+                                            <DataGridTextColumn Header="A" Binding="{Binding DestinationFolder}" Width="2*"/>
                                             <DataGridTextColumn Header="Stato" Binding="{Binding Status}" Width="100"/>
                                             <DataGridTemplateColumn Header="Progresso" Width="2*">
                                                 <DataGridTemplateColumn.CellTemplate>
@@ -1392,6 +1485,10 @@
                                                        Foreground="{DynamicResource AppAccentBrush}"/>
                                         </StackPanel>
 
+                                        <TextBlock Text="{Binding DownloadQueueStats}"
+                                            FontSize="11"
+                                            Foreground="{DynamicResource AppTextMutedBrush}"
+                                            FontStyle="Italic"/>
                                         <StackPanel Orientation="Horizontal" Spacing="8">
                                             <Button Content="▶ Avvia tutti" Classes="success"
                                                     Command="{Binding SftpDownloadQueueStartAllCommand}"/>
@@ -1427,6 +1524,8 @@
                                         </DataGrid.Styles>
                                         <DataGrid.Columns>
                                             <DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="2*"/>
+                                            <DataGridTextColumn Header="Da" Binding="{Binding SourceFolder}" Width="2*"/>
+                                            <DataGridTextColumn Header="A" Binding="{Binding DestinationFolder}" Width="2*"/>
                                             <DataGridTextColumn Header="Stato" Binding="{Binding Status}" Width="100"/>
                                             <DataGridTemplateColumn Header="Progresso" Width="2*">
                                                 <DataGridTemplateColumn.CellTemplate>
@@ -1452,6 +1551,7 @@
                         </TabItem>
                     </TabControl>
                 </DockPanel>
+            </ScrollViewer>
             </TabItem>
 
 
@@ -1459,13 +1559,14 @@
             <!--  TAB PROXY                                       -->
             <!-- ================================================ -->
             <TabItem Header="🌐  Proxy">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <DockPanel Margin="0,10,0,0">
 
                     <!-- Toolbar azioni -->
                     <Border DockPanel.Dock="Top" Classes="cardElevated" Margin="0,0,0,12">
                         <StackPanel Spacing="8">
                             <!-- Riga 1: gestione singola -->
-                            <StackPanel Orientation="Horizontal" Spacing="8">
+                            <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="6">
                                 <Button Content="+ Nuovo" Classes="accent"
                                         Command="{Binding ProxyNewCommand}"/>
                                 <Button Content="📁 Importa"
@@ -1474,14 +1575,20 @@
                                 <Button Content="💾 Salva"
                                         Command="{Binding ProxySaveCommand}"
                                         IsEnabled="{Binding !IsProxyBusy}"/>
-                                <Button Content="⚡ Attiva/Disattiva selezionato"
+                                <Button Content="⚡ Attiva selezionato"
                                         Classes="success"
                                         Command="{Binding ProxyToggleCommand}"
+                                        IsVisible="{Binding SelectedProxy.IsEnabled, Converter={x:Static BoolConverters.Not}, FallbackValue=False}"
                                         IsEnabled="{Binding SelectedProxy, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-                            </StackPanel>
+                                <Button Content="⏹ Disattiva selezionato"
+                                        Classes="danger"
+                                        Command="{Binding ProxyToggleCommand}"
+                                        IsVisible="{Binding SelectedProxy.IsEnabled, FallbackValue=False}"
+                                        IsEnabled="{Binding SelectedProxy, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                            </WrapPanel>
 
                             <!-- Riga 2: gestione multipla -->
-                            <StackPanel Orientation="Horizontal" Spacing="8">
+                            <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="6">
                                 <TextBlock Text="Selezione:"
                                         VerticalAlignment="Center"
                                         Foreground="{DynamicResource AppTextMutedBrush}"
@@ -1499,7 +1606,6 @@
                                 <TextBlock Text="{Binding ProxyTestConcurrency}" Width="20"
                                         VerticalAlignment="Center" FontWeight="Bold"
                                         Foreground="{DynamicResource AppAccentBrush}"/>
-                                <Border Width="1" Background="{DynamicResource AppBorderBrush}" Margin="4,2"/>
                                 <Button Content="🔌 Test selezionati"
                                         Classes="info"
                                         Command="{Binding ProxyTestSelectedCommand}"
@@ -1511,7 +1617,6 @@
                                 <Button Content="⏹ Stop test" Classes="danger"
                                         Command="{Binding ProxyStopTestCommand}"
                                         IsEnabled="{Binding IsProxyBusy}"/>
-                                <Border Width="1" Background="{DynamicResource AppBorderBrush}" Margin="4,2"/>
                                 <Button Content="🗑 Elimina selezionati"
                                         Classes="danger"
                                         Command="{Binding ProxyDeleteSelectedCommand}"/>
@@ -1521,7 +1626,7 @@
                                 <Button Content="🗑 Elimina tutti"
                                         Classes="danger"
                                         Command="{Binding ProxyDeleteAllCommand}"/>
-                            </StackPanel>
+                            </WrapPanel>
                         </StackPanel>
                     </Border>
 
@@ -1646,9 +1751,6 @@
                                                  PasswordChar="•" Margin="0,0,0,4"/>
                                     </Grid>
 
-                                    <CheckBox Content="✅ Abilita questo proxy (disattiva gli altri)"
-                                              IsChecked="{Binding IsEnabled, Mode=TwoWay}"/>
-
                                     <Border Background="{DynamicResource AppSurface2Brush}"
                                             CornerRadius="6" Padding="10">
                                         <StackPanel Spacing="4">
@@ -1665,28 +1767,48 @@
                         </Border>
                     </Grid>
                 </DockPanel>
+            </ScrollViewer>
             </TabItem>
         </TabControl>
 
-        <!-- ==================================================== -->
-        <!--  LOG GLOBALE (in fondo)                              -->
-        <!-- ==================================================== -->
-        <Border Grid.Row="2"
-                Background="{DynamicResource AppSurfaceBrush}"
-                BorderBrush="{DynamicResource AppBorderBrush}"
-                BorderThickness="0,1,0,0"
-                Height="150"
-                Margin="0,12,0,0">
-            <DockPanel Margin="16,8">
-                <Grid DockPanel.Dock="Top" ColumnDefinitions="*, Auto" Margin="0,0,0,6">
-                    <TextBlock Grid.Column="0" Text="📋 Log globale"
-                               FontWeight="Bold" FontSize="13"
-                               VerticalAlignment="Center"/>
-                    <Button Grid.Column="1" Content="🗑 Pulisci"
-                            FontSize="11" Padding="10,3"
-                            Command="{Binding ClearLogsCommand}"/>
-                </Grid>
-                <ScrollViewer>
+                <!-- ==================================================== -->
+                <!--  SPLITTER — trascina per ridimensionare il log       -->
+                <!-- ==================================================== -->
+                <GridSplitter Grid.Row="2"
+                            Height="5"
+                            Background="Transparent"
+                            ResizeDirection="Rows"
+                            HorizontalAlignment="Stretch"
+                            Cursor="SizeNorthSouth"/>
+
+                <!-- ==================================================== -->
+                <!--  LOG GLOBALE (in fondo, collassabile)                -->
+                <!-- ==================================================== -->
+                <Border Grid.Row="3"
+                        x:Name="LogPanel"
+                        Background="{DynamicResource AppSurfaceBrush}"
+                        BorderBrush="{DynamicResource AppBorderBrush}"
+                        BorderThickness="0,1,0,0"
+                        MinHeight="40"
+                        MaxHeight="400"
+                        Height="150"
+                        Margin="0,0,0,0"
+                        ClipToBounds="True">
+                    <DockPanel Margin="16,4,16,4">
+                        <Grid DockPanel.Dock="Top" ColumnDefinitions="*, Auto, Auto" Margin="0,0,0,2">
+                            <TextBlock Grid.Column="0" Text="📋 Log globale"
+                                    FontWeight="Bold" FontSize="12"
+                                    VerticalAlignment="Center"/>
+                            <Button Grid.Column="1" Content="🗑 Pulisci"
+                                    FontSize="11" Padding="8,2"
+                                    Command="{Binding ClearLogsCommand}"
+                                    Margin="0,0,6,0"/>
+                            <Button Grid.Column="2" x:Name="ToggleLogButton"
+                                    Content="▼" FontSize="11" Padding="6,2"
+                                    Click="OnToggleLogClick"
+                                    ToolTip.Tip="Comprimi / espandi log"/>
+                        </Grid>
+                <ScrollViewer x:Name="LogScrollViewer">
                     <ItemsControl ItemsSource="{Binding Logs}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
@@ -1717,6 +1839,6 @@
             </DockPanel>
         </Border>
 
-        <Border Grid.Row="3" Height="10"/>
+        <Border Grid.Row="4" Height="10"/>
     </Grid>
 </Window>

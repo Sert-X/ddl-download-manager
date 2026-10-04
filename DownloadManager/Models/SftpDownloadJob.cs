@@ -21,6 +21,12 @@ public partial class SftpDownloadJob : ObservableObject
 
     public string FileName => Path.GetFileName(RemotePath);
 
+    /// <summary>Cartella remota da cui viene scaricato il file.</summary>
+    public string SourceFolder => GetRemoteParent(RemotePath);
+
+    /// <summary>Cartella locale di destinazione.</summary>
+    public string DestinationFolder => Path.GetDirectoryName(LocalPath) ?? "";
+
     public double Percentage => TotalBytes > 0
         ? Math.Min(100, (double)DownloadedBytes / TotalBytes * 100)
         : 0;
@@ -45,6 +51,14 @@ public partial class SftpDownloadJob : ObservableObject
             var seconds = remaining / SpeedBytesPerSecond;
             return FormatEta(seconds);
         }
+    }
+
+    private static string GetRemoteParent(string remotePath)
+    {
+        if (string.IsNullOrEmpty(remotePath)) return "/";
+        var trimmed = remotePath.TrimEnd('/');
+        int lastSlash = trimmed.LastIndexOf('/');
+        return lastSlash <= 0 ? "/" : trimmed.Substring(0, lastSlash);
     }
 
     public static string FormatEta(double seconds)

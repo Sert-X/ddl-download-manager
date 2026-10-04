@@ -309,26 +309,77 @@ public class SftpWinScpService : ISftpService, IDisposable
     {
         EnsureConnected();
 
-        var escaped = RemotePath.EscapeFileMask(remotePath);
-
-        _logger.LogInformation("Delete file: {Path} (escaped: {Escaped})", remotePath, escaped);
+        _logger.LogInformation("[DEL-FILE] Request: {Path}", remotePath);
 
         await _sessionGate.WaitAsync(ct);
         try
         {
             await Task.Run(() =>
             {
-                var result = _session!.RemoveFiles(escaped);
-
-                if (!result.IsSuccess)
+                // 1. Verifica esistenza (con path letterale, senza escape)
+                RemoteFileInfo? info = null;
+                try
                 {
-                    var error = string.Join("; ", result.Failures.Select(f => f.Message));
-                    throw new InvalidOperationException($"Delete file fallito: {error}");
+                    info = _session!.GetFileInfo(remotePath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[DEL-FILE] GetFileInfo fallito su {Path}", remotePath);
                 }
 
-                if (result.Removals.Count == 0)
-                    throw new InvalidOperationException(
-                        $"Nessun file eliminato. Il percorso esiste? '{remotePath}'");
+                if (info == null)
+                    throw new InvalidOperationException($"File non trovato sul server: '{remotePath}'");
+
+                if (info.IsDirectory)
+                    throw new InvalidOperationException($"'{remotePath}' è una cartella. Usa DeleteDirectoryAsync.");
+
+                _logger.LogInformation("[DEL-FILE] Exists: {Path} (size={Size})", remotePath, info.Length);
+
+                // 2. Tentativo con EscapeFileMask
+                var escaped = RemotePath.EscapeFileMask(remotePath);
+                _logger.LogInformation("[DEL-FILE] Attempt 1 (escaped): {Escaped}", escaped);
+
+                var result = _session!.RemoveFiles(escaped);
+
+                _logger.LogInformation("[DEL-FILE] Result: IsSuccess={Ok} Removals={N} Failures={F}",
+                    result.IsSuccess, result.Removals.Count, result.Failures.Count);
+
+                if (result.IsSuccess && result.Removals.Count > 0)
+                    return;
+
+                // 3. Fallback: senza escape (alcuni server non gradiscono l'escape sui path)
+                _logger.LogWarning("[DEL-FILE] Attempt 1 failed, trying raw path: {Path}", remotePath);
+
+                var result2 = _session!.RemoveFiles(remotePath);
+
+                _logger.LogInformation("[DEL-FILE] Result 2: IsSuccess={Ok} Removals={N} Failures={F}",
+                    result2.IsSuccess, result2.Removals.Count, result2.Failures.Count);
+
+                if (result2.IsSuccess && result2.Removals.Count > 0)
+                    return;
+
+                // 4. Fallback estremo: prova dal path relativo alla cartella corrente
+                var parent = GetParentPath(remotePath);
+                var fileName = remotePath.Substring(remotePath.LastIndexOf('/') + 1);
+                var mask = $"{RemotePath.EscapeFileMask(parent)}/{RemotePath.EscapeFileMask(fileName)}";
+
+                _logger.LogWarning("[DEL-FILE] Attempt 2 failed, trying recomposed mask: {Mask}", mask);
+
+                var result3 = _session!.RemoveFiles(mask);
+
+                if (result3.IsSuccess && result3.Removals.Count > 0)
+                    return;
+
+                // Tutti i tentativi falliti
+                var errors = new List<string>();
+                if (result.Failures.Count > 0)
+                    errors.Add($"escaped: {string.Join("; ", result.Failures.Select(f => f.Message))}");
+                if (result2.Failures.Count > 0)
+                    errors.Add($"raw: {string.Join("; ", result2.Failures.Select(f => f.Message))}");
+
+                var detail = errors.Count > 0 ? string.Join(" | ", errors) : "nessun dettaglio dal server";
+                throw new InvalidOperationException(
+                    $"Eliminazione non riuscita per '{remotePath}'. Dettagli: {detail}");
             }, ct);
         }
         finally
@@ -341,33 +392,80 @@ public class SftpWinScpService : ISftpService, IDisposable
     {
         EnsureConnected();
 
-        var normalized = remotePath.TrimEnd('/');
-        var escaped = RemotePath.EscapeFileMask(normalized) + "/";
-
-        _logger.LogInformation("Delete directory (ricorsiva): {Path}", remotePath);
+        _logger.LogInformation("[DEL-DIR] Request: {Path}", remotePath);
 
         await _sessionGate.WaitAsync(ct);
         try
         {
             await Task.Run(() =>
             {
-                var result = _session!.RemoveFiles(escaped);
-
-                if (!result.IsSuccess)
+                // Verifica esistenza
+                RemoteFileInfo? info = null;
+                try
                 {
-                    var error = string.Join("; ", result.Failures.Select(f => f.Message));
-                    throw new InvalidOperationException($"Delete directory fallito: {error}");
+                    info = _session!.GetFileInfo(remotePath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[DEL-DIR] GetFileInfo fallito su {Path}", remotePath);
                 }
 
-                if (result.Removals.Count == 0)
-                    throw new InvalidOperationException(
-                        $"Nessun file/cartella eliminato. Il percorso esiste? '{remotePath}'");
+                if (info == null)
+                    throw new InvalidOperationException($"Cartella non trovata sul server: '{remotePath}'");
+
+                if (!info.IsDirectory)
+                    throw new InvalidOperationException($"'{remotePath}' non è una cartella. Usa DeleteFileAsync.");
+
+                // WinSCP rimuove ricorsivamente se passi "path/*"
+                var normalized = remotePath.TrimEnd('/');
+
+                // Tentativo 1: path/ con escape
+                var escaped = RemotePath.EscapeFileMask(normalized) + "/";
+                _logger.LogInformation("[DEL-DIR] Attempt 1: {Escaped}", escaped);
+
+                var result = _session!.RemoveFiles(escaped);
+
+                _logger.LogInformation("[DEL-DIR] Result 1: IsSuccess={Ok} Removals={N}",
+                    result.IsSuccess, result.Removals.Count);
+
+                if (result.IsSuccess && result.Removals.Count > 0)
+                    return;
+
+                // Tentativo 2: senza escape
+                var raw = normalized + "/";
+                _logger.LogWarning("[DEL-DIR] Attempt 1 failed, trying raw: {Raw}", raw);
+
+                var result2 = _session!.RemoveFiles(raw);
+
+                if (result2.IsSuccess && result2.Removals.Count > 0)
+                    return;
+
+                var errs = new List<string>();
+                if (result.Failures.Count > 0)
+                    errs.Add(string.Join("; ", result.Failures.Select(f => f.Message)));
+                if (result2.Failures.Count > 0)
+                    errs.Add(string.Join("; ", result2.Failures.Select(f => f.Message)));
+
+                var detail = errs.Count > 0 ? string.Join(" | ", errs) : "nessun dettaglio dal server";
+                throw new InvalidOperationException(
+                    $"Eliminazione cartella non riuscita per '{remotePath}'. Dettagli: {detail}");
             }, ct);
         }
         finally
         {
             _sessionGate.Release();
         }
+    }
+
+    /// <summary>
+    /// Ritorna il path della cartella genitore di un path remoto (con /).
+    /// </summary>
+    private static string GetParentPath(string fullPath)
+    {
+        if (string.IsNullOrEmpty(fullPath)) return "/";
+        var trimmed = fullPath.TrimEnd('/');
+        int lastSlash = trimmed.LastIndexOf('/');
+        return lastSlash <= 0 ? "/" : trimmed.Substring(0, lastSlash);
     }
 
     public async Task RenameAsync(string oldPath, string newPath, CancellationToken ct = default)
