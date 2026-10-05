@@ -35,7 +35,7 @@
                                 CornerRadius="4"
                                 Padding="6,2"
                                 VerticalAlignment="Center">
-                            <TextBlock Text="v1.0.6" FontSize="11" FontWeight="Bold" Foreground="White"/>
+                            <TextBlock Text="v1.0.7" FontSize="11" FontWeight="Bold" Foreground="White"/>
                         </Border>
                     </StackPanel>
                 </StackPanel>
@@ -79,7 +79,7 @@
             <!--  TAB DOWNLOAD                                     -->
             <!-- ================================================ -->
             <TabItem Header="🏠  Download">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" DataContext="{Binding Download}">
                 <StackPanel Margin="0,10,0,0">
 
                     <!-- Barra ricerca + status (uniti in una sola card) -->
@@ -335,11 +335,20 @@
                                 </StackPanel>
                             </Border>
 
-                            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                <ItemsControl ItemsSource="{Binding SeriesGroups}">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                        HorizontalScrollBarVisibility="Disabled">
+                                <ItemsControl ItemsSource="{Binding SeriesGroups}"
+                                            HorizontalAlignment="Stretch">
+                                    <ItemsControl.Styles>
+                                        <Style Selector="ItemsControl > ContentPresenter">
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                        </Style>
+                                    </ItemsControl.Styles>
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate DataType="models:SeriesGroup">
-                                            <Expander IsExpanded="{Binding IsExpanded, Mode=TwoWay}">
+                                            <Expander IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
+                                                    HorizontalAlignment="Stretch"
+                                                    HorizontalContentAlignment="Stretch">
                                                 <Expander.Header>
                                                     <Grid ColumnDefinitions="2*, 130, 110, 1.5*, 100, Auto">
                                                         <TextBlock Grid.Column="0"
@@ -411,7 +420,12 @@
                                                     </Grid>
                                                 </Expander.Header>
 
-                                                <ItemsControl ItemsSource="{Binding Items}">
+                                                <ItemsControl ItemsSource="{Binding Items}" HorizontalAlignment="Stretch">
+                                                    <ItemsControl.Styles>
+                                                        <Style Selector="ItemsControl > ContentPresenter">
+                                                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                                        </Style>
+                                                    </ItemsControl.Styles>
                                                     <ItemsControl.ItemTemplate>
                                                         <DataTemplate DataType="models:DownloadItem">
                                                             <Border Padding="10,6"
@@ -484,7 +498,7 @@
             <!--  TAB ORGANIZZA FILE                              -->
             <!-- ================================================ -->
             <TabItem Header="🗂️  Organizza file">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" DataContext="{Binding Organizer}">
                 <DockPanel Margin="0,10,0,0">
 
                     <!-- Selettore Locale/Remoto -->
@@ -989,7 +1003,7 @@
             <!--  TAB SFTP                                        -->
             <!-- ================================================ -->
             <TabItem Header="☁  SFTP">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" DataContext="{Binding Sftp}">
                 <DockPanel Margin="0,10,0,0">
 
                     <!-- Configurazione SFTP -->
@@ -1177,9 +1191,8 @@
                                                   CanUserReorderColumns="True"
                                                   CanUserSortColumns="False">
                                             <DataGrid.Styles>
-                                                <Style Selector="DataGridRow" x:CompileBindings="False">
-                                                    <Setter Property="Background"
-                                                            Value="{Binding HasZeroByteIssue, Converter={x:Static vm:ZeroByteToBrushConverter.Default}}"/>
+                                                <Style Selector="DataGridRow" x:CompileBindings="False"
+                                                    x:DataType="models:LocalFileEntry">
                                                     <Setter Property="ContextMenu">
                                                         <ContextMenu>
                                                             <MenuItem Header="📂 Apri" Click="OnRemoteOpenClick"/>
@@ -1317,7 +1330,8 @@
                                                   CanUserReorderColumns="True"
                                                   CanUserSortColumns="False">
                                             <DataGrid.Styles>
-                                                <Style Selector="DataGridRow" x:CompileBindings="False">
+                                                <Style Selector="DataGridRow" x:CompileBindings="False"
+                                                        x:DataType="models:SftpRemoteEntry">
                                                     <Setter Property="Background"
                                                             Value="{Binding HasZeroByteIssue, Converter={x:Static vm:ZeroByteToBrushConverter.Default}}"/>
                                                     <Setter Property="ToolTip.Tip"
@@ -1560,7 +1574,7 @@
             <!-- ================================================ -->
             <!--  TAB PROXY                                       -->
             <TabItem Header="🌐  Proxy">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" DataContext="{Binding Proxy}">
                 <DockPanel Margin="0,10,0,0">
 
                     <!-- Toolbar azioni -->

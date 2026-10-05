@@ -29,6 +29,7 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        #if DEBUG
         // ==== DUMP TEMPORANEO ====
         try
         {
@@ -66,6 +67,7 @@ public partial class App : Application
         {
             Console.WriteLine($"[DUMP FAIL] {ex}");
         }
+        #endif
         // ==== FINE DUMP ====
         var services = new ServiceCollection();
 
@@ -81,11 +83,19 @@ public partial class App : Application
         });
 
         services.AddSingleton<IAnimeWorldService, AnimeWorldService>();
+        services.AddSingleton<IAnimeProvider>(sp => sp.GetRequiredService<IAnimeWorldService>());
+        services.AddSingleton<AnimeProviderRegistry>();
+
+        services.AddSingleton<SftpSessionLimiter>(_ => new SftpSessionLimiter(maxSessions: 8));
         services.AddSingleton<SftpConfigRepository>();
         services.AddSingleton<ISftpService, SftpWinScpService>();
+        services.AddSingleton<SftpUploadQueueService>();
+        services.AddSingleton<SftpDownloadQueueService>();
+
         services.AddSingleton<ProxyConfigRepository>();
         services.AddSingleton<ProxyService>();
         services.AddSingleton<IProxyProvider, ProxyProvider>();
+
         services.AddSingleton<IDownloadService, DownloadService>();
         services.AddSingleton<DownloadRepository>();
         services.AddSingleton<FileOperationRepository>();
@@ -93,13 +103,6 @@ public partial class App : Application
         services.AddSingleton<FileNameBuilder>();
         services.AddSingleton<IFileOrganizerService, FileOrganizerService>();
         services.AddSingleton<DownloadQueueService>();
-
-        services.AddSingleton<SftpConfigRepository>();
-        services.AddSingleton<ISftpService, SftpWinScpService>();
-        services.AddSingleton<SftpUploadQueueService>();
-        services.AddSingleton<SftpDownloadQueueService>();
-        services.AddSingleton<ProxyConfigRepository>();
-        services.AddSingleton<ProxyService>();
 
         services.AddTransient<MainWindowViewModel>();
         services.AddTransient<MainWindow>();

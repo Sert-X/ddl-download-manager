@@ -8,7 +8,9 @@ namespace DownloadManager.Services.AnimeWorld;
 
 public class AnimeWorldService : IAnimeWorldService
 {
-    private const string BaseUrl = "https://www.animeworld.ac";
+    private const string BaseUrlConst = "https://www.animeworld.ac";
+    public string Name => "AnimeWorld";
+    public string BaseUrl => BaseUrlConst; 
 
     private IPlaywright? _playwright;
     private IBrowser? _browser;
@@ -128,6 +130,8 @@ public class AnimeWorldService : IAnimeWorldService
         try
         {
             var results = new List<AnimeSearchResult>();
+            var seenLinks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
             if (_context == null) throw new InvalidOperationException("Servizio non inizializzato.");
 
             var page = await _context.NewPageAsync();
@@ -139,6 +143,9 @@ public class AnimeWorldService : IAnimeWorldService
                 await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
                 await page.WaitForTimeoutAsync(1000);
 
+                // ============================================================
+                //  TENTATIVO 1: API interna (di solito restituisce pochi risultati)
+                // ============================================================
                 var keyword = Uri.EscapeDataString(query);
                 var apiUrl = $"/api/search/v2?keyword={keyword}";
 
@@ -180,61 +187,79 @@ public class AnimeWorldService : IAnimeWorldService
                         {
                             using var doc = System.Text.Json.JsonDocument.Parse(body);
 
-                            if (!doc.RootElement.TryGetProperty("error", out _) ||
-                                doc.RootElement.GetProperty("error").ValueKind == System.Text.Json.JsonValueKind.False)
+                            if (doc.RootElement.TryGetProperty("animes", out var animesEl) &&
+                                animesEl.ValueKind == System.Text.Json.JsonValueKind.Array)
                             {
-                                if (doc.RootElement.TryGetProperty("animes", out var animesEl) &&
-                                    animesEl.ValueKind == System.Text.Json.JsonValueKind.Array)
+                                foreach (var anime in animesEl.EnumerateArray())
                                 {
-                                    foreach (var anime in animesEl.EnumerateArray())
-                                    {
-                                        var name = anime.TryGetProperty("name", out var n) ? n.GetString() : "";
-                                        var link = anime.TryGetProperty("link", out var l) ? l.GetString() : "";
-                                        var identifier = anime.TryGetProperty("identifier", out var i) ? i.GetString() : "";
+                                    var name = anime.TryGetProperty("name", out var n) ? n.GetString() : "";
+                                    var link = anime.TryGetProperty("link", out var l) ? l.GetString() : "";
+                                    var identifier = anime.TryGetProperty("identifier", out var i) ? i.GetString() : "";
 
-                                        if (string.IsNullOrEmpty(link)) continue;
+                                    if (string.IsNullOrEmpty(link)) continue;
 
-                                        var fullLink = $"{BaseUrl}/play/{link}.{identifier}";
-                                        results.Add(new AnimeSearchResult { Name = name ?? "", Link = fullLink });
-                                    }
+                                    var fullLink = $"{BaseUrl}/play/{link}.{identifier}";
+                                    var key = fullLink.ToLowerInvariant();
+                                    if (!seenLinks.Add(key)) continue;
 
-                                    _logger.LogInformation("API: trovati {Count} risultati", results.Count);
-                                    if (results.Count > 0)
-                                        return results;
+                                    results.Add(new AnimeSearchResult { Name = name ?? "", Link = fullLink });
                                 }
+
+                                _logger.LogInformation("API: {Count} risultati", results.Count);
                             }
                         }
-
-                        _logger.LogWarning("API non ha dato risultati utili (status {Status}). Uso fallback HTML.", status);
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Errore parsing risposta API. Uso fallback HTML.");
+                        _logger.LogWarning(ex, "Errore parsing risposta API.");
                     }
                 }
 
-                _logger.LogInformation("Fallback ricerca HTML...");
-                var searchUrl = $"{BaseUrl}/search?keyword={Uri.EscapeDataString(query)}";
+                // ============================================================
+                //  TENTATIVO 2: HTML search — SEMPRE, per aggiungere altri risultati
+                // ============================================================
+                _logger.LogInformation("Cerco anche nell'HTML per completare i risultati...");
+
+                var searchUrl = $"{BaseUrlConst}/search?keyword={Uri.EscapeDataString(query)}";
                 await page.GotoAsync(searchUrl);
                 await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+                await page.WaitForTimeoutAsync(500);
 
-                var items = await page.QuerySelectorAllAsync("div.item > div.inner");
+                // Prova più selettori: il sito può cambiare struttura.
+                // Prima quello "storico", poi uno più generico.
+                var anchors = await page.QuerySelectorAllAsync("div.item > div.inner > a.name");
+                if (anchors == null || anchors.Count == 0)
+                    anchors = await page.QuerySelectorAllAsync("a.name");
 
-                foreach (var inner in items)
+                _logger.LogInformation("HTML: trovati {Count} anchor", anchors?.Count ?? 0);
+
+                if (anchors != null)
                 {
-                    var linkElement = await inner.QuerySelectorAsync("a.name");
-                    if (linkElement == null) continue;
+                    foreach (var a in anchors)
+                    {
+                        try
+                        {
+                            var name = (await a.InnerTextAsync()).Trim();
+                            var href = await a.GetAttributeAsync("href") ?? "";
 
-                    var name = (await linkElement.InnerTextAsync()).Trim();
-                    var href = await linkElement.GetAttributeAsync("href") ?? string.Empty;
+                            if (string.IsNullOrEmpty(href)) continue;
+                            if (href.StartsWith("/")) href = BaseUrlConst + href;
 
-                    if (string.IsNullOrEmpty(href)) continue;
-                    if (href.StartsWith("/")) href = BaseUrl + href;
+                            // Scarta link che non sono pagine anime (menu, login, ecc.)
+                            if (!href.Contains("/play/", StringComparison.OrdinalIgnoreCase) &&
+                                !href.Contains("/anime/", StringComparison.OrdinalIgnoreCase))
+                                continue;
 
-                    results.Add(new AnimeSearchResult { Name = name, Link = href });
+                            var key = href.Split('?')[0].ToLowerInvariant();
+                            if (!seenLinks.Add(key)) continue;
+
+                            results.Add(new AnimeSearchResult { Name = name, Link = href });
+                        }
+                        catch { }
+                    }
                 }
 
-                _logger.LogInformation("HTML: trovati {Count} risultati", results.Count);
+                _logger.LogInformation("Totale risultati combinati: {Count}", results.Count);
             }
             catch (Exception ex)
             {
@@ -280,7 +305,7 @@ public class AnimeWorldService : IAnimeWorldService
                     var href = await element.GetAttributeAsync("href") ?? "";
 
                     if (string.IsNullOrEmpty(href)) continue;
-                    if (href.StartsWith("/")) href = BaseUrl + href;
+                    if (href.StartsWith("/")) href = BaseUrlConst + href;
 
                     episodes.Add(new Episode
                     {
@@ -428,7 +453,7 @@ public class AnimeWorldService : IAnimeWorldService
             var page = await _context.NewPageAsync();
             try
             {
-                await page.GotoAsync(BaseUrl);
+                await page.GotoAsync(BaseUrlConst);
                 await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
                 await page.WaitForTimeoutAsync(1500);
 

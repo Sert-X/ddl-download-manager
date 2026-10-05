@@ -11,10 +11,13 @@ public class SftpWinScpService : ISftpService, IDisposable
 
     private Session? _session;
     private SessionOptions? _currentOptions;
+    private readonly SftpSessionLimiter _sessionLimiter;
+    private bool _holdsLimiterSlot;
 
-    public SftpWinScpService(ILogger<SftpWinScpService> logger)
+    public SftpWinScpService(ILogger<SftpWinScpService> logger, SftpSessionLimiter sessionLimiter)
     {
         _logger = logger;
+        _sessionLimiter = sessionLimiter;
     }
 
     public bool IsConnected => _session?.Opened == true;
@@ -31,29 +34,51 @@ public class SftpWinScpService : ISftpService, IDisposable
         {
             await DisconnectInternalAsync();
 
-            _currentOptions = BuildSessionOptions(config);
-            _session = new Session();
+            // Acquisisci slot PRIMA di aprire la sessione
+            await _sessionLimiter.AcquireAsync(ct);
+            _holdsLimiterSlot = true;
 
-            _logger.LogInformation("Connessione WinSCP a {Host}:{Port}...", config.Host, config.Port);
-
-            await Task.Run(() => _session.Open(_currentOptions), ct);
-
-            if (!_session.Opened)
-                throw new InvalidOperationException("Connessione WinSCP fallita.");
-
-            string homePath = "/";
             try
             {
-                homePath = _session.HomePath;
-                if (string.IsNullOrEmpty(homePath)) homePath = "/";
+                _currentOptions = BuildSessionOptions(config);
+                _session = new Session();
+
+                _logger.LogInformation("Connessione WinSCP a {Host}:{Port}...", config.Host, config.Port);
+
+                await Task.Run(() => _session.Open(_currentOptions), ct);
+
+                if (!_session.Opened)
+                    throw new InvalidOperationException("Connessione WinSCP fallita.");
+
+                string homePath = "/";
+                try
+                {
+                    homePath = _session.HomePath;
+                    if (string.IsNullOrEmpty(homePath)) homePath = "/";
+                }
+                catch { }
+
+                CurrentRemotePath = string.IsNullOrWhiteSpace(config.RemoteBasePath) || config.RemoteBasePath == "/"
+                    ? homePath
+                    : config.RemoteBasePath;
+
+                _logger.LogInformation("Connesso. Path: {Path}", CurrentRemotePath);
             }
-            catch { }
+            catch
+            {
+                // Cleanup se l'open è fallito: sessione + slot
+                try { _session?.Dispose(); } catch { }
+                _session = null;
+                _currentOptions = null;
 
-            CurrentRemotePath = string.IsNullOrWhiteSpace(config.RemoteBasePath) || config.RemoteBasePath == "/"
-                ? homePath
-                : config.RemoteBasePath;
+                if (_holdsLimiterSlot)
+                {
+                    _sessionLimiter.Release();
+                    _holdsLimiterSlot = false;
+                }
 
-            _logger.LogInformation("Connesso. Path: {Path}", CurrentRemotePath);
+                throw;
+            }
         }
         finally
         {
@@ -76,7 +101,16 @@ public class SftpWinScpService : ISftpService, IDisposable
 
     private async Task DisconnectInternalAsync()
     {
-        if (_session == null) return;
+        if (_session == null)
+        {
+            // Nessuna sessione ma per qualche motivo teniamo ancora lo slot → rilascia
+            if (_holdsLimiterSlot)
+            {
+                _sessionLimiter.Release();
+                _holdsLimiterSlot = false;
+            }
+            return;
+        }
 
         try
         {
@@ -92,6 +126,12 @@ public class SftpWinScpService : ISftpService, IDisposable
             try { _session.Dispose(); } catch { }
             _session = null;
             _currentOptions = null;
+
+            if (_holdsLimiterSlot)
+            {
+                _sessionLimiter.Release();
+                _holdsLimiterSlot = false;
+            }
         }
     }
 
@@ -99,21 +139,29 @@ public class SftpWinScpService : ISftpService, IDisposable
     {
         var options = BuildSessionOptions(config);
 
-        using var testSession = new Session();
-        await Task.Run(() => testSession.Open(options), ct);
-
-        if (!testSession.Opened)
-            throw new InvalidOperationException("Connessione fallita.");
-
-        var path = string.IsNullOrWhiteSpace(config.RemoteBasePath) ? "/" : config.RemoteBasePath;
-
-        var list = await Task.Run(() =>
+        await _sessionLimiter.AcquireAsync(ct);
+        try
         {
-            var result = testSession.ListDirectory(path);
-            return result.Files.Take(3).ToList();
-        }, ct);
+            using var testSession = new Session();
+            await Task.Run(() => testSession.Open(options), ct);
 
-        _logger.LogInformation("Test OK: {Count} elementi visibili in {Path}", list.Count, path);
+            if (!testSession.Opened)
+                throw new InvalidOperationException("Connessione fallita.");
+
+            var path = string.IsNullOrWhiteSpace(config.RemoteBasePath) ? "/" : config.RemoteBasePath;
+
+            var list = await Task.Run(() =>
+            {
+                var result = testSession.ListDirectory(path);
+                return result.Files.Take(3).ToList();
+            }, ct);
+
+            _logger.LogInformation("Test OK: {Count} elementi visibili in {Path}", list.Count, path);
+        }
+        finally
+        {
+            _sessionLimiter.Release();
+        }
     }
 
     public string GetWorkingDirectory()
@@ -655,6 +703,13 @@ public class SftpWinScpService : ISftpService, IDisposable
     {
         try { _session?.Dispose(); } catch { }
         _session = null;
+
+        if (_holdsLimiterSlot)
+        {
+            _sessionLimiter.Release();
+            _holdsLimiterSlot = false;
+        }
+
         _sessionGate.Dispose();
     }
 }

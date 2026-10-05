@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Read version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $ver = $tag.TrimStart('v')
+          echo "VERSION=$ver" >> $env:GITHUB_OUTPUT
+          echo "TAG=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Restore
+        run: dotnet restore DownloadManager/DownloadManager.csproj
+
+      - name: Publish (self-contained, win-x64)
+        run: |
+          dotnet publish DownloadManager/DownloadManager.csproj `
+            -c Release -r win-x64 --self-contained true `
+            -o ./publish
+
+      - name: Install vpk
+        run: dotnet tool install -g vpk
+
+      - name: Pack with Velopack
+        shell: pwsh
+        run: |
+          vpk pack `
+            -u DDLDownloadManager `
+            -v "${{ steps.version.outputs.VERSION }}" `
+            -p ./publish `
+            --mainExe DDLDownloadManager.exe `
+            -o ./Releases
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.TAG }}
+          name: ${{ steps.version.outputs.TAG }}
+          body_path: ./CHANGELOG.md
+          draft: false
+          prerelease: false
+          files: |
+            Releases/RELEASES
+            Releases/releases.win.json
+            Releases/releases.win.delta.json
+            Releases/*.nupkg
+            Releases/*-Setup.exe
+          fail_on_unmatched_files: false

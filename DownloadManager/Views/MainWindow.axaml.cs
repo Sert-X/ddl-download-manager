@@ -168,7 +168,7 @@ public partial class MainWindow : Window
         if (_sftpService == null) return null;
         if (!_sftpService.IsConnected) return null;
 
-        var start = Vm?.SftpCurrentRemotePath ?? "/";
+        var start = Vm?.Sftp.SftpCurrentRemotePath ?? "/";
         return await RemoteFolderPickerDialog.ShowAsync(this, _sftpService, start);
     }
 
@@ -184,9 +184,9 @@ public partial class MainWindow : Window
 
         var text = combo.Text?.Trim() ?? string.Empty;
         if (string.IsNullOrEmpty(text) && combo.SelectedItem is string selected) text = selected.Trim();
-        if (string.IsNullOrEmpty(text)) { Vm.StatusMessage = "Inserisci un termine."; return; }
+        if (string.IsNullOrEmpty(text)) { Vm.Download.StatusMessage = "Inserisci un termine."; return; }
 
-        _ = Vm.SearchWithTermAsync(text);
+        _ = Vm.Download.SearchWithTermAsync(text);
     }
 
     private void OnSearchKeyDown(object? sender, KeyEventArgs e)
@@ -194,7 +194,7 @@ public partial class MainWindow : Window
         if (e.Key == Key.Enter) { OnSearchButtonClick(sender, new RoutedEventArgs()); e.Handled = true; }
     }
 
-    private void OnClearSearchHistoryClick(object? sender, RoutedEventArgs e) => Vm?.ClearSearchHistoryCommand.Execute(null);
+    private void OnClearSearchHistoryClick(object? sender, RoutedEventArgs e) => Vm?.Download.ClearSearchHistoryCommand.Execute(null);
 
     // ============================================================
     //  SELEZIONE EPISODI
@@ -210,7 +210,7 @@ public partial class MainWindow : Window
             foreach (var item in grid.SelectedItems)
                 if (item is Episode ep) selected.Add(ep);
 
-        foreach (var ep in Vm.Episodes)
+        foreach (var ep in Vm.Download.Episodes)
         {
             bool shouldBeSelected = selected.Contains(ep);
             if (ep.IsSelected != shouldBeSelected) ep.IsSelected = shouldBeSelected;
@@ -220,25 +220,25 @@ public partial class MainWindow : Window
     private void OnSelectAllEpisodesClick(object? sender, RoutedEventArgs e)
     {
         if (Vm == null) return;
-        Vm.SelectAllEpisodesCommand.Execute(null);
+        Vm.Download.SelectAllEpisodesCommand.Execute(null);
         if (this.FindControl<DataGrid>("EpisodesGrid") is DataGrid grid) grid.SelectAll();
     }
 
     private void OnDeselectAllEpisodesClick(object? sender, RoutedEventArgs e)
     {
         if (Vm == null) return;
-        Vm.DeselectAllEpisodesCommand.Execute(null);
+        Vm.Download.DeselectAllEpisodesCommand.Execute(null);
         if (this.FindControl<DataGrid>("EpisodesGrid") is DataGrid grid) grid.SelectedItems?.Clear();
     }
 
     private void OnInvertEpisodeSelectionClick(object? sender, RoutedEventArgs e)
     {
         if (Vm == null) return;
-        Vm.InvertEpisodeSelectionCommand.Execute(null);
+        Vm.Download.InvertEpisodeSelectionCommand.Execute(null);
 
         if (this.FindControl<DataGrid>("EpisodesGrid") is not DataGrid grid) return;
         grid.SelectedItems?.Clear();
-        foreach (var ep in Vm.Episodes)
+        foreach (var ep in Vm.Download.Episodes)
             if (ep.IsSelected) grid.SelectedItems?.Add(ep);
     }
 
@@ -249,31 +249,31 @@ public partial class MainWindow : Window
     private async void OnBrowseBaseFolderClick(object? sender, RoutedEventArgs e)
     {
         var folder = await PickFolderAsync("Seleziona cartella base download");
-        if (!string.IsNullOrEmpty(folder)) Vm?.SetBaseDownloadFolder(folder);
+        if (!string.IsNullOrEmpty(folder)) Vm?.Download.SetBaseDownloadFolder(folder);
     }
 
     private async void OnBrowseOrganizeFolderClick(object? sender, RoutedEventArgs e)
     {
         var folder = await PickFolderAsync("Seleziona cartella da organizzare");
-        if (!string.IsNullOrEmpty(folder)) Vm?.SetOrganizeFolder(folder);
+        if (!string.IsNullOrEmpty(folder)) Vm?.Organizer.SetOrganizeFolder(folder);
     }
 
     private async void OnBrowseMergeDestClick(object? sender, RoutedEventArgs e)
     {
         var folder = await PickFolderAsync("Seleziona cartella di destinazione");
-        if (!string.IsNullOrEmpty(folder)) Vm?.SetMergeDestinationFolder(folder);
+        if (!string.IsNullOrEmpty(folder)) Vm?.Organizer.SetMergeDestinationFolder(folder);
     }
 
     private async void OnBrowseSplitSourceClick(object? sender, RoutedEventArgs e)
     {
         var folder = await PickFolderAsync("Seleziona cartella da dividere");
-        if (!string.IsNullOrEmpty(folder)) Vm?.SetSplitSourceFolder(folder);
+        if (!string.IsNullOrEmpty(folder)) Vm?.Organizer.SetSplitSourceFolder(folder);
     }
 
     private async void OnBrowseSplitDestClick(object? sender, RoutedEventArgs e)
     {
         var folder = await PickFolderAsync("Seleziona cartella di destinazione");
-        if (!string.IsNullOrEmpty(folder)) Vm?.SetSplitDestinationFolder(folder);
+        if (!string.IsNullOrEmpty(folder)) Vm?.Organizer.SetSplitDestinationFolder(folder);
     }
 
     // ============================================================
@@ -283,31 +283,31 @@ public partial class MainWindow : Window
     private async void OnBrowseOrganizeFolderRemoteClick(object? sender, RoutedEventArgs e)
     {
         var folder = await PickRemoteFolderAsync("Seleziona cartella remota da organizzare");
-        if (!string.IsNullOrEmpty(folder) && Vm != null) Vm.OrganizeFolder = folder;
+        if (!string.IsNullOrEmpty(folder) && Vm != null) Vm.Organizer.OrganizeFolder = folder;
     }
 
     private async void OnBrowseMergeDestRemoteClick(object? sender, RoutedEventArgs e)
     {
         var folder = await PickRemoteFolderAsync("Seleziona destinazione remota per il merge");
-        if (!string.IsNullOrEmpty(folder) && Vm != null) Vm.MergeDestinationFolder = folder;
+        if (!string.IsNullOrEmpty(folder) && Vm != null) Vm.Organizer.MergeDestinationFolder = folder;
     }
 
     private async void OnBrowseSplitSourceRemoteClick(object? sender, RoutedEventArgs e)
     {
         var folder = await PickRemoteFolderAsync("Seleziona cartella remota da dividere");
-        if (!string.IsNullOrEmpty(folder) && Vm != null) Vm.SplitSourceFolder = folder;
+        if (!string.IsNullOrEmpty(folder) && Vm != null) Vm.Organizer.SplitSourceFolder = folder;
     }
 
     private async void OnBrowseSplitDestRemoteClick(object? sender, RoutedEventArgs e)
     {
         var folder = await PickRemoteFolderAsync("Seleziona destinazione remota per lo split");
-        if (!string.IsNullOrEmpty(folder) && Vm != null) Vm.SplitDestinationFolder = folder;
+        if (!string.IsNullOrEmpty(folder) && Vm != null) Vm.Organizer.SplitDestinationFolder = folder;
     }
 
     private async void OnBrowseMergeAddRemoteFolderClick(object? sender, RoutedEventArgs e)
     {
         var folder = await PickRemoteFolderAsync("Aggiungi cartella sorgente remota");
-        if (!string.IsNullOrEmpty(folder)) Vm?.AddMergeFolder(folder);
+        if (!string.IsNullOrEmpty(folder)) Vm?.Organizer.AddMergeFolder(folder);
     }
 
     // ============================================================
@@ -318,7 +318,7 @@ public partial class MainWindow : Window
     {
         if (Vm == null) return;
 
-        if (Vm.OrganizeModeIsLocal)
+        if (Vm.Organizer.OrganizeModeIsLocal)
         {
             var storage = StorageProvider;
             if (storage == null) return;
@@ -334,7 +334,7 @@ public partial class MainWindow : Window
             foreach (var f in folders)
             {
                 var path = f.TryGetLocalPath();
-                if (!string.IsNullOrEmpty(path)) Vm.AddMergeFolder(path);
+                if (!string.IsNullOrEmpty(path)) Vm.Organizer.AddMergeFolder(path);
             }
         }
         else
@@ -345,23 +345,23 @@ public partial class MainWindow : Window
 
     private void OnMergeRemoveClick(object? sender, RoutedEventArgs e)
     {
-        if (Vm?.SelectedMergeFolder == null) return;
-        Vm.RemoveMergeFolder(Vm.SelectedMergeFolder);
+        if (Vm?.Organizer.SelectedMergeFolder == null) return;
+        Vm.Organizer.RemoveMergeFolder(Vm.Organizer.SelectedMergeFolder);
     }
 
     private void OnMergeMoveUpClick(object? sender, RoutedEventArgs e)
     {
-        if (Vm?.SelectedMergeFolder == null) return;
-        Vm.MoveMergeFolderUp(Vm.SelectedMergeFolder);
+        if (Vm?.Organizer.SelectedMergeFolder == null) return;
+        Vm.Organizer.MoveMergeFolderUp(Vm.Organizer.SelectedMergeFolder);
     }
 
     private void OnMergeMoveDownClick(object? sender, RoutedEventArgs e)
     {
-        if (Vm?.SelectedMergeFolder == null) return;
-        Vm.MoveMergeFolderDown(Vm.SelectedMergeFolder);
+        if (Vm?.Organizer.SelectedMergeFolder == null) return;
+        Vm.Organizer.MoveMergeFolderDown(Vm.Organizer.SelectedMergeFolder);
     }
 
-    private void OnMergeClearClick(object? sender, RoutedEventArgs e) => Vm?.ClearMergeFolders();
+    private void OnMergeClearClick(object? sender, RoutedEventArgs e) => Vm?.Organizer.ClearMergeFolders();
 
     // ============================================================
     //  SPLIT
@@ -371,14 +371,14 @@ public partial class MainWindow : Window
     {
         if (sender is not Button btn) return;
         if (btn.DataContext is not SplitSegment segment) return;
-        Vm?.RemoveSplitSegmentCommand.Execute(segment);
+        Vm?.Organizer.RemoveSplitSegmentCommand.Execute(segment);
     }
 
     // ============================================================
     //  SFTP CONFIG
     // ============================================================
 
-    private void OnSftpNewProfileClick(object? sender, RoutedEventArgs e) => Vm?.SftpNewProfileCommand.Execute(null);
+    private void OnSftpNewProfileClick(object? sender, RoutedEventArgs e) => Vm?.Sftp.SftpNewProfileCommand.Execute(null);
 
     private async void OnBrowseSftpKeyClick(object? sender, RoutedEventArgs e)
     {
@@ -394,10 +394,10 @@ public partial class MainWindow : Window
         if (files == null || files.Count == 0) return;
 
         var path = files[0].TryGetLocalPath();
-        if (!string.IsNullOrEmpty(path) && Vm != null) Vm.SftpPrivateKeyPath = path;
+        if (!string.IsNullOrEmpty(path) && Vm != null) Vm.Sftp.SftpPrivateKeyPath = path;
     }
 
-    private void OnSftpRefreshClick(object? sender, RoutedEventArgs e) => Vm?.SftpRefreshCommand.Execute(null);
+    private void OnSftpRefreshClick(object? sender, RoutedEventArgs e) => Vm?.Sftp.SftpRefreshCommand.Execute(null);
 
     private async void OnSftpEntryDoubleTapped(object? sender, TappedEventArgs e)
     {
@@ -407,8 +407,8 @@ public partial class MainWindow : Window
 
         if (entry.IsDirectory)
         {
-            Vm.SftpCurrentRemotePath = entry.FullPath;
-            await Vm.SftpRefreshCommand.ExecuteAsync(null);
+            Vm.Sftp.SftpCurrentRemotePath = entry.FullPath;
+            await Vm.Sftp.SftpRefreshCommand.ExecuteAsync(null);
         }
     }
 
@@ -416,7 +416,7 @@ public partial class MainWindow : Window
     //  SFTP BROWSER LOCALE
     // ============================================================
 
-    private void OnSftpLocalRefreshClick(object? sender, RoutedEventArgs e) => Vm?.SftpRefreshLocalCommand.Execute(null);
+    private void OnSftpLocalRefreshClick(object? sender, RoutedEventArgs e) => Vm?.Sftp.SftpRefreshLocalCommand.Execute(null);
 
     private async void OnSftpLocalEntryDoubleTapped(object? sender, TappedEventArgs e)
     {
@@ -426,21 +426,21 @@ public partial class MainWindow : Window
 
         if (entry.IsDirectory)
         {
-            Vm.SftpCurrentLocalPath = entry.FullPath;
-            await Vm.SftpRefreshLocalCommand.ExecuteAsync(null);
+            Vm.Sftp.SftpCurrentLocalPath = entry.FullPath;
+            await Vm.Sftp.SftpRefreshLocalCommand.ExecuteAsync(null);
         }
     }
 
     private async void OnBrowseSftpUploadLocalClick(object? sender, RoutedEventArgs e)
     {
         var folder = await PickFolderAsync("Seleziona cartella locale da caricare");
-        if (!string.IsNullOrEmpty(folder)) Vm?.SetSftpUploadLocalFolder(folder);
+        if (!string.IsNullOrEmpty(folder)) Vm?.Sftp.SetSftpUploadLocalFolder(folder);
     }
 
     private async void OnBrowseSftpDownloadLocalClick(object? sender, RoutedEventArgs e)
     {
         var folder = await PickFolderAsync("Seleziona cartella locale di destinazione");
-        if (!string.IsNullOrEmpty(folder)) Vm?.SetSftpDownloadLocalFolder(folder);
+        if (!string.IsNullOrEmpty(folder)) Vm?.Sftp.SetSftpDownloadLocalFolder(folder);
     }
 
     // ============================================================
@@ -452,10 +452,10 @@ public partial class MainWindow : Window
         if (Vm == null) return;
         if (sender is not DataGrid grid) return;
 
-        Vm.SelectedLocalEntries.Clear();
+        Vm.Sftp.SelectedLocalEntries.Clear();
         if (grid.SelectedItems != null)
             foreach (var item in grid.SelectedItems)
-                if (item is LocalFileEntry entry) Vm.SelectedLocalEntries.Add(entry);
+                if (item is LocalFileEntry entry) Vm.Sftp.SelectedLocalEntries.Add(entry);
     }
 
     private void OnRemoteFilesSelectionChanged(object? sender, SelectionChangedEventArgs e)
@@ -463,10 +463,10 @@ public partial class MainWindow : Window
         if (Vm == null) return;
         if (sender is not DataGrid grid) return;
 
-        Vm.SelectedRemoteEntries.Clear();
+        Vm.Sftp.SelectedRemoteEntries.Clear();
         if (grid.SelectedItems != null)
             foreach (var item in grid.SelectedItems)
-                if (item is SftpRemoteEntry entry) Vm.SelectedRemoteEntries.Add(entry);
+                if (item is SftpRemoteEntry entry) Vm.Sftp.SelectedRemoteEntries.Add(entry);
     }
 
     // ============================================================
@@ -480,8 +480,8 @@ public partial class MainWindow : Window
         if (Vm == null) return;
 
         var entries = new List<LocalFileEntry>();
-        if (Vm.SelectedLocalEntries.Count > 0) entries.AddRange(Vm.SelectedLocalEntries);
-        else if (Vm.SftpSelectedLocalEntry != null) entries.Add(Vm.SftpSelectedLocalEntry);
+        if (Vm.Sftp.SelectedLocalEntries.Count > 0) entries.AddRange(Vm.Sftp.SelectedLocalEntries);
+        else if (Vm.Sftp.SftpSelectedLocalEntry != null) entries.Add(Vm.Sftp.SftpSelectedLocalEntry);
 
         if (entries.Count == 0) return;
 
@@ -496,7 +496,7 @@ public partial class MainWindow : Window
         if (sender is DataGrid g) g.Focus();
         if (!ok) return;
 
-        await Vm.SftpLocalDeleteManyAsync(entries);
+        await Vm.Sftp.SftpLocalDeleteManyAsync(entries);
     }
 
     private async void OnRemoteGridKeyDown(object? sender, KeyEventArgs e)
@@ -506,8 +506,8 @@ public partial class MainWindow : Window
         if (Vm == null) return;
 
         var entries = new List<SftpRemoteEntry>();
-        if (Vm.SelectedRemoteEntries.Count > 0) entries.AddRange(Vm.SelectedRemoteEntries);
-        else if (Vm.SftpSelectedRemoteEntry != null) entries.Add(Vm.SftpSelectedRemoteEntry);
+        if (Vm.Sftp.SelectedRemoteEntries.Count > 0) entries.AddRange(Vm.Sftp.SelectedRemoteEntries);
+        else if (Vm.Sftp.SftpSelectedRemoteEntry != null) entries.Add(Vm.Sftp.SftpSelectedRemoteEntry);
 
         if (entries.Count == 0) return;
 
@@ -522,7 +522,7 @@ public partial class MainWindow : Window
         if (sender is DataGrid g) g.Focus();
         if (!ok) return;
 
-        await Vm.SftpRemoteDeleteManyAsync(entries);
+        await Vm.Sftp.SftpRemoteDeleteManyAsync(entries);
     }
 
     // ============================================================
@@ -533,7 +533,7 @@ public partial class MainWindow : Window
     {
         if (Vm == null) return;
         var name = await InputDialog.ShowAsync(this, "Nome nuova cartella:", "Nuova cartella", "Nuova cartella");
-        if (!string.IsNullOrEmpty(name)) await Vm.SftpLocalCreateFolderAsync(name);
+        if (!string.IsNullOrEmpty(name)) await Vm.Sftp.SftpLocalCreateFolderAsync(name);
     }
 
     private async void OnLocalOpenClick(object? sender, RoutedEventArgs e)
@@ -542,8 +542,8 @@ public partial class MainWindow : Window
         if (entry == null || Vm == null) return;
         if (!entry.IsDirectory) return;
 
-        Vm.SftpCurrentLocalPath = entry.FullPath;
-        await Vm.SftpRefreshLocalCommand.ExecuteAsync(null);
+        Vm.Sftp.SftpCurrentLocalPath = entry.FullPath;
+        await Vm.Sftp.SftpRefreshLocalCommand.ExecuteAsync(null);
     }
 
     private async void OnLocalRenameClick(object? sender, RoutedEventArgs e)
@@ -554,7 +554,7 @@ public partial class MainWindow : Window
         var newName = await InputDialog.ShowAsync(this, $"Rinomina '{entry.Name}' in:", entry.Name, "Rinomina");
         if (string.IsNullOrEmpty(newName) || newName == entry.Name) return;
 
-        await Vm.SftpLocalRenameAsync(entry, newName);
+        await Vm.Sftp.SftpLocalRenameAsync(entry, newName);
     }
 
     private async void OnLocalDeleteClick(object? sender, RoutedEventArgs e)
@@ -569,7 +569,7 @@ public partial class MainWindow : Window
         var ok = await ConfirmDialog.ShowAsync(this, msg, "Conferma eliminazione");
         if (!ok) return;
 
-        await Vm.SftpLocalDeleteManyAsync(new[] { entry });
+        await Vm.Sftp.SftpLocalDeleteManyAsync(new[] { entry });
     }
 
     // ============================================================
@@ -580,7 +580,7 @@ public partial class MainWindow : Window
     {
         if (Vm == null) return;
         var name = await InputDialog.ShowAsync(this, "Nome nuova cartella remota:", "Nuova cartella", "Nuova cartella");
-        if (!string.IsNullOrEmpty(name)) await Vm.SftpRemoteCreateFolderAsync(name);
+        if (!string.IsNullOrEmpty(name)) await Vm.Sftp.SftpRemoteCreateFolderAsync(name);
     }
 
     private async void OnRemoteOpenClick(object? sender, RoutedEventArgs e)
@@ -589,8 +589,8 @@ public partial class MainWindow : Window
         if (entry == null || Vm == null) return;
         if (!entry.IsDirectory) return;
 
-        Vm.SftpCurrentRemotePath = entry.FullPath;
-        await Vm.SftpRefreshCommand.ExecuteAsync(null);
+        Vm.Sftp.SftpCurrentRemotePath = entry.FullPath;
+        await Vm.Sftp.SftpRefreshCommand.ExecuteAsync(null);
     }
 
     private async void OnRemoteRenameClick(object? sender, RoutedEventArgs e)
@@ -601,7 +601,7 @@ public partial class MainWindow : Window
         var newName = await InputDialog.ShowAsync(this, $"Rinomina '{entry.Name}' in:", entry.Name, "Rinomina");
         if (string.IsNullOrEmpty(newName) || newName == entry.Name) return;
 
-        await Vm.SftpRemoteRenameAsync(entry, newName);
+        await Vm.Sftp.SftpRemoteRenameAsync(entry, newName);
     }
 
     private async void OnRemoteDeleteClick(object? sender, RoutedEventArgs e)
@@ -616,7 +616,7 @@ public partial class MainWindow : Window
         var ok = await ConfirmDialog.ShowAsync(this, msg, "Conferma eliminazione");
         if (!ok) return;
 
-        await Vm.SftpRemoteDeleteManyAsync(new[] { entry });
+        await Vm.Sftp.SftpRemoteDeleteManyAsync(new[] { entry });
     }
 
     private async void OnProxyImportFileClick(object? sender, RoutedEventArgs e)
@@ -651,11 +651,11 @@ public partial class MainWindow : Window
         try
         {
             var content = await File.ReadAllTextAsync(path);
-            Vm.ProxyImportFromString(content);
+            Vm.Proxy.ProxyImportFromString(content);
         }
         catch (Exception ex)
         {
-            Vm.ProxyStatusMessage = $"Errore lettura file: {ex.Message}";
+            Vm.Proxy.ProxyStatusMessage = $"Errore lettura file: {ex.Message}";
         }
     }
 
@@ -689,15 +689,15 @@ public partial class MainWindow : Window
     //  SFTP UPLOAD/DOWNLOAD JOB
     // ============================================================
 
-    private void OnSftpJobResumeClick(object? sender, RoutedEventArgs e) { var j = ResolveItem<SftpUploadJob>(sender); if (j != null) Vm?.ResumeSftpJobPublic(j); }
-    private void OnSftpJobPauseClick(object? sender, RoutedEventArgs e) { var j = ResolveItem<SftpUploadJob>(sender); if (j != null) Vm?.PauseSftpJobPublic(j); }
-    private void OnSftpJobCancelClick(object? sender, RoutedEventArgs e) { var j = ResolveItem<SftpUploadJob>(sender); if (j != null) Vm?.CancelSftpJobPublic(j); }
-    private void OnSftpJobRemoveClick(object? sender, RoutedEventArgs e) { var j = ResolveItem<SftpUploadJob>(sender); if (j != null) Vm?.RemoveSftpJobPublic(j); }
+    private void OnSftpJobResumeClick(object? sender, RoutedEventArgs e) { var j = ResolveItem<SftpUploadJob>(sender); if (j != null) Vm?.Sftp.ResumeSftpJobPublic(j); }
+    private void OnSftpJobPauseClick(object? sender, RoutedEventArgs e) { var j = ResolveItem<SftpUploadJob>(sender); if (j != null) Vm?.Sftp.PauseSftpJobPublic(j); }
+    private void OnSftpJobCancelClick(object? sender, RoutedEventArgs e) { var j = ResolveItem<SftpUploadJob>(sender); if (j != null) Vm?.Sftp.CancelSftpJobPublic(j); }
+    private void OnSftpJobRemoveClick(object? sender, RoutedEventArgs e) { var j = ResolveItem<SftpUploadJob>(sender); if (j != null) Vm?.Sftp.RemoveSftpJobPublic(j); }
 
-    private void OnSftpDownloadJobResumeClick(object? sender, RoutedEventArgs e) { var j = ResolveItem<SftpDownloadJob>(sender); if (j != null) Vm?.ResumeSftpDownloadJobPublic(j); }
-    private void OnSftpDownloadJobPauseClick(object? sender, RoutedEventArgs e) { var j = ResolveItem<SftpDownloadJob>(sender); if (j != null) Vm?.PauseSftpDownloadJobPublic(j); }
-    private void OnSftpDownloadJobCancelClick(object? sender, RoutedEventArgs e) { var j = ResolveItem<SftpDownloadJob>(sender); if (j != null) Vm?.CancelSftpDownloadJobPublic(j); }
-    private void OnSftpDownloadJobRemoveClick(object? sender, RoutedEventArgs e) { var j = ResolveItem<SftpDownloadJob>(sender); if (j != null) Vm?.RemoveSftpDownloadJobPublic(j); }
+    private void OnSftpDownloadJobResumeClick(object? sender, RoutedEventArgs e) { var j = ResolveItem<SftpDownloadJob>(sender); if (j != null) Vm?.Sftp.ResumeSftpDownloadJobPublic(j); }
+    private void OnSftpDownloadJobPauseClick(object? sender, RoutedEventArgs e) { var j = ResolveItem<SftpDownloadJob>(sender); if (j != null) Vm?.Sftp.PauseSftpDownloadJobPublic(j); }
+    private void OnSftpDownloadJobCancelClick(object? sender, RoutedEventArgs e) { var j = ResolveItem<SftpDownloadJob>(sender); if (j != null) Vm?.Sftp.CancelSftpDownloadJobPublic(j); }
+    private void OnSftpDownloadJobRemoveClick(object? sender, RoutedEventArgs e) { var j = ResolveItem<SftpDownloadJob>(sender); if (j != null) Vm?.Sftp.RemoveSftpDownloadJobPublic(j); }
 
     // ============================================================
     //  DOPPIO CLICK DOWNLOAD TAB
@@ -708,7 +708,7 @@ public partial class MainWindow : Window
         if (sender is not DataGrid grid) return;
         if (grid.SelectedItem is not AnimeSearchResult anime) return;
         if (Vm == null) return;
-        await Vm.LoadEpisodesCommand.ExecuteAsync(anime);
+        await Vm.Download.LoadEpisodesCommand.ExecuteAsync(anime);
     }
 
     private async void OnEpisodeDoubleTapped(object? sender, TappedEventArgs e)
@@ -716,41 +716,41 @@ public partial class MainWindow : Window
         if (sender is not DataGrid grid) return;
         if (grid.SelectedItem is not Episode episode) return;
         if (Vm == null) return;
-        await Vm.DownloadEpisodeCommand.ExecuteAsync(episode);
+        await Vm.Download.DownloadEpisodeCommand.ExecuteAsync(episode);
     }
 
     // ============================================================
     //  CONTEXT MENU DOWNLOAD
     // ============================================================
 
-    private void OnResumeDownloadClick(object? sender, RoutedEventArgs e) { var i = ResolveItem<DownloadItem>(sender); if (i != null) Vm?.ResumeItemPublic(i); }
-    private void OnForceDownloadClick(object? sender, RoutedEventArgs e) { var i = ResolveItem<DownloadItem>(sender); if (i != null) Vm?.ForceItemPublic(i); }
-    private void OnUnforceDownloadClick(object? sender, RoutedEventArgs e) { var i = ResolveItem<DownloadItem>(sender); if (i != null) Vm?.UnforceItemPublic(i); }
-    private void OnPauseDownloadClick(object? sender, RoutedEventArgs e) { var i = ResolveItem<DownloadItem>(sender); if (i != null) Vm?.PauseItemPublic(i); }
-    private void OnCancelDownloadClick(object? sender, RoutedEventArgs e) { var i = ResolveItem<DownloadItem>(sender); if (i != null) Vm?.CancelItemPublic(i); }
+    private void OnResumeDownloadClick(object? sender, RoutedEventArgs e) { var i = ResolveItem<DownloadItem>(sender); if (i != null) Vm?.Download.ResumeItemPublic(i); }
+    private void OnForceDownloadClick(object? sender, RoutedEventArgs e) { var i = ResolveItem<DownloadItem>(sender); if (i != null) Vm?.Download.ForceItemPublic(i); }
+    private void OnUnforceDownloadClick(object? sender, RoutedEventArgs e) { var i = ResolveItem<DownloadItem>(sender); if (i != null) Vm?.Download.UnforceItemPublic(i); }
+    private void OnPauseDownloadClick(object? sender, RoutedEventArgs e) { var i = ResolveItem<DownloadItem>(sender); if (i != null) Vm?.Download.PauseItemPublic(i); }
+    private void OnCancelDownloadClick(object? sender, RoutedEventArgs e) { var i = ResolveItem<DownloadItem>(sender); if (i != null) Vm?.Download.CancelItemPublic(i); }
 
     private async void OnRemoveDownloadClick(object? sender, RoutedEventArgs e)
     {
         var i = ResolveItem<DownloadItem>(sender);
-        if (i != null && Vm != null) await Vm.RemoveItemPublicAsync(i);
+        if (i != null && Vm != null) await Vm.Download.RemoveItemPublicAsync(i);
     }
 
     // ============================================================
     //  PULSANTI GRUPPO
     // ============================================================
 
-    private void OnResumeGroupClick(object? sender, RoutedEventArgs e) { if (sender is Button b && b.DataContext is SeriesGroup g) Vm?.ResumeGroupPublic(g); }
-    private void OnForceGroupClick(object? sender, RoutedEventArgs e) { if (sender is Button b && b.DataContext is SeriesGroup g) Vm?.ForceGroupPublic(g); }
-    private void OnUnforceGroupClick(object? sender, RoutedEventArgs e) { if (sender is Button b && b.DataContext is SeriesGroup g) Vm?.UnforceGroupPublic(g); }
-    private void OnPauseGroupClick(object? sender, RoutedEventArgs e) { if (sender is Button b && b.DataContext is SeriesGroup g) Vm?.PauseGroupPublic(g); }
-    private void OnCancelGroupClick(object? sender, RoutedEventArgs e) { if (sender is Button b && b.DataContext is SeriesGroup g) Vm?.CancelGroupPublic(g); }
+    private void OnResumeGroupClick(object? sender, RoutedEventArgs e) { if (sender is Button b && b.DataContext is SeriesGroup g) Vm?.Download.ResumeGroupPublic(g); }
+    private void OnForceGroupClick(object? sender, RoutedEventArgs e) { if (sender is Button b && b.DataContext is SeriesGroup g) Vm?.Download.ForceGroupPublic(g); }
+    private void OnUnforceGroupClick(object? sender, RoutedEventArgs e) { if (sender is Button b && b.DataContext is SeriesGroup g) Vm?.Download.UnforceGroupPublic(g); }
+    private void OnPauseGroupClick(object? sender, RoutedEventArgs e) { if (sender is Button b && b.DataContext is SeriesGroup g) Vm?.Download.PauseGroupPublic(g); }
+    private void OnCancelGroupClick(object? sender, RoutedEventArgs e) { if (sender is Button b && b.DataContext is SeriesGroup g) Vm?.Download.CancelGroupPublic(g); }
 
     private async void OnRemoveGroupClick(object? sender, RoutedEventArgs e)
     {
         if (sender is not Button b) return;
         if (b.DataContext is not SeriesGroup g) return;
         if (Vm == null) return;
-        await Vm.RemoveGroupPublicAsync(g);
+        await Vm.Download.RemoveGroupPublicAsync(g);
     }
 
     // ============================================================
@@ -900,11 +900,11 @@ public partial class MainWindow : Window
             var entries = _draggedLocalEntries;
             _draggedLocalEntries = null;
 
-            Vm.SelectedLocalEntries.Clear();
+            Vm.Sftp.SelectedLocalEntries.Clear();
             foreach (var it in entries)
-                Vm.SelectedLocalEntries.Add(it);
+                Vm.Sftp.SelectedLocalEntries.Add(it);
 
-            await Vm.SftpUploadSelectedCommand.ExecuteAsync(null);
+            await Vm.Sftp.SftpUploadSelectedCommand.ExecuteAsync(null);
             return;
         }
 
@@ -924,7 +924,7 @@ public partial class MainWindow : Window
         if (paths.Count == 0) return;
 
         System.Diagnostics.Debug.WriteLine($"[DRAG-OS-DROP] {paths.Count} elemento/i");
-        await Vm.EnqueueUploadsFromPathsAsync(paths, Vm.SftpCurrentRemotePath);
+        await Vm.Sftp.EnqueueUploadsFromPathsAsync(paths, Vm.Sftp.SftpCurrentRemotePath);
     }
 
     private void OnLocalGridDragOver(object? sender, DragEventArgs e)
@@ -945,10 +945,10 @@ public partial class MainWindow : Window
         var entries = _draggedRemoteEntries;
         _draggedRemoteEntries = null;
 
-        Vm.SelectedRemoteEntries.Clear();
+        Vm.Sftp.SelectedRemoteEntries.Clear();
         foreach (var it in entries)
-            Vm.SelectedRemoteEntries.Add(it);
+            Vm.Sftp.SelectedRemoteEntries.Add(it);
 
-        await Vm.SftpDownloadSelectedCommand.ExecuteAsync(null);
+        await Vm.Sftp.SftpDownloadSelectedCommand.ExecuteAsync(null);
     }
 }

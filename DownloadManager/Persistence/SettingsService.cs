@@ -8,6 +8,7 @@ public class SettingsService
 {
     private readonly ILogger<SettingsService> _logger;
     private readonly string _settingsPath;
+    private readonly object _saveLock = new();
     private AppSettings _current = new();
 
     public SettingsService(ILogger<SettingsService> logger)
@@ -57,20 +58,45 @@ public class SettingsService
         }
     }
 
+    /// <summary>
+    /// Salvataggio atomico: scrive su file .tmp con fsync, poi Move-with-overwrite.
+    /// Se l'app crasha a metà scrittura, il vecchio settings.json resta intatto.
+    /// Serializzato con lock per evitare corse su Save() concorrenti.
+    /// </summary>
     public void Save()
     {
-        try
+        lock (_saveLock)
         {
-            var json = JsonSerializer.Serialize(_current, new JsonSerializerOptions
+            try
             {
-                WriteIndented = true
-            });
-            File.WriteAllText(_settingsPath, json);
-            _logger.LogInformation("Impostazioni salvate in {Path}", _settingsPath);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Errore salvataggio impostazioni");
+                var json = JsonSerializer.Serialize(_current, new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                });
+
+                var tmpPath = _settingsPath + ".tmp";
+
+                // Scrittura su .tmp con flush-to-disk (fsync) per garantire
+                // che i byte siano davvero sul disco prima del move.
+                using (var fs = new FileStream(
+                    tmpPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                using (var writer = new StreamWriter(fs))
+                {
+                    writer.Write(json);
+                    writer.Flush();
+                    fs.Flush(flushToDisk: true);
+                }
+
+                // File.Move con overwrite: su Windows è un'operazione atomica
+                // (rename nella stessa partizione). O il file vecchio, o il nuovo.
+                File.Move(tmpPath, _settingsPath, overwrite: true);
+
+                _logger.LogInformation("Impostazioni salvate in {Path}", _settingsPath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Errore salvataggio impostazioni");
+            }
         }
     }
 }

@@ -17,6 +17,7 @@ public partial class UpdateDialog : Window
     private string _changelog = "";
     private Func<Action<int>, Task>? _downloadAction;
     private int _lastPercent;
+    private int _baselinePercent = -1;
 
     private DateTime _downloadStartTime;
     private DateTime _lastSampleTime;
@@ -156,11 +157,12 @@ public partial class UpdateDialog : Window
     private void ResetProgress()
     {
         ProgressBarCtrl.Value = 0;
-        BytesText.Text = "0%";
+        BytesText.Text = "Preparazione...";
         SpeedText.Text = "-";
-        PercentText.Text = "0%";
+        PercentText.Text = "";
 
         _lastPercent = 0;
+        _baselinePercent = -1;
         _downloadStartTime = DateTime.UtcNow;
         _lastSampleTime = DateTime.UtcNow;
     }
@@ -177,26 +179,54 @@ public partial class UpdateDialog : Window
             if (percent < 0) percent = 0;
             if (percent > 100) percent = 100;
 
-            ProgressBarCtrl.Value = percent;
-            PercentText.Text = $"{percent}%";
+            var now = DateTime.UtcNow;
+
+            // Prima callback: registra la baseline e non calcolare velocità.
+            // Velopack spesso parte da un valore > 0 (es. 70%) perché la
+            // percentuale include lo staging interno; trattiamola come punto zero.
+            if (_baselinePercent < 0)
+            {
+                _baselinePercent = percent;
+                _lastPercent = percent;
+                _lastSampleTime = now;
+
+                ProgressBarCtrl.Value = percent;
+                PercentText.Text = $"{percent}%";
+                BytesText.Text = $"{percent}%";
+                SpeedText.Text = "-";
+                return;
+            }
+
+            // Proietta il progresso sull'intervallo [baseline, 100]
+            // per mostrare 0-100% da dove ha davvero inizio il "download visibile".
+            int adjusted;
+            if (percent >= 100)
+                adjusted = 100;
+            else
+            {
+                var range = 100.0 - _baselinePercent;
+                adjusted = range <= 0
+                    ? 100
+                    : (int)Math.Round((percent - _baselinePercent) * 100.0 / range);
+                if (adjusted < 0) adjusted = 0;
+                if (adjusted > 100) adjusted = 100;
+            }
+
+            ProgressBarCtrl.Value = adjusted;
+            PercentText.Text = $"{adjusted}%";
             BytesText.Text = $"{percent}%";
 
-            var now = DateTime.UtcNow;
+            // Velocità: solo su callback consecutive con delta positivo reale
             var elapsed = (now - _lastSampleTime).TotalSeconds;
-
-            if (elapsed >= 0.5 && percent != _lastPercent)
+            if (elapsed >= 0.5 && percent > _lastPercent)
             {
                 double deltaPercent = percent - _lastPercent;
                 double speedPercent = deltaPercent / elapsed;
 
                 if (speedPercent > 0)
-                {
                     SpeedText.Text = $"{speedPercent:F1} %/s";
-                }
                 else
-                {
                     SpeedText.Text = "-";
-                }
 
                 _lastSampleTime = now;
                 _lastPercent = percent;
