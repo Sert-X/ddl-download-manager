@@ -25,6 +25,7 @@ public partial class OrganizerTabViewModel : ViewModelBase
     // --- Organize ---
     [ObservableProperty] private string _organizeFolder = string.Empty;
     [ObservableProperty] private string _organizePattern = "{Series}/{Series} - {Episode:D3}";
+    [ObservableProperty] private int _organizeStartingEpisode = 1;
     [ObservableProperty] private ObservableCollection<ProposedOperation> _previewOperations = new();
     [ObservableProperty] private ObservableCollection<FileOperation> _operationHistory = new();
     [ObservableProperty] private ProposedOperation? _selectedPreviewOperation;
@@ -35,6 +36,7 @@ public partial class OrganizerTabViewModel : ViewModelBase
     [ObservableProperty] private MergeSourceFolder? _selectedMergeFolder;
     [ObservableProperty] private string _mergeDestinationFolder = string.Empty;
     [ObservableProperty] private string _mergePattern = "{Series}/{Series} - {Episode:D3}";
+    [ObservableProperty] private int _mergeStartingEpisode = 1;
     [ObservableProperty] private ObservableCollection<ProposedOperation> _mergePreviewOperations = new();
     [ObservableProperty] private string _mergeStatusMessage = string.Empty;
     [ObservableProperty] private bool _isMergeBusy;
@@ -83,6 +85,11 @@ public partial class OrganizerTabViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Legacy: la casella "Crea sottocartella per serie" è stata rimossa
+    /// dall'UI dell'Organizer. Il valore è mantenuto su SharedState perché
+    /// ancora usato dal tab Download, ma qui non viene più mostrato.
+    /// </summary>
     public bool CreateSeriesFolder
     {
         get => _shared.CreateSeriesFolder;
@@ -261,14 +268,19 @@ public partial class OrganizerTabViewModel : ViewModelBase
         {
             IsOrganizeBusy = true;
             OrganizeStatusMessage = "Analisi in corso...";
-            var ops = await _fileOrganizer.PreviewAsync(OrganizeFolder, OrganizePattern, false);
+
+            var startingEpisode = OrganizeStartingEpisode > 0 ? OrganizeStartingEpisode : 1;
+
+            // createSubfolders sempre false: la casella è stata rimossa dall'UI
+            var ops = await _fileOrganizer.PreviewAsync(
+                OrganizeFolder, OrganizePattern, false, startingEpisode);
 
             PreviewOperations.Clear();
             foreach (var op in ops) PreviewOperations.Add(op);
 
             var conflicts = ops.Count(o => o.HasConflict);
             OrganizeStatusMessage = conflicts == 0
-                ? $"Trovate {ops.Count} operazioni proposte."
+                ? $"Trovate {ops.Count} operazioni (episodi da {startingEpisode})."
                 : $"Trovate {ops.Count} operazioni ({conflicts} conflitti).";
         }
         catch (Exception ex) { OrganizeStatusMessage = $"Errore: {ex.Message}"; }
@@ -318,15 +330,18 @@ public partial class OrganizerTabViewModel : ViewModelBase
             IsOrganizeBusy = true;
             OrganizeStatusMessage = "Analisi remota in corso...";
 
+            var startingEpisode = OrganizeStartingEpisode > 0 ? OrganizeStartingEpisode : 1;
+
+            // createSubfolders sempre false: la casella è stata rimossa dall'UI
             var ops = await _fileOrganizer.PreviewRemoteFolderAsync(
-                OrganizeFolder, OrganizePattern, CreateSeriesFolder);
+                OrganizeFolder, OrganizePattern, false, startingEpisode);
 
             PreviewOperations.Clear();
             foreach (var op in ops) PreviewOperations.Add(op);
 
             var conflicts = ops.Count(o => o.HasConflict);
             OrganizeStatusMessage = conflicts == 0
-                ? $"Trovate {ops.Count} operazioni (remoto)."
+                ? $"Trovate {ops.Count} operazioni (remoto, episodi da {startingEpisode})."
                 : $"Trovate {ops.Count} operazioni ({conflicts} conflitti).";
         }
         catch (Exception ex) { OrganizeStatusMessage = $"Errore: {ex.Message}"; }
@@ -478,15 +493,19 @@ public partial class OrganizerTabViewModel : ViewModelBase
         {
             IsMergeBusy = true;
             MergeStatusMessage = "Analisi...";
+
+            var startingEpisode = MergeStartingEpisode > 0 ? MergeStartingEpisode : 1;
+
+            // createSubfolders sempre false: la casella è stata rimossa dall'UI
             var ops = await _fileOrganizer.PreviewMergeAsync(
-                MergeSourceFolders.ToList(), MergeDestinationFolder, MergePattern, false);
+                MergeSourceFolders.ToList(), MergeDestinationFolder, MergePattern, false, startingEpisode);
 
             MergePreviewOperations.Clear();
             foreach (var op in ops) MergePreviewOperations.Add(op);
 
             var conflicts = ops.Count(o => o.HasConflict);
             MergeStatusMessage = conflicts == 0
-                ? $"Trovate {ops.Count} operazioni."
+                ? $"Trovate {ops.Count} operazioni (episodi da {startingEpisode})."
                 : $"Trovate {ops.Count} operazioni ({conflicts} conflitti).";
         }
         catch (Exception ex) { MergeStatusMessage = $"Errore: {ex.Message}"; }
@@ -522,15 +541,19 @@ public partial class OrganizerTabViewModel : ViewModelBase
         {
             IsMergeBusy = true;
             MergeStatusMessage = "Analisi remota...";
+
+            var startingEpisode = MergeStartingEpisode > 0 ? MergeStartingEpisode : 1;
+
+            // createSubfolders sempre false: la casella è stata rimossa dall'UI
             var ops = await _fileOrganizer.PreviewRemoteMergeAsync(
-                MergeSourceFolders.ToList(), MergeDestinationFolder, MergePattern, CreateSeriesFolder);
+                MergeSourceFolders.ToList(), MergeDestinationFolder, MergePattern, false, startingEpisode);
 
             MergePreviewOperations.Clear();
             foreach (var op in ops) MergePreviewOperations.Add(op);
 
             var conflicts = ops.Count(o => o.HasConflict);
             MergeStatusMessage = conflicts == 0
-                ? $"Trovate {ops.Count} operazioni (remoto)."
+                ? $"Trovate {ops.Count} operazioni (remoto, episodi da {startingEpisode})."
                 : $"Trovate {ops.Count} operazioni ({conflicts} conflitti).";
         }
         catch (Exception ex) { MergeStatusMessage = $"Errore: {ex.Message}"; }

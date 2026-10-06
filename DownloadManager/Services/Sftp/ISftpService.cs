@@ -42,4 +42,5 @@ public interface ISftpService
         string localBaseFolder,
         IProgress<SftpProgress>? progress = null,
         CancellationToken ct = default);
+    void AbortCurrentOperation();
 }

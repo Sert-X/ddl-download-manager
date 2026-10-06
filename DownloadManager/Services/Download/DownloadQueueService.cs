@@ -499,6 +499,113 @@ public class DownloadQueueService
     }
 
     // ============================================================
+    //  PER SINGOLI ITEM
+    // ============================================================
+
+    /// <summary>
+    /// Ritenta un download Failed/Cancelled: cancella .part, resetta il progresso
+    /// e rimette in coda. Non tocca l'URL (se è scaduto fallirà di nuovo).
+    /// </summary>
+    public async Task RetryItemAsync(DownloadItem item)
+    {
+        if (item.Status != DownloadStatus.Failed && item.Status != DownloadStatus.Cancelled)
+            return;
+
+        // Elimina eventuale file .part
+        try
+        {
+            var partPath = item.DestinationPath + ".part";
+            if (File.Exists(partPath))
+            {
+                File.Delete(partPath);
+                _logger.LogInformation("Rimosso .part per retry: {Path}", partPath);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Impossibile eliminare .part per retry: {Path}", item.DestinationPath);
+        }
+
+        // Reset stato — SINCRONO sul thread UI, così quando torniamo
+        // il dispatcher vede già lo status aggiornato
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            item.DownloadedBytes = 0;
+            item.SpeedBytesPerSecond = 0;
+            item.ErrorMessage = string.Empty;
+            item.Status = DownloadStatus.Pending;
+            item.PauseRequested = false;
+            item.IsPriority = false;
+        });
+
+        // Pulisci i chunk salvati (resume DB)
+        try { await _repository.ClearChunksAsync(item.Id); } catch { }
+
+        // Aspetta che l'item esca da _active (se ancora presente).
+        // Uso InvokeAsync sopra garantisce che il Post di Failed/Cancelled
+        // sia già stato processato, ma _active.Remove() può essere in ritardo.
+        for (int i = 0; i < 20; i++)
+        {
+            lock (_queueLock)
+            {
+                if (!_active.ContainsKey(item.Id))
+                    break;
+            }
+            await Task.Delay(50);
+        }
+
+        // Metti in coda
+        lock (_queueLock)
+        {
+            _pending.RemoveAll(i => i.Id == item.Id);
+            _pendingIds.Remove(item.Id);
+
+            if (_pendingIds.Add(item.Id))
+                _pending.Add(item);
+        }
+
+        _isPaused = false;
+        _autoStartOnFirstEnqueue = false;
+
+        QueueChanged?.Invoke();
+        TryDispatch();
+    }
+
+    public async Task RetryFailedInGroupAsync(SeriesGroup group)
+    {
+        var failedItems = group.Items
+            .Where(i => i.Status == DownloadStatus.Failed)
+            .ToList();
+
+        if (failedItems.Count == 0)
+            return;
+
+        _logger.LogInformation(
+            "Retry di {Count} failed nella serie {Series}",
+            failedItems.Count, group.SeriesName);
+
+        foreach (var item in failedItems)
+            await RetryItemAsync(item);
+    }
+
+    public async Task RetryCancelledInGroupAsync(SeriesGroup group)
+    {
+        var cancelledItems = group.Items
+            .Where(i => i.Status == DownloadStatus.Cancelled)
+            .ToList();
+
+        if (cancelledItems.Count == 0)
+            return;
+
+        _logger.LogInformation(
+            "Retry di {Count} cancelled nella serie {Series}",
+            cancelledItems.Count, group.SeriesName);
+
+        foreach (var item in cancelledItems)
+            await RetryItemAsync(item);
+    }
+
+    // ============================================================
     //  DISPATCH
     // ============================================================
 

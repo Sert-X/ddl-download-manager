@@ -14,6 +14,11 @@ public class SftpWinScpService : ISftpService, IDisposable
     private readonly SftpSessionLimiter _sessionLimiter;
     private bool _holdsLimiterSlot;
 
+    /// <summary>Timeout di rete per operazioni WinSCP (default 15s). Alzato
+    /// a 60s perché su server lenti 15s sono pochi per ListDirectory di
+    /// cartelle grandi (es. Mushoku Tensei).</summary>
+    private static readonly TimeSpan NetworkTimeout = TimeSpan.FromSeconds(60);
+
     public SftpWinScpService(ILogger<SftpWinScpService> logger, SftpSessionLimiter sessionLimiter)
     {
         _logger = logger;
@@ -22,6 +27,25 @@ public class SftpWinScpService : ISftpService, IDisposable
 
     public bool IsConnected => _session?.Opened == true;
     public string CurrentRemotePath { get; private set; } = "/";
+
+    // ============================================================
+    //  ABORT (usato dal ZeroByteCheckerService quando una cartella
+    //  impiega troppo). Chiamato da un thread diverso da quello che
+    //  esegue ListDirectory: sblocca l'operazione in corso e permette
+    //  al finally di rilasciare il _sessionGate.
+    // ============================================================
+
+    public void AbortCurrentOperation()
+    {
+        try
+        {
+            _session?.Abort();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SFTP-ABORT] {ex.Message}");
+        }
+    }
 
     // ============================================================
     //  CONNESSIONE
@@ -34,7 +58,6 @@ public class SftpWinScpService : ISftpService, IDisposable
         {
             await DisconnectInternalAsync();
 
-            // Acquisisci slot PRIMA di aprire la sessione
             await _sessionLimiter.AcquireAsync(ct);
             _holdsLimiterSlot = true;
 
@@ -66,7 +89,6 @@ public class SftpWinScpService : ISftpService, IDisposable
             }
             catch
             {
-                // Cleanup se l'open è fallito: sessione + slot
                 try { _session?.Dispose(); } catch { }
                 _session = null;
                 _currentOptions = null;
@@ -103,7 +125,6 @@ public class SftpWinScpService : ISftpService, IDisposable
     {
         if (_session == null)
         {
-            // Nessuna sessione ma per qualche motivo teniamo ancora lo slot → rilascia
             if (_holdsLimiterSlot)
             {
                 _sessionLimiter.Release();
@@ -187,7 +208,8 @@ public class SftpWinScpService : ISftpService, IDisposable
             HostName = config.Host,
             PortNumber = config.Port,
             UserName = config.Username,
-            Password = config.Password
+            Password = config.Password,
+            Timeout = NetworkTimeout
         };
 
         if (!string.IsNullOrEmpty(config.SshHostKeyFingerprint))
@@ -227,48 +249,49 @@ public class SftpWinScpService : ISftpService, IDisposable
         if (string.IsNullOrWhiteSpace(remotePath))
             remotePath = "/";
 
-        _logger.LogInformation("Listing: {Path}", remotePath);
+        System.Diagnostics.Debug.WriteLine($"[SFTP-LIST] {remotePath}");
 
-        var entries = await _sessionGate.WaitAsync(ct).ContinueWith(_ =>
+        var entries = new List<SftpRemoteEntry>();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        await _sessionGate.WaitAsync(ct);
+        try
         {
-            try
+            var trimmed = remotePath.TrimEnd('/');
+
+            await Task.Run(() =>
             {
-                var list = new List<SftpRemoteEntry>();
                 var result = _session!.ListDirectory(remotePath);
 
                 foreach (RemoteFileInfo file in result.Files)
                 {
                     if (file.Name == "." || file.Name == "..") continue;
 
-                    list.Add(new SftpRemoteEntry
+                    entries.Add(new SftpRemoteEntry
                     {
                         Name = file.Name,
-                        FullPath = $"{remotePath.TrimEnd('/')}/{file.Name}",
+                        FullPath = $"{trimmed}/{file.Name}",
                         IsDirectory = file.IsDirectory,
                         Size = file.Length,
                         Modified = file.LastWriteTime
                     });
                 }
+            }, ct);
 
-                return list;
-            }
-            finally
+            // Fallback: SOLO per size < 0 (sconosciuta). Un file con size 0
+            // è realmente 0-byte (o il server lo dichiara tale): non serve
+            // un GetFileInfo per ogni file 0-byte, era la causa principale
+            // del "blocco" su cartelle con molti file vuoti.
+            var toFetch = entries
+                .Where(e => !e.IsDirectory && e.Size < 0)
+                .Take(30)
+                .ToList();
+
+            if (toFetch.Count > 0)
             {
-                _sessionGate.Release();
-            }
-        }, ct);
+                System.Diagnostics.Debug.WriteLine(
+                    $"[SFTP-LIST] Fetch size per {toFetch.Count} file (size < 0) in {remotePath}");
 
-        // Fallback: per i file con size sconosciuta (0 o -1), chiediamo
-        // esplicitamente la dimensione con GetFileInfo. Serializzato perché
-        // la Session non è thread-safe.
-        var toFetch = entries.Where(e => !e.IsDirectory && e.Size <= 0).ToList();
-        if (toFetch.Count > 0)
-        {
-            _logger.LogInformation("Fetching size for {Count} file/i (size sconosciuta)", toFetch.Count);
-
-            await _sessionGate.WaitAsync(ct);
-            try
-            {
                 foreach (var entry in toFetch)
                 {
                     if (ct.IsCancellationRequested) break;
@@ -276,7 +299,7 @@ public class SftpWinScpService : ISftpService, IDisposable
                     try
                     {
                         var info = await Task.Run(() => _session!.GetFileInfo(entry.FullPath), ct);
-                        if (info != null && !info.IsDirectory && info.Length > 0)
+                        if (info != null && !info.IsDirectory)
                         {
                             entry.Size = info.Length;
                             entry.Modified = info.LastWriteTime;
@@ -284,14 +307,28 @@ public class SftpWinScpService : ISftpService, IDisposable
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Impossibile recuperare info per {Path}", entry.FullPath);
+                        System.Diagnostics.Debug.WriteLine(
+                            $"[SFTP-LIST] GetFileInfo fallito {entry.FullPath}: {ex.Message}");
                     }
                 }
             }
-            finally
-            {
-                _sessionGate.Release();
-            }
+        }
+        finally
+        {
+            _sessionGate.Release();
+        }
+
+        sw.Stop();
+
+        if (sw.ElapsedMilliseconds > 3000)
+        {
+            _logger.LogWarning("[SFTP-LIST] {Path}: {Count} entry in {Ms}ms",
+                remotePath, entries.Count, sw.ElapsedMilliseconds);
+        }
+        else
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[SFTP-LIST] {remotePath}: {entries.Count} entry in {sw.ElapsedMilliseconds}ms");
         }
 
         return entries.OrderByDescending(e => e.IsDirectory)
@@ -349,10 +386,6 @@ public class SftpWinScpService : ISftpService, IDisposable
         }
     }
 
-    // ============================================================
-    //  DELETE
-    // ============================================================
-
     public async Task DeleteFileAsync(string remotePath, CancellationToken ct = default)
     {
         EnsureConnected();
@@ -364,7 +397,6 @@ public class SftpWinScpService : ISftpService, IDisposable
         {
             await Task.Run(() =>
             {
-                // 1. Verifica esistenza (con path letterale, senza escape)
                 RemoteFileInfo? info = null;
                 try
                 {
@@ -381,44 +413,26 @@ public class SftpWinScpService : ISftpService, IDisposable
                 if (info.IsDirectory)
                     throw new InvalidOperationException($"'{remotePath}' è una cartella. Usa DeleteDirectoryAsync.");
 
-                _logger.LogInformation("[DEL-FILE] Exists: {Path} (size={Size})", remotePath, info.Length);
-
-                // 2. Tentativo con EscapeFileMask
                 var escaped = RemotePath.EscapeFileMask(remotePath);
-                _logger.LogInformation("[DEL-FILE] Attempt 1 (escaped): {Escaped}", escaped);
-
                 var result = _session!.RemoveFiles(escaped);
-
-                _logger.LogInformation("[DEL-FILE] Result: IsSuccess={Ok} Removals={N} Failures={F}",
-                    result.IsSuccess, result.Removals.Count, result.Failures.Count);
 
                 if (result.IsSuccess && result.Removals.Count > 0)
                     return;
 
-                // 3. Fallback: senza escape (alcuni server non gradiscono l'escape sui path)
-                _logger.LogWarning("[DEL-FILE] Attempt 1 failed, trying raw path: {Path}", remotePath);
-
                 var result2 = _session!.RemoveFiles(remotePath);
-
-                _logger.LogInformation("[DEL-FILE] Result 2: IsSuccess={Ok} Removals={N} Failures={F}",
-                    result2.IsSuccess, result2.Removals.Count, result2.Failures.Count);
 
                 if (result2.IsSuccess && result2.Removals.Count > 0)
                     return;
 
-                // 4. Fallback estremo: prova dal path relativo alla cartella corrente
                 var parent = GetParentPath(remotePath);
                 var fileName = remotePath.Substring(remotePath.LastIndexOf('/') + 1);
                 var mask = $"{RemotePath.EscapeFileMask(parent)}/{RemotePath.EscapeFileMask(fileName)}";
-
-                _logger.LogWarning("[DEL-FILE] Attempt 2 failed, trying recomposed mask: {Mask}", mask);
 
                 var result3 = _session!.RemoveFiles(mask);
 
                 if (result3.IsSuccess && result3.Removals.Count > 0)
                     return;
 
-                // Tutti i tentativi falliti
                 var errors = new List<string>();
                 if (result.Failures.Count > 0)
                     errors.Add($"escaped: {string.Join("; ", result.Failures.Select(f => f.Message))}");
@@ -447,7 +461,6 @@ public class SftpWinScpService : ISftpService, IDisposable
         {
             await Task.Run(() =>
             {
-                // Verifica esistenza
                 RemoteFileInfo? info = null;
                 try
                 {
@@ -464,25 +477,15 @@ public class SftpWinScpService : ISftpService, IDisposable
                 if (!info.IsDirectory)
                     throw new InvalidOperationException($"'{remotePath}' non è una cartella. Usa DeleteFileAsync.");
 
-                // WinSCP rimuove ricorsivamente se passi "path/*"
                 var normalized = remotePath.TrimEnd('/');
 
-                // Tentativo 1: path/ con escape
                 var escaped = RemotePath.EscapeFileMask(normalized) + "/";
-                _logger.LogInformation("[DEL-DIR] Attempt 1: {Escaped}", escaped);
-
                 var result = _session!.RemoveFiles(escaped);
-
-                _logger.LogInformation("[DEL-DIR] Result 1: IsSuccess={Ok} Removals={N}",
-                    result.IsSuccess, result.Removals.Count);
 
                 if (result.IsSuccess && result.Removals.Count > 0)
                     return;
 
-                // Tentativo 2: senza escape
                 var raw = normalized + "/";
-                _logger.LogWarning("[DEL-DIR] Attempt 1 failed, trying raw: {Raw}", raw);
-
                 var result2 = _session!.RemoveFiles(raw);
 
                 if (result2.IsSuccess && result2.Removals.Count > 0)
@@ -505,9 +508,6 @@ public class SftpWinScpService : ISftpService, IDisposable
         }
     }
 
-    /// <summary>
-    /// Ritorna il path della cartella genitore di un path remoto (con /).
-    /// </summary>
     private static string GetParentPath(string fullPath)
     {
         if (string.IsNullOrEmpty(fullPath)) return "/";
@@ -530,10 +530,6 @@ public class SftpWinScpService : ISftpService, IDisposable
             _sessionGate.Release();
         }
     }
-
-    // ============================================================
-    //  UPLOAD
-    // ============================================================
 
     public async Task UploadFileAsync(
         string localPath, string remotePath,
@@ -617,10 +613,6 @@ public class SftpWinScpService : ISftpService, IDisposable
             _sessionGate.Release();
         }
     }
-
-    // ============================================================
-    //  DOWNLOAD
-    // ============================================================
 
     public async Task DownloadFileAsync(
         string remotePath, string localPath,

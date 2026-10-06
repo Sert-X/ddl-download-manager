@@ -65,11 +65,13 @@ public class FileOrganizerService : IFileOrganizerService
     // ============================================================
 
     public Task<List<ProposedOperation>> PreviewAsync(
-        string folder, string pattern, bool createSubfolders, CancellationToken ct = default)
-        => Task.Run(() => PreviewInternal(folder, pattern, createSubfolders, ct), ct);
+        string folder, string pattern, bool createSubfolders,
+        int startingEpisode = 1, CancellationToken ct = default)
+        => Task.Run(() => PreviewInternal(folder, pattern, createSubfolders, startingEpisode, ct), ct);
 
     private List<ProposedOperation> PreviewInternal(
-        string folder, string pattern, bool createSubfolders, CancellationToken ct)
+        string folder, string pattern, bool createSubfolders,
+        int startingEpisode, CancellationToken ct)
     {
         var result = new List<ProposedOperation>();
 
@@ -79,27 +81,51 @@ public class FileOrganizerService : IFileOrganizerService
             return result;
         }
 
+        if (startingEpisode < 1) startingEpisode = 1;
+
+        // Precalcolo info + ordinamento per numero episodio (poi per nome).
+        // Necessario per la rinumerazione sequenziale: primo file → startingEpisode,
+        // secondo → startingEpisode+1, ecc.
         var files = Directory.GetFiles(folder, "*", SearchOption.TopDirectoryOnly)
             .Where(f => VideoExtensions.Contains(Path.GetExtension(f)))
+            .Select(f => new
+            {
+                Path = f,
+                Info = ExtractEpisodeInfo(Path.GetFileNameWithoutExtension(f))
+            })
+            .OrderBy(x => x.Info.Start)
+            .ThenBy(x => x.Path, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         _logger.LogInformation("Trovati {Count} file video in {Folder}", files.Count, folder);
 
         var folderName = Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar));
+        int currentEpisode = startingEpisode;
 
-        foreach (var file in files)
+        foreach (var entry in files)
         {
             ct.ThrowIfCancellationRequested();
 
             try
             {
-                var fileName = Path.GetFileNameWithoutExtension(file);
-                var ext = Path.GetExtension(file).TrimStart('.');
+                var fileName = Path.GetFileNameWithoutExtension(entry.Path);
+                var ext = Path.GetExtension(entry.Path).TrimStart('.');
 
                 var series = ExtractSeriesName(fileName);
                 if (string.IsNullOrWhiteSpace(series)) series = folderName;
 
-                var info = ExtractEpisodeInfo(fileName);
+                int count = Math.Max(1, entry.Info.Count);
+                var info = new EpisodeInfo(
+                    currentEpisode,
+                    currentEpisode + count - 1,
+                    count,
+                    count > 1
+                        ? string.Join("-", Enumerable.Range(currentEpisode, count))
+                        : currentEpisode.ToString(),
+                    count > 1);
+
+                currentEpisode += count;
+
                 var title = ExtractTitle(fileName);
                 var newName = ApplyPatternWithRange(pattern, series, info, title, fileName);
 
@@ -109,15 +135,15 @@ public class FileOrganizerService : IFileOrganizerService
 
                 var newPath = Path.Combine(destFolder, Sanitize(newName) + "." + ext);
 
-                if (string.Equals(Path.GetFullPath(file), Path.GetFullPath(newPath), StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(Path.GetFullPath(entry.Path), Path.GetFullPath(newPath), StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 var op = new ProposedOperation
                 {
-                    OriginalPath = file,
+                    OriginalPath = entry.Path,
                     NewPath = newPath,
                     SourceFolder = folder,
-                    Type = string.Equals(Path.GetDirectoryName(file), destFolder, StringComparison.OrdinalIgnoreCase)
+                    Type = string.Equals(Path.GetDirectoryName(entry.Path), destFolder, StringComparison.OrdinalIgnoreCase)
                         ? FileOperationType.Rename
                         : FileOperationType.Move
                 };
@@ -132,7 +158,7 @@ public class FileOrganizerService : IFileOrganizerService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Errore analisi file {File}", file);
+                _logger.LogError(ex, "Errore analisi file {File}", entry.Path);
             }
         }
 
@@ -145,18 +171,24 @@ public class FileOrganizerService : IFileOrganizerService
 
     public Task<List<ProposedOperation>> PreviewMergeAsync(
         List<MergeSourceFolder> sourceFolders, string destinationFolder,
-        string pattern, bool createSubfolders, CancellationToken ct = default)
-        => Task.Run(() => PreviewMergeInternal(sourceFolders, destinationFolder, pattern, createSubfolders, ct), ct);
+        string pattern, bool createSubfolders,
+        int startingEpisode = 1, CancellationToken ct = default)
+        => Task.Run(() => PreviewMergeInternal(sourceFolders, destinationFolder, pattern,
+            createSubfolders, startingEpisode, ct), ct);
 
     private List<ProposedOperation> PreviewMergeInternal(
         List<MergeSourceFolder> sourceFolders, string destinationFolder,
-        string pattern, bool createSubfolders, CancellationToken ct)
+        string pattern, bool createSubfolders, int startingEpisode, CancellationToken ct)
     {
         var result = new List<ProposedOperation>();
         if (sourceFolders.Count == 0) return result;
+        if (startingEpisode < 1) startingEpisode = 1;
 
         var ordered = sourceFolders.OrderBy(f => f.Priority).ToList();
-        int globalEpisodeCounter = 0;
+
+        // Il counter parte da startingEpisode - 1, così il primo file
+        // (newStart = counter + 1) avrà proprio startingEpisode.
+        int globalEpisodeCounter = startingEpisode - 1;
 
         foreach (var source in ordered)
         {
@@ -383,20 +415,31 @@ public class FileOrganizerService : IFileOrganizerService
     // ============================================================
 
     public async Task<List<ProposedOperation>> PreviewRemoteFolderAsync(
-        string remoteFolder, string pattern, bool createSubfolders, CancellationToken ct = default)
+        string remoteFolder, string pattern, bool createSubfolders,
+        int startingEpisode = 1, CancellationToken ct = default)
     {
         var result = new List<ProposedOperation>();
 
         if (string.IsNullOrWhiteSpace(remoteFolder)) return result;
         if (!_sftpService.IsConnected)
             throw new InvalidOperationException("Non connesso al server SFTP.");
+        if (startingEpisode < 1) startingEpisode = 1;
 
         var remoteBase = remoteFolder.TrimEnd('/');
         if (string.IsNullOrEmpty(remoteBase)) remoteBase = "/";
 
         var entries = await _sftpService.ListDirectoryAsync(remoteBase, ct);
+
+        // Precalcolo info + ordinamento per numero episodio (poi per nome).
         var files = entries
             .Where(e => !e.IsDirectory && VideoExtensions.Contains(Path.GetExtension(e.Name)))
+            .Select(e => new
+            {
+                Entry = e,
+                Info = ExtractEpisodeInfo(Path.GetFileNameWithoutExtension(e.Name))
+            })
+            .OrderBy(x => x.Info.Start)
+            .ThenBy(x => x.Entry.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         _logger.LogInformation("Remoto: {Count} file video in {Folder}", files.Count, remoteBase);
@@ -413,19 +456,33 @@ public class FileOrganizerService : IFileOrganizerService
 
         var assignedTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var entry in files)
+        int currentEpisode = startingEpisode;
+
+        foreach (var item in files)
         {
             ct.ThrowIfCancellationRequested();
 
             try
             {
+                var entry = item.Entry;
                 var fileName = Path.GetFileNameWithoutExtension(entry.Name);
                 var ext = Path.GetExtension(entry.Name).TrimStart('.');
 
                 var series = ExtractSeriesName(fileName);
                 if (string.IsNullOrWhiteSpace(series)) series = folderName;
 
-                var info = ExtractEpisodeInfo(fileName);
+                int count = Math.Max(1, item.Info.Count);
+                var info = new EpisodeInfo(
+                    currentEpisode,
+                    currentEpisode + count - 1,
+                    count,
+                    count > 1
+                        ? string.Join("-", Enumerable.Range(currentEpisode, count))
+                        : currentEpisode.ToString(),
+                    count > 1);
+
+                currentEpisode += count;
+
                 var title = ExtractTitle(fileName);
                 var newName = Sanitize(ApplyPatternWithRange(pattern, series, info, title, fileName)) + "." + ext;
 
@@ -453,7 +510,7 @@ public class FileOrganizerService : IFileOrganizerService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Errore analisi file remoto {File}", entry.FullPath);
+                _logger.LogError(ex, "Errore analisi file remoto {File}", item.Entry.FullPath);
             }
         }
 
@@ -466,18 +523,23 @@ public class FileOrganizerService : IFileOrganizerService
 
     public async Task<List<ProposedOperation>> PreviewRemoteMergeAsync(
         List<MergeSourceFolder> sourceFolders, string remoteDestinationFolder,
-        string pattern, bool createSubfolders, CancellationToken ct = default)
+        string pattern, bool createSubfolders,
+        int startingEpisode = 1, CancellationToken ct = default)
     {
         var result = new List<ProposedOperation>();
         if (sourceFolders.Count == 0) return result;
         if (!_sftpService.IsConnected)
             throw new InvalidOperationException("Non connesso al server SFTP.");
+        if (startingEpisode < 1) startingEpisode = 1;
 
         var remoteDest = remoteDestinationFolder.TrimEnd('/');
         if (string.IsNullOrEmpty(remoteDest)) remoteDest = "/";
 
         var ordered = sourceFolders.OrderBy(f => f.Priority).ToList();
-        int globalEpisodeCounter = 0;
+
+        // Il counter parte da startingEpisode - 1, così il primo file
+        // avrà proprio startingEpisode.
+        int globalEpisodeCounter = startingEpisode - 1;
 
         var listedDirs = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         var assignedTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -946,7 +1008,6 @@ public class FileOrganizerService : IFileOrganizerService
                         break;
 
                     case FileOperationType.CreateDir:
-                        // Non annulliamo la creazione cartella remota.
                         break;
                 }
 
@@ -1013,13 +1074,10 @@ public class FileOrganizerService : IFileOrganizerService
 
     private static string ExtractSeriesName(string fileName)
     {
-        // 1. Preferisci tagliare prima di un marker esplicito (Ep 5, Episode 5, Puntata 5)
         var marker = EpisodeMarkerRegex.Match(fileName);
         if (marker.Success && marker.Index > 0)
             return CleanSeriesName(fileName.Substring(0, marker.Index));
 
-        // 2. Altrimenti taglia prima dell'ULTIMO numero isolato
-        // (che è l'episodio), non del primo che potrebbe essere parte del titolo.
         var isolated = IsolatedNumberRegex.Matches(fileName);
         if (isolated.Count > 0)
         {
@@ -1033,7 +1091,6 @@ public class FileOrganizerService : IFileOrganizerService
 
     private static EpisodeInfo ExtractEpisodeInfo(string fileName)
     {
-        // 1. Marker esplicito (Ep, Episode, Puntata, E, P)
         var m1 = EpisodeMarkerRegex.Match(fileName);
         if (m1.Success)
         {
@@ -1041,9 +1098,6 @@ public class FileOrganizerService : IFileOrganizerService
             if (info.Start > 0) return info;
         }
 
-        // 2. Numeri isolati: prendi L'ULTIMO, non il primo.
-        // L'episodio è quasi sempre l'ultimo numero prima dell'estensione/tag,
-        // mentre il primo numero può far parte del titolo (es. "L'Uomo Tigre 2 (ITA) - 001").
         var isolatedMatches = IsolatedNumberRegex.Matches(fileName);
         if (isolatedMatches.Count > 0)
         {
@@ -1052,7 +1106,6 @@ public class FileOrganizerService : IFileOrganizerService
             if (info.Start > 0) return info;
         }
 
-        // 3. Fallback: primo numero qualsiasi
         var firstNumber = FirstNumberRegex.Match(fileName);
         if (firstNumber.Success && int.TryParse(firstNumber.Groups[1].Value, out var n3) && n3 > 0)
             return new EpisodeInfo(n3, n3, 1, n3.ToString(), false);

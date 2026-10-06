@@ -58,6 +58,7 @@ public interface IFileOrganizerService
         string folder,
         string pattern,
         bool createSubfolders,
+        int startingEpisode = 1,
         CancellationToken ct = default);
 
     Task<List<ProposedOperation>> PreviewMergeAsync(
@@ -65,6 +66,7 @@ public interface IFileOrganizerService
         string destinationFolder,
         string pattern,
         bool createSubfolders,
+        int startingEpisode = 1,
         CancellationToken ct = default);
 
     Task<List<ProposedOperation>> PreviewSplitAsync(
@@ -87,6 +89,7 @@ public interface IFileOrganizerService
         string remoteFolder,
         string pattern,
         bool createSubfolders,
+        int startingEpisode = 1,
         CancellationToken ct = default);
 
     Task<List<ProposedOperation>> PreviewRemoteMergeAsync(
@@ -94,6 +97,7 @@ public interface IFileOrganizerService
         string remoteDestinationFolder,
         string pattern,
         bool createSubfolders,
+        int startingEpisode = 1,
         CancellationToken ct = default);
 
     Task<List<ProposedOperation>> PreviewRemoteSplitAsync(

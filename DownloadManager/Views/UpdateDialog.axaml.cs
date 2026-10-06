@@ -223,10 +223,16 @@ public partial class UpdateDialog : Window
                 double deltaPercent = percent - _lastPercent;
                 double speedPercent = deltaPercent / elapsed;
 
-                if (speedPercent > 0)
-                    SpeedText.Text = $"{speedPercent:F1} %/s";
-                else
-                    SpeedText.Text = "-";
+            if (speedPercent > 0 && _totalBytes > 0)
+            {
+                // Stima byte/s = (% / 100) × dimensione totale / secondi
+                double bytesPerSecond = (speedPercent / 100.0) * _totalBytes;
+                SpeedText.Text = $"{bytesPerSecond / 1024 / 1024:F1} MB/s";
+            }
+            else
+            {
+                SpeedText.Text = "-";
+            }
 
                 _lastSampleTime = now;
                 _lastPercent = percent;

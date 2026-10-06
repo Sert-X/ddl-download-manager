@@ -16,10 +16,12 @@ public partial class SeriesGroup : ObservableObject
     public int TotalCount => Items.Count;
     public int CompletedCount => Items.Count(i => i.Status == DownloadStatus.Completed);
     public int ActiveCount => Items.Count(i => i.Status == DownloadStatus.Downloading);
-    public int PendingCount => Items.Count(i =>
-        i.Status == DownloadStatus.Pending ||
-        i.Status == DownloadStatus.Paused);
+    public int PendingCount => Items.Count(i => i.Status == DownloadStatus.Pending);
+    public int PausedCount => Items.Count(i => i.Status == DownloadStatus.Paused);
     public int FailedCount => Items.Count(i => i.Status == DownloadStatus.Failed);
+    public int CancelledCount => Items.Count(i => i.Status == DownloadStatus.Cancelled);
+    public bool HasFailed => Items.Any(i => i.Status == DownloadStatus.Failed);
+    public bool HasCancelled => Items.Any(i => i.Status == DownloadStatus.Cancelled);
 
     public double OverallPercentage
     {
@@ -64,8 +66,24 @@ public partial class SeriesGroup : ObservableObject
         }
     }
 
-    public string Header =>
-        $"{SeriesName} — {CompletedCount}/{TotalCount} completati, {ActiveCount} attivi, {PendingCount} in attesa";
+    public string Header
+    {
+        get
+        {
+            var parts = new List<string>
+            {
+                $"{CompletedCount}/{TotalCount} completati",
+                $"{ActiveCount} attivi"
+            };
+
+            if (PendingCount > 0) parts.Add($"{PendingCount} in attesa");
+            if (PausedCount > 0) parts.Add($"{PausedCount} in pausa");
+            if (FailedCount > 0) parts.Add($"{FailedCount} falliti");
+            if (CancelledCount > 0) parts.Add($"{CancelledCount} annullati");
+
+            return $"{SeriesName} — {string.Join(", ", parts)}";
+        }
+    }
 
     public void RefreshStats()
     {
@@ -73,11 +91,15 @@ public partial class SeriesGroup : ObservableObject
         OnPropertyChanged(nameof(CompletedCount));
         OnPropertyChanged(nameof(ActiveCount));
         OnPropertyChanged(nameof(PendingCount));
+        OnPropertyChanged(nameof(PausedCount));
         OnPropertyChanged(nameof(FailedCount));
+        OnPropertyChanged(nameof(CancelledCount));
         OnPropertyChanged(nameof(OverallPercentage));
         OnPropertyChanged(nameof(TotalSpeedText));
         OnPropertyChanged(nameof(TotalSizeText));
         OnPropertyChanged(nameof(OverallEtaText));
         OnPropertyChanged(nameof(Header));
+        OnPropertyChanged(nameof(HasFailed));
+        OnPropertyChanged(nameof(HasCancelled));
     }
 }

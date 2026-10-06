@@ -31,6 +31,12 @@ public partial class DownloadItem : ObservableObject
         ? $"{SpeedBytesPerSecond / 1024 / 1024:F2} MB/s"
         : "-";
 
+    public bool CanResume => Status == DownloadStatus.Paused;
+    public bool CanPause => Status == DownloadStatus.Downloading || Status == DownloadStatus.Pending;
+    public bool CanCancel => Status != DownloadStatus.Completed && Status != DownloadStatus.Cancelled;
+    public bool CanRetry => Status == DownloadStatus.Failed || Status == DownloadStatus.Cancelled;
+    public bool CanForce => Status != DownloadStatus.Completed && !IsPriority;
+
     public string SizeText => TotalBytes > 0
         ? $"{SftpRemoteEntry.FormatSize(DownloadedBytes)} / {SftpRemoteEntry.FormatSize(TotalBytes)}"
         : "-";
@@ -83,5 +89,15 @@ public partial class DownloadItem : ObservableObject
         OnPropertyChanged(nameof(Percentage));
         OnPropertyChanged(nameof(SizeText));
         OnPropertyChanged(nameof(EtaText));
+        OnPropertyChanged(nameof(CanResume));
+        OnPropertyChanged(nameof(CanPause));
+        OnPropertyChanged(nameof(CanCancel));
+        OnPropertyChanged(nameof(CanRetry));
+        OnPropertyChanged(nameof(CanForce));
+    }
+
+    partial void OnIsPriorityChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanForce));
     }
 }

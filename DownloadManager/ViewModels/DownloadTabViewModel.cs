@@ -27,7 +27,8 @@ public partial class DownloadTabViewModel : ViewModelBase
     private readonly FileNameBuilder _fileNameBuilder;
     private readonly SettingsService _settings;
     private readonly SharedState _shared;
-    private readonly ILogger<DownloadTabViewModel> _logger;    private Episode? _currentEpisode;
+    private readonly ILogger<DownloadTabViewModel> _logger;
+    private Episode? _currentEpisode;
     private CancellationTokenSource? _batchCts;
     private readonly DispatcherTimer _statsTimer;
     private readonly HashSet<SeriesGroup> _activeGroupsLastTick = new();
@@ -50,6 +51,14 @@ public partial class DownloadTabViewModel : ViewModelBase
 
     public string EpisodesSelectedCountText =>
         Episodes.Count == 0 ? "" : $"{Episodes.Count(e => e.IsSelected)} selezionati";
+
+    /// <summary>
+    /// Nome della serie/anime attualmente selezionato (usato nell'header
+    /// del pannello Episodi). Stringa vuota se nessuna serie è selezionata.
+    /// </summary>
+    public string SelectedAnimeName => SelectedAnime?.Name ?? string.Empty;
+
+    public bool HasSelectedAnime => SelectedAnime != null;
 
     // ============================================================
     //  Selezione provider
@@ -312,10 +321,8 @@ public partial class DownloadTabViewModel : ViewModelBase
     {
         if (value == null) return;
 
-        // Notifica UI (il ComboBox si aggiorna automaticamente)
         OnPropertyChanged(nameof(SelectedProviderName));
 
-        // Pulisce i risultati correnti quando cambi provider
         SearchResults.Clear();
         Episodes.Clear();
         SelectedAnime = null;
@@ -323,6 +330,15 @@ public partial class DownloadTabViewModel : ViewModelBase
     }
 
     public string SelectedProviderName => SelectedProvider?.Name ?? "—";
+
+    /// <summary>
+    /// Notifica i binding del nome serie quando cambia la selezione.
+    /// </summary>
+    partial void OnSelectedAnimeChanged(AnimeSearchResult? value)
+    {
+        OnPropertyChanged(nameof(SelectedAnimeName));
+        OnPropertyChanged(nameof(HasSelectedAnime));
+    }
 
     // ============================================================
     //  PROPERTY CHANGED
@@ -666,6 +682,9 @@ public partial class DownloadTabViewModel : ViewModelBase
     public void ForceGroupPublic(SeriesGroup group) => _queueService.ForceQueueGroup(group);
     public void UnforceGroupPublic(SeriesGroup group) => _queueService.UnforceQueueGroup(group);
 
+    public Task RetryItemPublicAsync(DownloadItem item) => _queueService.RetryItemAsync(item);
+    public Task RetryFailedGroupPublicAsync(SeriesGroup group) => _queueService.RetryFailedInGroupAsync(group);
+    public Task RetryCancelledGroupPublicAsync(SeriesGroup group) => _queueService.RetryCancelledInGroupAsync(group);
     public void CancelGroupPublic(SeriesGroup group)
     {
         _queueService.CancelGroup(group);
@@ -702,6 +721,15 @@ public partial class DownloadTabViewModel : ViewModelBase
     //  RAGGRUPPAMENTO SERIE
     // ============================================================
 
+    private void OnDownloadItemPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (sender is not DownloadItem item) return;
+        if (e.PropertyName != nameof(DownloadItem.Status)) return;
+
+        var seriesName = string.IsNullOrWhiteSpace(item.SeriesName) ? "Senza serie" : item.SeriesName;
+        var group = SeriesGroups.FirstOrDefault(g => g.SeriesName == seriesName);
+        group?.RefreshStats();
+    }
     private void OnAllItemsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         if (e.Action == NotifyCollectionChangedAction.Reset)
@@ -732,6 +760,7 @@ public partial class DownloadTabViewModel : ViewModelBase
 
         if (!group.Items.Contains(item))
             group.Items.Add(item);
+            item.PropertyChanged += OnDownloadItemPropertyChanged;
         OnPropertyChanged(nameof(SeriesSummaryText));
     }
 
@@ -742,6 +771,7 @@ public partial class DownloadTabViewModel : ViewModelBase
         var group = SeriesGroups.FirstOrDefault(g => g.SeriesName == seriesName);
         if (group != null)
         {
+            item.PropertyChanged -= OnDownloadItemPropertyChanged;
             group.Items.Remove(item);
             if (group.Items.Count == 0)
                 SeriesGroups.Remove(group);

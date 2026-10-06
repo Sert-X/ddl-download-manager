@@ -764,6 +764,62 @@ public partial class MainWindow : Window
     private void OnUnforceDownloadClick(object? sender, RoutedEventArgs e) { var i = ResolveItem<DownloadItem>(sender); if (i != null) Vm?.Download.UnforceItemPublic(i); }
     private void OnPauseDownloadClick(object? sender, RoutedEventArgs e) { var i = ResolveItem<DownloadItem>(sender); if (i != null) Vm?.Download.PauseItemPublic(i); }
     private void OnCancelDownloadClick(object? sender, RoutedEventArgs e) { var i = ResolveItem<DownloadItem>(sender); if (i != null) Vm?.Download.CancelItemPublic(i); }
+    
+    // ============================================================
+    //  PULSANTI ITEM (colonna a fianco)
+    // ============================================================
+
+    private void OnDownloadItemResumeClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button b && b.DataContext is DownloadItem item)
+            Vm?.Download.ResumeItemPublic(item);
+    }
+
+    private void OnDownloadItemForceClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button b && b.DataContext is DownloadItem item)
+            Vm?.Download.ForceItemPublic(item);
+    }
+
+    private void OnDownloadItemPauseClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button b && b.DataContext is DownloadItem item)
+            Vm?.Download.PauseItemPublic(item);
+    }
+
+    private void OnDownloadItemCancelClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button b && b.DataContext is DownloadItem item)
+            Vm?.Download.CancelItemPublic(item);
+    }
+
+    private async void OnDownloadItemRetryClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button b && b.DataContext is DownloadItem item && Vm != null)
+            await Vm.Download.RetryItemPublicAsync(item);
+    }
+
+    private async void OnDownloadItemRemoveClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button b && b.DataContext is DownloadItem item && Vm != null)
+            await Vm.Download.RemoveItemPublicAsync(item);
+    }
+
+    // ============================================================
+    //  PULSANTI SERIE (retry)
+    // ============================================================
+
+    private async void OnRetryFailedGroupClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button b && b.DataContext is SeriesGroup g && Vm != null)
+            await Vm.Download.RetryFailedGroupPublicAsync(g);
+    }
+
+    private async void OnRetryCancelledGroupClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button b && b.DataContext is SeriesGroup g && Vm != null)
+            await Vm.Download.RetryCancelledGroupPublicAsync(g);
+    }
 
     private async void OnRemoveDownloadClick(object? sender, RoutedEventArgs e)
     {

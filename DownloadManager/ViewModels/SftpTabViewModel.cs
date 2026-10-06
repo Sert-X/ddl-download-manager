@@ -25,8 +25,8 @@ public partial class SftpTabViewModel : ViewModelBase
     private FileSystemWatcher? _localWatcher;
     private DispatcherTimer? _localWatcherDebounce;
     private readonly object _localWatcherLock = new();
+    private string? _currentWatchedPath;
 
-    // --- Config ---
     public ObservableCollection<SftpConfig> SftpProfiles { get; } = new();
 
     [ObservableProperty] private SftpConfig? _selectedSftpProfile;
@@ -46,19 +46,16 @@ public partial class SftpTabViewModel : ViewModelBase
     [ObservableProperty] private string _sftpStatusMessage = string.Empty;
     [ObservableProperty] private bool _isSftpBusy = false;
 
-    // --- Browser remoto ---
     [ObservableProperty] private ObservableCollection<SftpRemoteEntry> _sftpRemoteEntries = new();
     [ObservableProperty] private SftpRemoteEntry? _sftpSelectedRemoteEntry;
     [ObservableProperty] private bool _isRefreshingRemote;
     private bool _isForceReloading;
     [ObservableProperty] private string _remoteBrowserStats = "";
 
-    // --- Browser locale ---
     [ObservableProperty] private ObservableCollection<LocalFileEntry> _sftpLocalEntries = new();
     [ObservableProperty] private LocalFileEntry? _sftpSelectedLocalEntry;
     [ObservableProperty] private string _localBrowserStats = "";
 
-    // --- Sort ---
     public SortOption[] SortOptions { get; } = new[]
     {
         new SortOption("Nome", SftpSortMode.Name),
@@ -71,33 +68,27 @@ public partial class SftpTabViewModel : ViewModelBase
     [ObservableProperty] private SortOption _remoteSortOption = null!;
     [ObservableProperty] private bool _remoteSortAscending = true;
 
-    // --- Upload queue ---
     [ObservableProperty] private string _sftpUploadLocalFolder = string.Empty;
     [ObservableProperty] private string _sftpUploadRemoteFolder = "/";
     [ObservableProperty] private int _sftpMaxUploadConcurrency = 6;
     [ObservableProperty] private string _uploadQueueStats = "";
 
-    // --- Download queue ---
     [ObservableProperty] private string _sftpDownloadRemoteFolder = "/";
     [ObservableProperty] private string _sftpDownloadLocalFolder = string.Empty;
     [ObservableProperty] private int _sftpMaxDownloadConcurrency = 6;
     [ObservableProperty] private string _downloadQueueStats = "";
 
-    // --- Zero-byte ---
     [ObservableProperty] private bool _isCheckingZeroByte;
     [ObservableProperty] private string _zeroByteCheckStatus = string.Empty;
 
-    // --- Badge ---
     [ObservableProperty] private bool _hasActiveUploads;
     [ObservableProperty] private bool _hasActiveDownloads;
 
-    // --- Collezioni ---
     public ObservableCollection<SftpUploadJob> SftpUploadJobs => _sftpUploadQueue.AllJobs;
     public ObservableCollection<SftpDownloadJob> SftpDownloadJobs => _sftpDownloadQueue.AllJobs;
     public ObservableCollection<LocalFileEntry> SelectedLocalEntries { get; } = new();
     public ObservableCollection<SftpRemoteEntry> SelectedRemoteEntries { get; } = new();
 
-    // --- Wrapper Shared ---
     public string SftpCurrentRemotePath
     {
         get => _shared.SftpCurrentRemotePath;
@@ -111,7 +102,7 @@ public partial class SftpTabViewModel : ViewModelBase
         {
             if (_shared.SftpCurrentLocalPath == value) return;
             _shared.SftpCurrentLocalPath = value;
-            SetupLocalWatcher(value);  // ← NUOVO
+            SetupLocalWatcher(value);
         }
     }
 
@@ -125,10 +116,6 @@ public partial class SftpTabViewModel : ViewModelBase
             OnIsSftpConnectedChanged(value);
         }
     }
-
-    // ============================================================
-    //  COMPUTED — status bar remoto
-    // ============================================================
 
     public string RemoteStatusText
     {
@@ -150,10 +137,6 @@ public partial class SftpTabViewModel : ViewModelBase
     public string LocalSortDirectionIcon => LocalSortAscending ? "↑" : "↓";
     public string RemoteSortDirectionIcon => RemoteSortAscending ? "↑" : "↓";
 
-    // ============================================================
-    //  COSTRUTTORE
-    // ============================================================
-
     public SftpTabViewModel(
         ISftpService sftpService,
         SftpConfigRepository sftpRepository,
@@ -171,12 +154,14 @@ public partial class SftpTabViewModel : ViewModelBase
         _logger = logger;
         _shared = shared;
 
-        // Ordinamento default
         LocalSortOption = SortOptions[0];
         RemoteSortOption = SortOptions[0];
 
-        // Debounce per evitare refresh multipli quando il file system
-        // scatena eventi a raffica (es. molti file creati insieme).
+        // LogSink del checker → logger UI. Ora il checker chiama LogSink
+        // SOLO per messaggi importanti (START, FINE, TIMEOUT, errore),
+        // non per ogni cartella. Così la UI non viene saturata.
+        _zeroByteChecker.LogSink = msg => _logger.LogInformation("{Msg}", msg);
+
         _localWatcherDebounce = new DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(400)
@@ -188,6 +173,7 @@ public partial class SftpTabViewModel : ViewModelBase
         };
 
         _sftpUploadQueue.QueueChanged += OnUploadQueueChanged;
+        _sftpUploadQueue.QueueChanged += OnUploadCompletedRecalc;
         _sftpDownloadQueue.QueueChanged += UpdateSftpBadges;
 
         _sftpUploadQueue.MaxConcurrency = SftpMaxUploadConcurrency;
@@ -230,10 +216,6 @@ public partial class SftpTabViewModel : ViewModelBase
         if (!value) SftpRemoteEntries.Clear();
     }
 
-    // ============================================================
-    //  PROPERTY CHANGED HANDLERS
-    // ============================================================
-
     partial void OnLocalSortOptionChanged(SortOption value)
     {
         if (value == null) return;
@@ -257,15 +239,14 @@ public partial class SftpTabViewModel : ViewModelBase
         OnPropertyChanged(nameof(RemoteSortDirectionIcon));
         ReorderRemoteEntries();
     }
-    /// <summary>
-    /// Attiva/riattiva il FileSystemWatcher sulla cartella locale corrente.
-    /// Viene chiamato quando cambia il path locale o dopo un refresh completo.
-    /// </summary>
+
     private void SetupLocalWatcher(string path)
     {
         lock (_localWatcherLock)
         {
-            // Ferma watcher precedente
+            if (_currentWatchedPath == path && _localWatcher != null)
+                return;
+
             if (_localWatcher != null)
             {
                 try
@@ -278,7 +259,10 @@ public partial class SftpTabViewModel : ViewModelBase
             }
 
             if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
+            {
+                _currentWatchedPath = null;
                 return;
+            }
 
             try
             {
@@ -302,22 +286,20 @@ public partial class SftpTabViewModel : ViewModelBase
 
                 w.EnableRaisingEvents = true;
                 _localWatcher = w;
+                _currentWatchedPath = path;
 
                 _logger.LogInformation("[SFTP] Watcher locale attivo su {Path}", path);
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "[SFTP] Impossibile creare watcher su {Path}", path);
+                _currentWatchedPath = null;
             }
         }
     }
 
-    /// <summary>
-    /// Schedula un refresh locale silenzioso con debounce.
-    /// </summary>
     private void ScheduleLocalRefresh()
     {
-        // Il timer deve essere toccato sul thread UI
         Dispatcher.UIThread.Post(() =>
         {
             _localWatcherDebounce?.Stop();
@@ -325,9 +307,6 @@ public partial class SftpTabViewModel : ViewModelBase
         });
     }
 
-    /// <summary>
-    /// Ferma il watcher locale (chiamato alla chiusura del VM o su disconnessione).
-    /// </summary>
     private void StopLocalWatcher()
     {
         lock (_localWatcherLock)
@@ -342,48 +321,30 @@ public partial class SftpTabViewModel : ViewModelBase
                 catch { }
                 _localWatcher = null;
             }
+            _currentWatchedPath = null;
         }
     }
 
-    /// <summary>
-    /// Riordina la lista locale GIÀ in memoria. Ricostruisce la collezione
-    /// (invece di spostare item in-place) perché la DataGrid di Avalonia
-    /// non sempre reagisce visivamente ai "Move" puri su ObservableCollection.
-    /// </summary>
     private void ReorderLocalEntries()
     {
         if (LocalSortOption == null) return;
         if (SftpLocalEntries.Count == 0) return;
 
-        // Ricorda la selezione corrente per ripristinarla dopo
-        var selectedPaths = SftpLocalEntries
-            .Where(e => e == SftpSelectedLocalEntry)
-            .Select(e => e.FullPath)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
         var current = SftpLocalEntries.ToList();
         var sorted = SftpEntrySorter.SortLocalEntries(
             current, LocalSortOption.Mode, LocalSortAscending);
 
-        // Ricostruzione: svuota e ripopola → la DataGrid aggiorna l'ordine visivo
         SftpLocalEntries.Clear();
         foreach (var e in sorted)
             SftpLocalEntries.Add(e);
 
-        // Ripristina la selezione (l'item è lo stesso oggetto, basta riassegnarlo)
         if (SftpSelectedLocalEntry != null
             && !SftpLocalEntries.Contains(SftpSelectedLocalEntry))
         {
             SftpSelectedLocalEntry = SftpLocalEntries.FirstOrDefault();
         }
-
-        _logger.LogInformation("[SFTP] Locale riordinato per {Mode} ({Dir})",
-            LocalSortOption.Label, LocalSortAscending ? "↑" : "↓");
     }
 
-    /// <summary>
-    /// Riordina la lista remota GIÀ in memoria (stesso approccio del locale).
-    /// </summary>
     private void ReorderRemoteEntries()
     {
         if (RemoteSortOption == null) return;
@@ -402,11 +363,8 @@ public partial class SftpTabViewModel : ViewModelBase
         {
             SftpSelectedRemoteEntry = SftpRemoteEntries.FirstOrDefault();
         }
-
-        _logger.LogInformation("[SFTP] Remoto riordinato per {Mode} ({Dir})",
-            RemoteSortOption.Label, RemoteSortAscending ? "↑" : "↓");
     }
-    
+
     partial void OnSftpMaxUploadConcurrencyChanged(int value)
     {
         if (_sftpUploadQueue != null) _sftpUploadQueue.MaxConcurrency = value;
@@ -452,10 +410,6 @@ public partial class SftpTabViewModel : ViewModelBase
         OnPropertyChanged(nameof(RemoteStatusIcon));
         OnPropertyChanged(nameof(HasRemoteStatus));
     }
-
-    // ============================================================
-    //  BADGE / STATS
-    // ============================================================
 
     private void UpdateSftpBadges()
     {
@@ -535,14 +489,70 @@ public partial class SftpTabViewModel : ViewModelBase
 
         DownloadQueueStats = string.Join(" · ", parts);
     }
+
+    private readonly HashSet<int> _patchedJobIds = new();
+    private readonly object _uploadRecalcLock = new();
+
+    private void OnUploadCompletedRecalc()
+    {
+        List<SftpUploadJob> toPatch = new();
+
+        lock (_uploadRecalcLock)
+        {
+            foreach (var job in _sftpUploadQueue.AllJobs)
+            {
+                if (job.Status == SftpJobStatus.Completed && _patchedJobIds.Add(job.Id))
+                    toPatch.Add(job);
+            }
+
+            if (_patchedJobIds.Count > 2000)
+            {
+                var alive = _sftpUploadQueue.AllJobs.Select(j => j.Id).ToHashSet();
+                _patchedJobIds.RemoveWhere(id => !alive.Contains(id));
+            }
+        }
+
+        if (toPatch.Count == 0) return;
+
+        foreach (var job in toPatch)
+        {
+            try
+            {
+                _zeroByteChecker.PatchAfterUpload(job.RemotePath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[ZERO-BYTE] Patch fallita per {Path}", job.RemotePath);
+            }
+        }
+
+        _logger.LogInformation(
+            "[ZERO-BYTE] Patch post-upload per {Count} job (totale patchati: {Total})",
+            toPatch.Count, _patchedJobIds.Count);
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            foreach (var entry in SftpRemoteEntries)
+            {
+                if (!entry.IsDirectory) continue;
+
+                var normalized = entry.FullPath.TrimEnd('/');
+
+                if (_zeroByteChecker.TryGetFolderFlag(normalized, out var flag))
+                    entry.HasZeroByteIssue = flag;
+                else
+                    entry.HasZeroByteIssue = false;
+
+                if (_zeroByteChecker.TryGetFolderContents(normalized, out var info))
+                    entry.ContentsInfo = info;
+            }
+        });
+    }
+
     private void OnUploadQueueChanged()
     {
         UpdateSftpBadges();
     }
-
-    // ============================================================
-    //  CONFIG
-    // ============================================================
 
     [RelayCommand]
     private async Task SftpLoadAllProfilesAsync()
@@ -769,8 +779,8 @@ public partial class SftpTabViewModel : ViewModelBase
     private async Task SftpForceReloadAsync()
     {
         if (!IsSftpConnected) return;
-        if (_isForceReloading) return;      // evita doppio force reload concorrente
-        if (IsRefreshingRemote) return;     // evita conflitto con refresh in corso
+        if (_isForceReloading) return;
+        if (IsRefreshingRemote) return;
 
         _isForceReloading = true;
         try
@@ -796,7 +806,6 @@ public partial class SftpTabViewModel : ViewModelBase
             _isForceReloading = false;
         }
 
-        // Ora il refresh: gestisce da solo IsRefreshingRemote
         await SftpRefreshInternalAsync(silent: false);
     }
 
@@ -814,10 +823,6 @@ public partial class SftpTabViewModel : ViewModelBase
         PrivateKeyPath = SftpPrivateKeyPath, PrivateKeyPassphrase = SftpPrivateKeyPassphrase,
         RemoteBasePath = SftpRemoteBasePath, SshHostKeyFingerprint = SftpHostKeyFingerprint
     };
-
-    // ============================================================
-    //  BROWSER LOCALE
-    // ============================================================
 
     [RelayCommand]
     private async Task SftpRefreshLocalAsync() => await SftpRefreshLocalInternalAsync(silent: false);
@@ -871,7 +876,6 @@ public partial class SftpTabViewModel : ViewModelBase
                 var sorted = SftpEntrySorter.SortLocalEntries(entries, LocalSortOption.Mode, LocalSortAscending);
                 SftpEntrySorter.SyncCollection(SftpLocalEntries, sorted, e => e.FullPath, SftpEntrySorter.UpdateLocalEntryFromSource);
                 UpdateLocalBrowserStats();
-                // Assicura che il watcher punti alla cartella corrente
                 SetupLocalWatcher(pathToRead);
             }
             catch (Exception ex)
@@ -882,24 +886,46 @@ public partial class SftpTabViewModel : ViewModelBase
         finally { _localRefreshLock.Release(); }
     }
 
+    /// <summary>
+    /// Avvia il check 0-byte sulle cartelle visibili. Ogni ramo di uscita
+    /// lascia un messaggio visibile all'utente, così un click "silenzioso"
+    /// non è mai ambiguo.
+    /// </summary>
     [RelayCommand]
     private void CheckZeroByteFolders()
     {
-        if (!IsSftpConnected) { SftpStatusMessage = "Non connesso."; return; }
-        if (_zeroByteChecker.IsChecking) return;
-
-        var folders = SftpRemoteEntries.Where(e => e.IsDirectory).ToList();
-        if (folders.Count == 0)
+        try
         {
-            SftpStatusMessage = "Nessuna cartella da controllare.";
-            return;
+            if (!IsSftpConnected)
+            {
+                SftpStatusMessage = "Non connesso: connetti prima l'SFTP.";
+                return;
+            }
+
+            if (_zeroByteChecker.IsChecking)
+            {
+                SftpStatusMessage = "Un check 0-byte è già in corso. Usa ⏹ per fermarlo.";
+                return;
+            }
+
+            var folders = SftpRemoteEntries.Where(e => e.IsDirectory).ToList();
+            if (folders.Count == 0)
+            {
+                SftpStatusMessage = "Nessuna cartella da controllare nella cartella corrente.";
+                return;
+            }
+
+            SftpStatusMessage = $"Check di {folders.Count} cartelle in corso...";
+
+            _logger.LogInformation("[ZERO-BYTE] Check manuale avviato su {Count} cartelle", folders.Count);
+
+            _ = _zeroByteChecker.RunCheckAsync(folders);
         }
-
-        SftpStatusMessage = $"Check di {folders.Count} cartelle in corso...";
-
-        _logger.LogInformation("[ZERO-BYTE] Check manuale su {Count} cartelle", folders.Count);
-
-        _ = _zeroByteChecker.RunCheckAsync(folders);
+        catch (Exception ex)
+        {
+            SftpStatusMessage = $"Errore avvio check: {ex.Message}";
+            _logger.LogError(ex, "[ZERO-BYTE] Errore avvio check");
+        }
     }
 
     [RelayCommand]
@@ -970,10 +996,6 @@ public partial class SftpTabViewModel : ViewModelBase
         _ = SftpRefreshLocalAsync();
     }
 
-    // ============================================================
-    //  CRUD LOCALE
-    // ============================================================
-
     public async Task SftpLocalDeleteManyAsync(IEnumerable<LocalFileEntry> entries)
     {
         var list = entries.Where(e => e != null).ToList();
@@ -1031,10 +1053,6 @@ public partial class SftpTabViewModel : ViewModelBase
         }
         catch (Exception ex) { SftpStatusMessage = $"Errore: {ex.Message}"; }
     }
-
-    // ============================================================
-    //  CRUD REMOTO
-    // ============================================================
 
     public async Task SftpRemoteDeleteManyAsync(IEnumerable<SftpRemoteEntry> entries)
     {
@@ -1105,10 +1123,6 @@ public partial class SftpTabViewModel : ViewModelBase
         catch (Exception ex) { SftpStatusMessage = $"Errore: {ex.Message}"; }
     }
 
-    // ============================================================
-    //  UPLOAD / DOWNLOAD
-    // ============================================================
-
     [RelayCommand]
     private async Task SftpUploadSelectedAsync()
     {
@@ -1149,7 +1163,6 @@ public partial class SftpTabViewModel : ViewModelBase
             }
 
             SftpStatusMessage = $"{totalQueued} file accodati per upload.";
-            InvalidateZeroByteCacheForFolder(SftpCurrentRemotePath);
         }
         catch (Exception ex) { SftpStatusMessage = $"Errore: {ex.Message}"; }
     }
@@ -1190,7 +1203,6 @@ public partial class SftpTabViewModel : ViewModelBase
 
             SftpStatusMessage = $"{totalQueued} file accodati per upload (drag & drop).";
             _sftpUploadQueue.StartAll();
-            InvalidateZeroByteCacheRecursive(targetDir);
         }
         catch (Exception ex) { SftpStatusMessage = $"Errore accodamento upload: {ex.Message}"; }
     }
@@ -1268,10 +1280,6 @@ public partial class SftpTabViewModel : ViewModelBase
         }
     }
 
-    // ============================================================
-    //  UPLOAD QUEUE
-    // ============================================================
-
     [RelayCommand]
     private async Task SftpEnqueueFolderAsync()
     {
@@ -1286,7 +1294,6 @@ public partial class SftpTabViewModel : ViewModelBase
 
             var count = await _sftpUploadQueue.EnqueueFolderAsync(SftpUploadLocalFolder, SftpUploadRemoteFolder);
             SftpStatusMessage = $"{count} file accodati per upload.";
-            InvalidateZeroByteCacheRecursive(SftpUploadRemoteFolder);
         }
         catch (Exception ex) { SftpStatusMessage = $"Errore: {ex.Message}"; }
     }
@@ -1303,10 +1310,6 @@ public partial class SftpTabViewModel : ViewModelBase
     public void CancelSftpJobPublic(SftpUploadJob job) => _sftpUploadQueue.CancelJob(job);
     public void RemoveSftpJobPublic(SftpUploadJob job) => _sftpUploadQueue.RemoveJob(job);
 
-    // ============================================================
-    //  DOWNLOAD QUEUE
-    // ============================================================
-
     [RelayCommand] private void SftpDownloadQueueStartAll() { _sftpDownloadQueue.StartAll(); SftpStatusMessage = "Coda download avviata."; }
     [RelayCommand] private void SftpDownloadQueuePauseAll() { _sftpDownloadQueue.PauseAll(); SftpStatusMessage = "Coda download in pausa."; }
     [RelayCommand] private void SftpDownloadQueueCancelAll() { _sftpDownloadQueue.CancelAll(); SftpStatusMessage = "Coda download annullata."; }
@@ -1318,6 +1321,7 @@ public partial class SftpTabViewModel : ViewModelBase
     public void ResumeSftpDownloadJobPublic(SftpDownloadJob job) => _sftpDownloadQueue.ResumeJob(job);
     public void CancelSftpDownloadJobPublic(SftpDownloadJob job) => _sftpDownloadQueue.CancelJob(job);
     public void RemoveSftpDownloadJobPublic(SftpDownloadJob job) => _sftpDownloadQueue.RemoveJob(job);
+
     public void Dispose()
     {
         StopLocalWatcher();

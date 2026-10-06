@@ -36,7 +36,7 @@
                                 CornerRadius="4"
                                 Padding="6,2"
                                 VerticalAlignment="Center">
-                            <TextBlock Text="v1.0.8" FontSize="11" FontWeight="Bold" Foreground="White"/>
+                            <TextBlock Text="v1.0.9" FontSize="11" FontWeight="Bold" Foreground="White"/>
                         </Border>
                     </StackPanel>
                 </StackPanel>
@@ -229,24 +229,44 @@
 
                         <Border Grid.Column="1" Classes="cardElevated" Margin="6,0,0,0">
                             <DockPanel>
-                                <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto, Auto, Auto, *" Margin="0,0,0,8">
+                                <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto, Auto, Auto, Auto, *" Margin="0,0,0,8">
+                                    <!-- Titolo -->
                                     <TextBlock Grid.Column="0" Text="📺 Episodi"
                                             FontWeight="Bold" FontSize="14"
                                             VerticalAlignment="Center"/>
+
+                                    <!-- Nome serie/anime selezionato -->
                                     <TextBlock Grid.Column="1"
+                                            Text="{Binding SelectedAnimeName}"
+                                            FontSize="14"
+                                            FontWeight="SemiBold"
+                                            Foreground="{DynamicResource AppAccentBrush}"
+                                            Margin="8,0,0,0"
+                                            VerticalAlignment="Center"
+                                            TextTrimming="CharacterEllipsis"
+                                            MaxWidth="360"
+                                            IsVisible="{Binding HasSelectedAnime}"
+                                            ToolTip.Tip="{Binding SelectedAnimeName}"/>
+
+                                    <!-- Contatore episodi -->
+                                    <TextBlock Grid.Column="2"
                                             Text="{Binding EpisodesCountText}"
                                             FontSize="12"
                                             Foreground="{DynamicResource AppTextMutedBrush}"
-                                            Margin="8,0,0,0"
+                                            Margin="12,0,0,0"
                                             VerticalAlignment="Center"/>
-                                    <TextBlock Grid.Column="2"
+
+                                    <!-- Contatore selezionati -->
+                                    <TextBlock Grid.Column="3"
                                             Text="{Binding EpisodesSelectedCountText}"
                                             FontSize="12"
                                             Foreground="{DynamicResource AppAccentBrush}"
                                             Margin="12,0,0,0"
                                             VerticalAlignment="Center"
                                             FontWeight="SemiBold"/>
-                                    <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8"
+
+                                    <!-- Progress caricamento (a destra) -->
+                                    <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="8"
                                                 HorizontalAlignment="Right"
                                                 IsVisible="{Binding IsLoadingEpisodes}">
                                         <ProgressBar IsIndeterminate="True" Width="80" Height="4"
@@ -457,6 +477,17 @@
                                                                     Width="30" Height="30" FontSize="12"
                                                                     ToolTip.Tip="Rimuovi serie"
                                                                     Click="OnRemoveGroupClick"/>
+                                                            <Button Content="🔄" Classes="iconCircle"
+                                                                    Width="30" Height="30" FontSize="12"
+                                                                    ToolTip.Tip="Riscarica tutti i failed di questa serie"
+                                                                    IsVisible="{Binding HasFailed}"
+                                                                    Click="OnRetryFailedGroupClick"/>
+
+                                                            <Button Content="🔄" Classes="iconCircle warning"
+                                                                    Width="30" Height="30" FontSize="12"
+                                                                    ToolTip.Tip="Riscarica tutti gli annullati di questa serie"
+                                                                    IsVisible="{Binding HasCancelled}"
+                                                                    Click="OnRetryCancelledGroupClick"/>
                                                         </StackPanel>
                                                     </Grid>
                                                 </Expander.Header>
@@ -484,7 +515,7 @@
                                                                     </ContextMenu>
                                                                 </Border.ContextMenu>
 
-                                                                <Grid ColumnDefinitions="24, 2*, 50, 110, 2*, 160, 90, 90">
+                                                                <Grid ColumnDefinitions="24, 2*, 50, 110, 2*, 160, 90, 90, Auto">
                                                                     <TextBlock Grid.Column="0" Text="⚡" FontSize="14"
                                                                                Foreground="{DynamicResource AppWarningBrush}"
                                                                                IsVisible="{Binding IsPriority}"
@@ -519,6 +550,60 @@
                                                                                VerticalAlignment="Center"
                                                                                FontSize="11"
                                                                                Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                                                    <!-- Pulsanti a fianco dell'episodio -->
+                                                                    <StackPanel Grid.Column="8"
+                                                                                Orientation="Horizontal"
+                                                                                Spacing="2"
+                                                                                VerticalAlignment="Center"
+                                                                                Margin="8,0,0,0">
+
+                                                                        <!-- ▶ Riprendi (solo se Paused) -->
+                                                                        <Button Content="▶"
+                                                                                Classes="iconCircle success"
+                                                                                Width="26" Height="26" FontSize="10" Padding="0"
+                                                                                ToolTip.Tip="Riprendi"
+                                                                                IsVisible="{Binding CanResume}"
+                                                                                Click="OnDownloadItemResumeClick"/>
+
+                                                                        <!-- ⚡ Forza priorità -->
+                                                                        <Button Content="⚡"
+                                                                                Classes="iconCircle"
+                                                                                Width="26" Height="26" FontSize="10" Padding="0"
+                                                                                ToolTip.Tip="Forza priorità"
+                                                                                IsVisible="{Binding CanForce}"
+                                                                                Click="OnDownloadItemForceClick"/>
+
+                                                                        <!-- ⏸ Pausa -->
+                                                                        <Button Content="⏸"
+                                                                                Classes="iconCircle warning"
+                                                                                Width="26" Height="26" FontSize="10" Padding="0"
+                                                                                ToolTip.Tip="Pausa"
+                                                                                IsVisible="{Binding CanPause}"
+                                                                                Click="OnDownloadItemPauseClick"/>
+
+                                                                        <!-- ✕ Annulla -->
+                                                                        <Button Content="✕"
+                                                                                Classes="iconCircle danger"
+                                                                                Width="26" Height="26" FontSize="10" Padding="0"
+                                                                                ToolTip.Tip="Annulla"
+                                                                                IsVisible="{Binding CanCancel}"
+                                                                                Click="OnDownloadItemCancelClick"/>
+
+                                                                        <!-- 🔄 Riscarica (solo Failed/Cancelled) -->
+                                                                        <Button Content="🔄"
+                                                                                Classes="iconCircle"
+                                                                                Width="26" Height="26" FontSize="10" Padding="0"
+                                                                                ToolTip.Tip="Riscarica (elimina .part e ricomincia)"
+                                                                                IsVisible="{Binding CanRetry}"
+                                                                                Click="OnDownloadItemRetryClick"/>
+
+                                                                        <!-- 🗑 Elimina (sempre visibile) -->
+                                                                        <Button Content="🗑"
+                                                                                Classes="iconCircle danger"
+                                                                                Width="26" Height="26" FontSize="10" Padding="0"
+                                                                                ToolTip.Tip="Rimuovi dalla lista"
+                                                                                Click="OnDownloadItemRemoveClick"/>
+                                                                    </StackPanel>
                                                                 </Grid>
                                                             </Border>
                                                         </DataTemplate>
@@ -607,9 +692,15 @@
                                             </Border>
                                         </Grid>
 
-                                        <CheckBox Content="Crea una sottocartella per ogni serie"
-                                                  IsChecked="{Binding CreateSeriesFolder}"
-                                                  IsVisible="{Binding !OrganizeModeIsLocal}"/>
+                                        <!-- NUOVO: Episodio iniziale -->
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <TextBlock Text="Episodio iniziale:" VerticalAlignment="Center"
+                                                       FontWeight="SemiBold"/>
+                                            <TextBox Text="{Binding OrganizeStartingEpisode, Mode=TwoWay}" Width="80"/>
+                                            <TextBlock Text="(default 1)" FontStyle="Italic"
+                                                       Foreground="{DynamicResource AppTextMutedBrush}"
+                                                       VerticalAlignment="Center"/>
+                                        </StackPanel>
 
                                         <StackPanel Orientation="Horizontal" Spacing="8">
                                             <Button Content="👁 Anteprima" Classes="info"
@@ -772,8 +863,15 @@
                                             </Border>
                                         </Grid>
 
-                                        <CheckBox Content="Crea una sottocartella per ogni serie"
-                                                  IsChecked="{Binding CreateSeriesFolder}"/>
+                                        <!-- NUOVO: Episodio iniziale -->
+                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                            <TextBlock Text="Episodio iniziale:" VerticalAlignment="Center"
+                                                       FontWeight="SemiBold"/>
+                                            <TextBox Text="{Binding MergeStartingEpisode, Mode=TwoWay}" Width="80"/>
+                                            <TextBlock Text="(default 1)" FontStyle="Italic"
+                                                       Foreground="{DynamicResource AppTextMutedBrush}"
+                                                       VerticalAlignment="Center"/>
+                                        </StackPanel>
 
                                         <StackPanel Orientation="Horizontal" Spacing="8">
                                             <Button Content="👁 Anteprima merge" Classes="info"
@@ -1197,7 +1295,6 @@
 
                                         <Grid DockPanel.Dock="Top" RowDefinitions="Auto,Auto" Margin="0,0,0,8">
 
-                                            <!-- Riga 1: pulsanti + path + sort -->
                                             <Grid Grid.Row="0" ColumnDefinitions="Auto, Auto, *, Auto, Auto, Auto, Auto">
                                                 <Button Grid.Column="0" Content="⬅" Classes="iconCircle"
                                                         Command="{Binding SftpLocalGoUpCommand}" Margin="0,0,6,0"
@@ -1229,7 +1326,6 @@
                                                         ToolTip.Tip="Inverti direzione (↑ crescente / ↓ decrescente)"/>
                                             </Grid>
 
-                                            <!-- Riga 2: contatore, sempre visibile -->
                                             <TextBlock Grid.Row="1"
                                                     Text="{Binding LocalBrowserStats}"
                                                     FontSize="11"
@@ -1300,7 +1396,6 @@
 
                                         <Grid DockPanel.Dock="Top" RowDefinitions="Auto,Auto" Margin="0,0,0,8">
 
-                                            <!-- Riga 1: pulsanti + path + sort -->
                                             <Grid Grid.Row="0"
                                                 ColumnDefinitions="Auto, Auto, *, Auto, Auto, Auto, Auto, Auto">
                                                 <Button Grid.Column="0" Content="⬅" Classes="iconCircle"
@@ -1350,7 +1445,6 @@
                                                         ToolTip.Tip="Inverti direzione (↑ crescente / ↓ decrescente)"/>
                                             </Grid>
 
-                                            <!-- Riga 2: contatore, sempre visibile -->
                                             <TextBlock Grid.Row="1"
                                                     Text="{Binding RemoteBrowserStats}"
                                                     FontSize="11"
@@ -1359,7 +1453,6 @@
                                                     HorizontalAlignment="Left"/>
                                         </Grid>
 
-                                        <!-- Status bar remoto: altezza fissa, non fa scrollare la lista -->
                                         <Border DockPanel.Dock="Top"
                                                 Height="28"
                                                 Background="{DynamicResource AppSurface2Brush}"
@@ -1397,8 +1490,11 @@
                                             <DataGrid.Styles>
                                                 <Style Selector="DataGridRow" x:CompileBindings="False"
                                                         x:DataType="models:SftpRemoteEntry">
-                                                    <Setter Property="Background"
-                                                            Value="{Binding HasZeroByteIssue, Converter={x:Static vm:ZeroByteToBrushConverter.Default}}"/>
+                                                    <!-- Applica classe .zeroByte quando HasZeroByteIssue=true;
+                                                         lo stile della riga usa DynamicResource così il colore
+                                                         cambia automaticamente con il tema chiaro/scuro. -->
+                                                    <Setter Property="Classes.zeroByte"
+                                                            Value="{Binding HasZeroByteIssue}"/>
                                                     <Setter Property="ContextMenu">
                                                         <ContextMenu>
                                                             <MenuItem Header="📂 Apri" Click="OnRemoteOpenClick"/>
@@ -1736,7 +1832,6 @@
                                     SelectionMode="Multiple"
                                     SelectionChanged="OnProxyListSelectionChanged">
                                 <ListBox.Styles>
-                                    <!-- Riga attiva (proxy con IsEnabled=true): bordo verde + sfondo -->
                                     <Style Selector="ListBoxItem">
                                         <Setter Property="BorderThickness" Value="2"/>
                                         <Setter Property="BorderBrush" Value="Transparent"/>
@@ -1754,26 +1849,22 @@
                                                     BorderBrush="{Binding IsEnabled, Converter={x:Static vm:EnabledProxyToBrushConverter.Default}}"
                                                     Background="{Binding IsEnabled, Converter={x:Static vm:EnabledProxyToBackgroundConverter.Default}}">
                                                 <Grid ColumnDefinitions="Auto, Auto, *, Auto, Auto">
-                                                    <!-- Checkbox selezione -->
                                                     <CheckBox Grid.Column="0"
                                                             IsChecked="{Binding IsSelected, Mode=TwoWay}"
                                                             Margin="0,0,8,0"
                                                             VerticalAlignment="Center"/>
 
-                                                    <!-- Pallino attivo -->
                                                     <Ellipse Grid.Column="1" Width="12" Height="12"
                                                             Margin="0,0,8,0"
                                                             VerticalAlignment="Center"
                                                             Fill="{Binding IsEnabled, Converter={x:Static vm:EnabledProxyToBrushConverter.Default}}"/>
 
-                                                    <!-- Nome + display -->
                                                     <StackPanel Grid.Column="2">
                                                         <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
                                                         <TextBlock Text="{Binding DisplayText}" FontSize="11"
                                                                 Foreground="{DynamicResource AppTextMutedBrush}"/>
                                                     </StackPanel>
 
-                                                    <!-- Esito test -->
                                                     <TextBlock Grid.Column="3" Text="{Binding TestResult}"
                                                             FontSize="11" MaxWidth="220"
                                                             TextTrimming="CharacterEllipsis"
@@ -1858,7 +1949,7 @@
 
             <!-- ================================================ -->
             <!--  TAB DOMINI                                      -->
-            
+            <!-- ================================================ -->
             <TabItem>
                 <TabItem.Header>
                     <StackPanel Orientation="Horizontal" Spacing="8">
@@ -1875,7 +1966,6 @@
                             DataContext="{Binding Domains}">
                     <DockPanel Margin="0,10,0,0">
 
-                        <!-- Toolbar -->
                         <Border DockPanel.Dock="Top" Classes="cardElevated" Margin="0,0,0,12">
                             <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="6">
                                 <Button Content="🔌 Test tutti" Classes="info"
@@ -1892,11 +1982,9 @@
                             </WrapPanel>
                         </Border>
 
-                        <!-- Lista domini -->
                         <Border Classes="cardElevated">
                             <StackPanel Spacing="4">
 
-                                <!-- Header colonne -->
                                 <Grid ColumnDefinitions="140, *, 180, 140, Auto, Auto"
                                     Margin="10,4,10,8">
                                     <TextBlock Grid.Column="0" Text="Provider"
@@ -1909,7 +1997,6 @@
                                             FontWeight="Bold" FontSize="12"/>
                                 </Grid>
 
-                                <!-- Righe -->
                                 <ItemsControl ItemsSource="{Binding Domains}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate DataType="models:DomainConfig">
@@ -1948,7 +2035,6 @@
                                                             Foreground="{DynamicResource AppTextMutedBrush}"
                                                             VerticalAlignment="Center"/>
 
-                                                    <!-- Test singolo -->
                                                     <Button Grid.Column="4"
                                                             Content="🔌"
                                                             Classes="iconCircle"
@@ -1958,7 +2044,6 @@
                                                             CommandParameter="{Binding}"
                                                             ToolTip.Tip="Test dominio"/>
 
-                                                    <!-- Salva + Reset -->
                                                     <StackPanel Grid.Column="5"
                                                                 Orientation="Horizontal"
                                                                 Spacing="4">
@@ -1989,9 +2074,6 @@
             </TabItem>    
         </TabControl>
 
-                <!-- ==================================================== -->
-                <!--  SPLITTER — trascina per ridimensionare il log       -->
-                <!-- ==================================================== -->
                 <GridSplitter Grid.Row="2"
                             Height="5"
                             Background="Transparent"
@@ -1999,9 +2081,6 @@
                             HorizontalAlignment="Stretch"
                             Cursor="SizeNorthSouth"/>
 
-                <!-- ==================================================== -->
-                <!--  LOG GLOBALE (in fondo, collassabile)                -->
-                <!-- ==================================================== -->
                 <Border Grid.Row="3"
                         x:Name="LogPanel"
                         Background="{DynamicResource AppSurfaceBrush}"

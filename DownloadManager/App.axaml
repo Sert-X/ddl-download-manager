@@ -28,29 +28,70 @@
                     <SolidColorBrush x:Key="AppProxyBadgeActiveBgBrush" Color="#1E3A24"/>
                     <SolidColorBrush x:Key="AppProxyBadgeActiveBorderBrush" Color="#22C55E"/>
                     <SolidColorBrush x:Key="AppProxyBadgeActiveTextBrush" Color="#4ADE80"/>
+
+                    <!-- Evidenziazione file/cartelle con 0-byte (tema scuro) -->
+                    <SolidColorBrush x:Key="AppZeroByteHighlightBrush" Color="#4A1414"/>
+                    <SolidColorBrush x:Key="AppZeroByteHighlightBorderBrush" Color="#7F1D1D"/>
+
+                    <!-- Pulsanti .warning (tema scuro: pieno) -->
+                    <SolidColorBrush x:Key="AppWarningButtonBgBrush" Color="#F59E0B"/>
+                    <SolidColorBrush x:Key="AppWarningButtonFgBrush" Color="#FFFFFF"/>
+                    <SolidColorBrush x:Key="AppWarningButtonBorderBrush" Color="#F59E0B"/>
+
+                    <!-- Selezione testo (tema scuro) -->
+                    <SolidColorBrush x:Key="AppTextSelectionBrush" Color="#3B82F6"/>
+                    <SolidColorBrush x:Key="AppTextSelectionForegroundBrush" Color="#FFFFFF"/>
+                    <SolidColorBrush x:Key="AppCaretBrush" Color="#E50914"/>
+
+                    <!-- Override risorse Fluent per la selezione testo.
+                         Queste sono le chiavi che il TextBox e il ComboBox
+                         editable usano davvero: sovrascriverle garantisce
+                         che il colore venga applicato ovunque. -->
+                    <SolidColorBrush x:Key="TextControlSelectionBrush" Color="#3B82F6"/>
+                    <SolidColorBrush x:Key="TextControlSelectionForegroundBrush" Color="#FFFFFF"/>
+                    <SolidColorBrush x:Key="TextControlSelectionForegroundBrushUnfocused" Color="#FFFFFF"/>
                 </ResourceDictionary>
 
                 <!-- ============================================ -->
                 <!--  TEMA CHIARO (Netflix-like)                  -->
                 <!-- ============================================ -->
                 <ResourceDictionary x:Key="Light">
-                    <SolidColorBrush x:Key="AppBackgroundBrush">#F7F7FA</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppBackgroundBrush">#F5F5F8</SolidColorBrush>
                     <SolidColorBrush x:Key="AppSurfaceBrush">#FFFFFF</SolidColorBrush>
-                    <SolidColorBrush x:Key="AppSurface2Brush">#F0F0F5</SolidColorBrush>
-                    <SolidColorBrush x:Key="AppBorderBrush">#E0E0E8</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppSurface2Brush">#EFEFF4</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppBorderBrush">#D4D4DD</SolidColorBrush>
                     <SolidColorBrush x:Key="AppTextBrush">#0F0F17</SolidColorBrush>
-                    <SolidColorBrush x:Key="AppTextMutedBrush">#6B6B7B</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppTextMutedBrush">#5A5A6E</SolidColorBrush>
                     <SolidColorBrush x:Key="AppAccentBrush">#E50914</SolidColorBrush>
                     <SolidColorBrush x:Key="AppAccentHoverBrush">#C50812</SolidColorBrush>
-                    <SolidColorBrush x:Key="AppSuccessBrush">#16A34A</SolidColorBrush>
-                    <SolidColorBrush x:Key="AppWarningBrush">#D97706</SolidColorBrush>
-                    <SolidColorBrush x:Key="AppDangerBrush">#DC2626</SolidColorBrush>
-                    <SolidColorBrush x:Key="AppInfoBrush">#2563EB</SolidColorBrush>
-                    <SolidColorBrush x:Key="AppHoverBrush">#EAEAF0</SolidColorBrush>
-                    <SolidColorBrush x:Key="AppSelectedBrush">#DCDCE8</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppSuccessBrush">#15803D</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppWarningBrush">#B45309</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppDangerBrush">#B91C1C</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppInfoBrush">#1D4ED8</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppHoverBrush">#E4E4EC</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppSelectedBrush">#D4D4E0</SolidColorBrush>
                     <SolidColorBrush x:Key="AppProxyBadgeActiveBgBrush" Color="#DCFCE7"/>
                     <SolidColorBrush x:Key="AppProxyBadgeActiveBorderBrush" Color="#16A34A"/>
                     <SolidColorBrush x:Key="AppProxyBadgeActiveTextBrush" Color="#15803D"/>
+
+                    <!-- Evidenziazione file/cartelle con 0-byte (tema chiaro) -->
+                    <SolidColorBrush x:Key="AppZeroByteHighlightBrush" Color="#FEE2E2"/>
+                    <SolidColorBrush x:Key="AppZeroByteHighlightBorderBrush" Color="#FCA5A5"/>
+
+                    <!-- Pulsanti .warning (tema chiaro: soft, leggibile) -->
+                    <SolidColorBrush x:Key="AppWarningButtonBgBrush" Color="#FEF3C7"/>
+                    <SolidColorBrush x:Key="AppWarningButtonFgBrush" Color="#92400E"/>
+                    <SolidColorBrush x:Key="AppWarningButtonBorderBrush" Color="#F59E0B"/>
+
+                    <!-- Selezione testo (tema chiaro) -->
+                    <SolidColorBrush x:Key="AppTextSelectionBrush" Color="#3B82F6"/>
+                    <SolidColorBrush x:Key="AppTextSelectionForegroundBrush" Color="#FFFFFF"/>
+                    <SolidColorBrush x:Key="AppCaretBrush" Color="#E50914"/>
+
+                    <!-- Override risorse Fluent per la selezione testo. -->
+                    <SolidColorBrush x:Key="TextControlSelectionBrush" Color="#3B82F6"/>
+                    <SolidColorBrush x:Key="TextControlSelectionForegroundBrush" Color="#FFFFFF"/>
+                    <SolidColorBrush x:Key="TextControlSelectionForegroundBrushUnfocused" Color="#FFFFFF"/>
                 </ResourceDictionary>
 
             </ResourceDictionary.ThemeDictionaries>
@@ -76,7 +117,7 @@
         </Style>
 
         <!-- ============================================================ -->
-        <!--  TABCONTROL — header grandi in stile streaming                -->
+        <!--  TABCONTROL                                                    -->
         <!-- ============================================================ -->
         <Style Selector="TabControl">
             <Setter Property="Background" Value="Transparent"/>
@@ -128,7 +169,6 @@
             <Setter Property="Background" Value="{DynamicResource AppSelectedBrush}"/>
         </Style>
 
-        <!-- Button accento rosso (Netflix style) -->
         <Style Selector="Button.accent">
             <Setter Property="Background" Value="{DynamicResource AppAccentBrush}"/>
             <Setter Property="Foreground" Value="White"/>
@@ -145,9 +185,16 @@
             <Setter Property="BorderBrush" Value="{DynamicResource AppSuccessBrush}"/>
         </Style>
 
+        <!-- Pulsante warning: nel tema scuro è pieno ambra,
+             nel tema chiaro è "soft" (bg ambra chiarissimo, testo ambra scuro). -->
         <Style Selector="Button.warning">
+            <Setter Property="Background" Value="{DynamicResource AppWarningButtonBgBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppWarningButtonFgBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppWarningButtonBorderBrush}"/>
+        </Style>
+        <Style Selector="Button.warning:pointerover /template/ ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource AppWarningBrush}"/>
-            <Setter Property="Foreground" Value="Black"/>
+            <Setter Property="Foreground" Value="White"/>
             <Setter Property="BorderBrush" Value="{DynamicResource AppWarningBrush}"/>
         </Style>
 
@@ -172,7 +219,6 @@
             <Setter Property="BorderBrush" Value="Transparent"/>
         </Style>
 
-        <!-- Button circolare per toolbar -->
         <Style Selector="Button.iconCircle">
             <Setter Property="Width" Value="36"/>
             <Setter Property="Height" Value="36"/>
@@ -192,10 +238,22 @@
             <Setter Property="CornerRadius" Value="6"/>
             <Setter Property="Padding" Value="10,6"/>
             <Setter Property="MinHeight" Value="32"/>
+            <!-- Selezione testo: applicata direttamente sul TextBox.
+                 Insieme agli override di TextControlSelectionBrush nei
+                 ThemeDictionaries, garantisce leggibilità in entrambi i temi. -->
+            <Setter Property="SelectionBrush" Value="{DynamicResource AppTextSelectionBrush}"/>
+            <Setter Property="SelectionForegroundBrush" Value="{DynamicResource AppTextSelectionForegroundBrush}"/>
         </Style>
 
         <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
             <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
+
+        <!-- Fallback: applica anche direttamente al TextPresenter interno -->
+        <Style Selector="TextBox /template/ TextPresenter">
+            <Setter Property="SelectionBrush" Value="{DynamicResource AppTextSelectionBrush}"/>
+            <Setter Property="SelectionForegroundBrush" Value="{DynamicResource AppTextSelectionForegroundBrush}"/>
+            <Setter Property="CaretBrush" Value="{DynamicResource AppCaretBrush}"/>
         </Style>
 
         <!-- ============================================================ -->
@@ -213,6 +271,17 @@
 
         <Style Selector="ComboBox:pointerover /template/ Border#Background">
             <Setter Property="Background" Value="{DynamicResource AppHoverBrush}"/>
+        </Style>
+
+        <!-- ComboBox editable: il TextBox interno usa le stesse risorse -->
+        <Style Selector="ComboBox TextBox">
+            <Setter Property="SelectionBrush" Value="{DynamicResource AppTextSelectionBrush}"/>
+            <Setter Property="SelectionForegroundBrush" Value="{DynamicResource AppTextSelectionForegroundBrush}"/>
+        </Style>
+        <Style Selector="ComboBox TextBox /template/ TextPresenter">
+            <Setter Property="SelectionBrush" Value="{DynamicResource AppTextSelectionBrush}"/>
+            <Setter Property="SelectionForegroundBrush" Value="{DynamicResource AppTextSelectionForegroundBrush}"/>
+            <Setter Property="CaretBrush" Value="{DynamicResource AppCaretBrush}"/>
         </Style>
 
         <!-- ============================================================ -->
@@ -273,6 +342,15 @@
         </Style>
         <Style Selector="DataGridRow:selected /template/ Rectangle#BackgroundRectangle">
             <Setter Property="Fill" Value="{DynamicResource AppSelectedBrush}"/>
+        </Style>
+
+        <!-- Evidenziazione riga con 0-byte. La classe .zeroByte viene aggiunta
+             dinamicamente dal DataGrid.Styles in MainWindow.axaml. -->
+        <Style Selector="DataGridRow.zeroByte">
+            <Setter Property="Background" Value="{DynamicResource AppZeroByteHighlightBrush}"/>
+        </Style>
+        <Style Selector="DataGridRow.zeroByte:pointerover /template/ Rectangle#BackgroundRectangle">
+            <Setter Property="Fill" Value="{DynamicResource AppZeroByteHighlightBrush}"/>
         </Style>
 
         <!-- ============================================================ -->
@@ -351,7 +429,6 @@
             <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}"/>
         </Style>
 
-        <!-- Badge proxy: attivo -->
         <Style Selector="Border.proxyBadge.proxyActive">
             <Setter Property="Background" Value="{DynamicResource AppProxyBadgeActiveBgBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource AppProxyBadgeActiveBorderBrush}"/>
