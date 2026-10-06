@@ -1,6 +1,6 @@
 using DownloadManager.Models;
 
-namespace DownloadManager.Services.AnimeWorld;
+namespace DownloadManager.Services.Anime;
 
 /// <summary>
 /// Interfaccia comune a tutti i provider anime (AnimeWorld oggi,

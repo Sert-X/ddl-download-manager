@@ -51,6 +51,7 @@ public partial class MainWindow : Window
         }
     }
     private bool _sftpConfigCollapsed;
+    private bool _syncingEpisodeSelection;
 
     private void OnToggleSftpConfigClick(object? sender, RoutedEventArgs e)
     {
@@ -203,6 +204,7 @@ public partial class MainWindow : Window
     private void OnEpisodesSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (Vm == null) return;
+        if (_syncingEpisodeSelection) return;  // ← evita loop durante operazioni batch
         if (sender is not DataGrid grid) return;
 
         var selected = new HashSet<Episode>();
@@ -221,25 +223,59 @@ public partial class MainWindow : Window
     {
         if (Vm == null) return;
         Vm.Download.SelectAllEpisodesCommand.Execute(null);
-        if (this.FindControl<DataGrid>("EpisodesGrid") is DataGrid grid) grid.SelectAll();
+
+        if (this.FindControl<DataGrid>("EpisodesGrid") is not DataGrid grid) return;
+
+        _syncingEpisodeSelection = true;
+        try
+        {
+            grid.SelectAll();
+        }
+        finally
+        {
+            _syncingEpisodeSelection = false;
+        }
     }
 
     private void OnDeselectAllEpisodesClick(object? sender, RoutedEventArgs e)
     {
         if (Vm == null) return;
         Vm.Download.DeselectAllEpisodesCommand.Execute(null);
-        if (this.FindControl<DataGrid>("EpisodesGrid") is DataGrid grid) grid.SelectedItems?.Clear();
+
+        if (this.FindControl<DataGrid>("EpisodesGrid") is not DataGrid grid) return;
+
+        _syncingEpisodeSelection = true;
+        try
+        {
+            grid.SelectedItems?.Clear();
+        }
+        finally
+        {
+            _syncingEpisodeSelection = false;
+        }
     }
 
     private void OnInvertEpisodeSelectionClick(object? sender, RoutedEventArgs e)
     {
         if (Vm == null) return;
+
+        // 1. Inverti la selezione nel VM (lancia anche il binding del checkbox)
         Vm.Download.InvertEpisodeSelectionCommand.Execute(null);
 
         if (this.FindControl<DataGrid>("EpisodesGrid") is not DataGrid grid) return;
-        grid.SelectedItems?.Clear();
-        foreach (var ep in Vm.Download.Episodes)
-            if (ep.IsSelected) grid.SelectedItems?.Add(ep);
+
+        // 2. Aggiorna SelectedItems della DataGrid SENZA far scatenare OnEpisodesSelectionChanged
+        _syncingEpisodeSelection = true;
+        try
+        {
+            grid.SelectedItems?.Clear();
+            foreach (var ep in Vm.Download.Episodes)
+                if (ep.IsSelected) grid.SelectedItems?.Add(ep);
+        }
+        finally
+        {
+            _syncingEpisodeSelection = false;
+        }
     }
 
     // ============================================================

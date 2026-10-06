@@ -32,7 +32,8 @@ public partial class SharedState : ObservableObject
     // ============================================================
     //  Eventi per la top bar
     // ============================================================
-
+    /// <summary>True se almeno un dominio provider è irraggiungibile.</summary>
+    [ObservableProperty] private bool _hasDomainIssues;
     /// <summary>
     /// Scatena quando cambia il proxy attivo. Il MainVM lo ascolta
     /// per ri-notificare ActiveProxyBadgeText e IsProxyActive (bindati in top bar).

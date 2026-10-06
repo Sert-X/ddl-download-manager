@@ -3,11 +3,15 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DownloadManager.Models;
 using DownloadManager.Persistence;
-using DownloadManager.Services.AnimeWorld;
+using DownloadManager.Services.Anime.AnimeWorld;
+using DownloadManager.Services.Anime.AnimeSaturn;
+using DownloadManager.Services.Anime;
 using DownloadManager.Services.Download;
 using DownloadManager.Services.FileOrganizer;
 using DownloadManager.Services.Logging;
 using DownloadManager.Services.Sftp;
+using DownloadManager.Services.Domains;
+using Microsoft.Extensions.Logging;
 using Avalonia.Controls;
 
 namespace DownloadManager.ViewModels;
@@ -15,6 +19,8 @@ namespace DownloadManager.ViewModels;
 public partial class MainWindowViewModel : ViewModelBase
 {
     private readonly IAnimeWorldService _animeWorldService;
+    private readonly IAnimeSaturnService _animeSaturnService;
+    private readonly AnimeProviderRegistry _animeProviderRegistry;
     private readonly DownloadQueueService _queueService;
     private readonly FileNameBuilder _fileNameBuilder;
     private readonly SettingsService _settings;
@@ -25,6 +31,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly SftpDownloadQueueService _sftpDownloadQueue;
     private readonly DownloadManager.Services.Proxy.ProxyService _proxyService;
     private readonly LogService _logService;
+    private readonly ILogger<SftpTabViewModel> _sftpLogger;
 
     /// <summary>Stato condiviso tra i tab.</summary>
     public SharedState Shared { get; }
@@ -36,6 +43,7 @@ public partial class MainWindowViewModel : ViewModelBase
     public ProxyTabViewModel Proxy { get; }
     public OrganizerTabViewModel Organizer { get; }
     public SftpTabViewModel Sftp { get; }
+    public DomainsTabViewModel Domains { get; }
 
     // --- Log globale ---
     public ObservableCollection<LogEntry> Logs => _logService.Logs;
@@ -47,8 +55,14 @@ public partial class MainWindowViewModel : ViewModelBase
 
     public bool IsProxyActive => Proxy.Proxies.Any(p => p.IsEnabled);
 
+    // --- Badge domini (top bar) ---
+
+    public bool HasDomainIssues => Shared.HasDomainIssues;
+
     public MainWindowViewModel(
         IAnimeWorldService animeWorldService,
+        IAnimeSaturnService animeSaturnService,
+        AnimeProviderRegistry animeProviderRegistry,
         DownloadQueueService queueService,
         FileNameBuilder fileNameBuilder,
         SettingsService settings,
@@ -58,10 +72,17 @@ public partial class MainWindowViewModel : ViewModelBase
         SftpUploadQueueService sftpUploadQueue,
         SftpDownloadQueueService sftpDownloadQueue,
         DownloadManager.Services.Proxy.ProxyService proxyService,
-        LogService logService)
+        LogService logService,
+        DownloadManager.Services.Domains.DomainResolver domainsResolver,
+        DownloadManager.Services.Domains.DomainTester domainTester,
+        ILogger<DomainsTabViewModel> domainsLogger,
+        ILogger<SftpTabViewModel> sftpLogger,
+        ILogger<DownloadTabViewModel> downloadLogger)
     {
         Shared = new SharedState();
         _animeWorldService = animeWorldService;
+        _animeSaturnService = animeSaturnService;
+        _animeProviderRegistry = animeProviderRegistry;
         _queueService = queueService;
         _fileNameBuilder = fileNameBuilder;
         _settings = settings;
@@ -72,6 +93,7 @@ public partial class MainWindowViewModel : ViewModelBase
         _sftpDownloadQueue = sftpDownloadQueue;
         _proxyService = proxyService;
         _logService = logService;
+        _sftpLogger = sftpLogger;
 
         // ============================================================
         //  SUB-VIEWMODEL
@@ -79,9 +101,12 @@ public partial class MainWindowViewModel : ViewModelBase
 
         Download = new DownloadTabViewModel(
             _animeWorldService,
+            _animeSaturnService,
+            _animeProviderRegistry,
             _queueService,
             _fileNameBuilder,
             _settings,
+            downloadLogger,
             Shared);
 
         Proxy = new ProxyTabViewModel(
@@ -105,12 +130,30 @@ public partial class MainWindowViewModel : ViewModelBase
             _sftpUploadQueue,
             _sftpDownloadQueue,
             zeroByteChecker,
+            _sftpLogger, 
+            Shared);
+
+            Domains = new DomainsTabViewModel(
+            domainsResolver,
+            domainTester,
+            _animeWorldService,
+            _animeSaturnService,
+            domainsLogger,
             Shared);
 
         Shared.RequestSftpRefresh = () => _ = Sftp.SftpRefreshCommand.ExecuteAsync(null);
 
         // ============================================================
-        //  TOP BAR — badge proxy
+        //  TOP BAR — BADGE DOMINI
+        // ============================================================
+
+        Shared.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(SharedState.HasDomainIssues))
+                OnPropertyChanged(nameof(HasDomainIssues));
+        };
+        // ============================================================
+        //  TOP BAR — BADGE PROXY
         // ============================================================
 
         Shared.ActiveProxyChanged += (_, _) =>

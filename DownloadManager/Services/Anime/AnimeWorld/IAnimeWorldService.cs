@@ -1,6 +1,4 @@
-using DownloadManager.Models;
-
-namespace DownloadManager.Services.AnimeWorld;
+namespace DownloadManager.Services.Anime.AnimeWorld;
 
 /// <summary>
 /// Interfaccia specifica di AnimeWorld. Estende IAnimeProvider per

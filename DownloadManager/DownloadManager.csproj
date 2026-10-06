@@ -14,9 +14,9 @@
     <!-- ============================================================ -->
     <AssemblyName>DDLDownloadManager</AssemblyName>
     <RootNamespace>DownloadManager</RootNamespace>
-    <Version>1.0.7</Version>
-    <FileVersion>1.0.7.0</FileVersion>
-    <AssemblyVersion>1.0.7.0</AssemblyVersion>
+    <Version>1.0.8</Version>
+    <FileVersion>1.0.8.0</FileVersion>
+    <AssemblyVersion>1.0.8.0</AssemblyVersion>
     <Product>DDL Download Manager</Product>
     <Company>DDL</Company>
     <Description>Download manager per AnimeWorld con organizer locale/remoto e SFTP.</Description>
@@ -91,4 +91,16 @@
   </ItemGroup>
   <Copy SourceFiles="@(PlaywrightBrowsers)" DestinationFiles="@(PlaywrightBrowsers->'$(PublishDir)ms-playwright\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
 </Target>
+  <ItemGroup>
+    <None Include="Assets\ffmpeg\win-x64\ffmpeg.exe"
+          Condition="Exists('Assets\ffmpeg\win-x64\ffmpeg.exe')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>ffmpeg\ffmpeg.exe</Link>
+    </None>
+    <None Include="Assets\ffmpeg\win-x64\ffprobe.exe"
+          Condition="Exists('Assets\ffmpeg\win-x64\ffprobe.exe')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>ffmpeg\ffprobe.exe</Link>
+    </None>
+  </ItemGroup>
 </Project>

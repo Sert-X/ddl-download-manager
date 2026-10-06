@@ -26,15 +26,40 @@ public class FileNameBuilder
     {
         var settings = _settings.Current;
 
-        // 1. Estrai il nome file originale dall'URL (senza estensione).
-        var originalFileName = Path.GetFileNameWithoutExtension(new Uri(originalVideoUrl).AbsolutePath);
-        if (string.IsNullOrEmpty(originalFileName))
-            originalFileName = "video";
+        // 1. Estrai nome file ed estensione dall'URL
+        string originalFileName;
+        string ext;
 
-        var ext = Path.GetExtension(new Uri(originalVideoUrl).AbsolutePath).TrimStart('.');
-        if (string.IsNullOrEmpty(ext)) ext = "mp4";
+        try
+        {
+            var uri = new Uri(originalVideoUrl);
+            originalFileName = Path.GetFileNameWithoutExtension(uri.AbsolutePath);
+            ext = Path.GetExtension(uri.AbsolutePath).TrimStart('.');
+        }
+        catch
+        {
+            originalFileName = "";
+            ext = "";
+        }
 
-        // 2. Applica il pattern.
+        // Rileva se è un HLS playlist (.m3u8) → il nome file è inutile ("playlist"/"master")
+        bool isHls = ext.Equals("m3u8", StringComparison.OrdinalIgnoreCase)
+                     || originalFileName.Equals("playlist", StringComparison.OrdinalIgnoreCase)
+                     || originalFileName.Equals("master", StringComparison.OrdinalIgnoreCase)
+                     || string.IsNullOrEmpty(originalFileName);
+
+        if (isHls)
+        {
+            // Usa un nome generico basato sull'episodio
+            originalFileName = $"Episode_{item.EpisodeNumber:D3}";
+            ext = "mp4"; // il file scaricato da ffmpeg sarà sempre mp4
+        }
+        else if (string.IsNullOrEmpty(ext))
+        {
+            ext = "mp4";
+        }
+
+        // 2. Applica il pattern
         var fileNameWithoutExt = ApplyPattern(
             settings.NamingPattern,
             series: item.SeriesName,
@@ -44,7 +69,7 @@ public class FileNameBuilder
 
         fileNameWithoutExt = SanitizeFileName(fileNameWithoutExt);
 
-        // 3. Componi la cartella finale.
+        // 3. Componi la cartella finale
         var folder = settings.BaseDownloadFolder;
         if (settings.CreateSeriesFolder && !string.IsNullOrWhiteSpace(item.SeriesName))
         {

@@ -3,7 +3,8 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DownloadManager.Models;
-using DownloadManager.Services.AnimeWorld;
+using DownloadManager.Services.Anime;
+using DownloadManager.Services.Anime.AnimeWorld;
 using DownloadManager.Services.Proxy;
 
 namespace DownloadManager.ViewModels;

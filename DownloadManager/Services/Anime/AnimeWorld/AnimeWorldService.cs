@@ -1,31 +1,32 @@
 using DownloadManager.Models;
 using DownloadManager.Services.Proxy;
+using DownloadManager.Services.Domains;
 using ManagedCode.Playwright.Stealth;
 using Microsoft.Extensions.Logging;
 using Microsoft.Playwright;
 
-namespace DownloadManager.Services.AnimeWorld;
+namespace DownloadManager.Services.Anime.AnimeWorld;
 
 public class AnimeWorldService : IAnimeWorldService
 {
-    private const string BaseUrlConst = "https://www.animeworld.ac";
     public string Name => "AnimeWorld";
-    public string BaseUrl => BaseUrlConst; 
+    public string BaseUrl => _domainResolver.GetBaseUrl(Name);
 
     private IPlaywright? _playwright;
     private IBrowser? _browser;
     private IBrowserContext? _context;
-
+    private readonly DomainResolver _domainResolver;
     private readonly ILogger<AnimeWorldService> _logger;
     private readonly IProxyProvider _proxyProvider;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private bool _disposed;
     private string _currentProxyKey = "(none)";
 
-    public AnimeWorldService(ILogger<AnimeWorldService> logger, IProxyProvider proxyProvider)
+    public AnimeWorldService(ILogger<AnimeWorldService> logger, IProxyProvider proxyProvider,DomainResolver domainResolver)
     {
         _logger = logger;
         _proxyProvider = proxyProvider;
+        _domainResolver = domainResolver;
     }
 
     public async Task NotifyProxyChangedAsync()
@@ -139,8 +140,12 @@ public class AnimeWorldService : IAnimeWorldService
             {
                 _logger.LogInformation("Ricerca per '{Query}'", query);
 
-                await page.GotoAsync(BaseUrl);
-                await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+                var navResponse = await page.GotoAsync(BaseUrl);
+                if (navResponse != null && navResponse.Status >= 400)
+                {
+                    throw new InvalidOperationException(
+                        $"HTTP {navResponse.Status} {navResponse.StatusText}");
+                }
                 await page.WaitForTimeoutAsync(1000);
 
                 // ============================================================
@@ -220,7 +225,7 @@ public class AnimeWorldService : IAnimeWorldService
                 // ============================================================
                 _logger.LogInformation("Cerco anche nell'HTML per completare i risultati...");
 
-                var searchUrl = $"{BaseUrlConst}/search?keyword={Uri.EscapeDataString(query)}";
+                var searchUrl = $"{BaseUrl}/search?keyword={Uri.EscapeDataString(query)}";
                 await page.GotoAsync(searchUrl);
                 await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
                 await page.WaitForTimeoutAsync(500);
@@ -243,7 +248,7 @@ public class AnimeWorldService : IAnimeWorldService
                             var href = await a.GetAttributeAsync("href") ?? "";
 
                             if (string.IsNullOrEmpty(href)) continue;
-                            if (href.StartsWith("/")) href = BaseUrlConst + href;
+                            if (href.StartsWith("/")) href = BaseUrl + href;
 
                             // Scarta link che non sono pagine anime (menu, login, ecc.)
                             if (!href.Contains("/play/", StringComparison.OrdinalIgnoreCase) &&
@@ -264,12 +269,12 @@ public class AnimeWorldService : IAnimeWorldService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Errore durante la ricerca di '{Query}'", query);
+                throw;
             }
             finally
             {
-                await page.CloseAsync();
+                try { await page.CloseAsync(); } catch { }
             }
-
             return results;
         }
         finally
@@ -305,7 +310,7 @@ public class AnimeWorldService : IAnimeWorldService
                     var href = await element.GetAttributeAsync("href") ?? "";
 
                     if (string.IsNullOrEmpty(href)) continue;
-                    if (href.StartsWith("/")) href = BaseUrlConst + href;
+                    if (href.StartsWith("/")) href = BaseUrl + href;
 
                     episodes.Add(new Episode
                     {
@@ -453,7 +458,7 @@ public class AnimeWorldService : IAnimeWorldService
             var page = await _context.NewPageAsync();
             try
             {
-                await page.GotoAsync(BaseUrlConst);
+                await page.GotoAsync(BaseUrl);
                 await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
                 await page.WaitForTimeoutAsync(1500);
 

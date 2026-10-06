@@ -4,13 +4,16 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
 using System.IO;
 using DownloadManager.Persistence;
-using DownloadManager.Services.AnimeWorld;
+using DownloadManager.Services.Anime;
+using DownloadManager.Services.Anime.AnimeWorld;
+using DownloadManager.Services.Anime.AnimeSaturn;
 using DownloadManager.Services.Download;
 using DownloadManager.Services.FileOrganizer;
 using DownloadManager.Services.Logging;
 using DownloadManager.Services.Sftp;
 using DownloadManager.ViewModels;
 using DownloadManager.Views;
+using DownloadManager.Services.Domains;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using DownloadManager.Services.Proxy;
@@ -84,7 +87,11 @@ public partial class App : Application
 
         services.AddSingleton<IAnimeWorldService, AnimeWorldService>();
         services.AddSingleton<IAnimeProvider>(sp => sp.GetRequiredService<IAnimeWorldService>());
+        services.AddSingleton<IAnimeSaturnService, AnimeSaturnService>();
+        services.AddSingleton<IAnimeProvider>(sp => sp.GetRequiredService<IAnimeSaturnService>());
         services.AddSingleton<AnimeProviderRegistry>();
+        services.AddSingleton<FfmpegLocator>();
+        services.AddSingleton<IDownloadService, DownloadService>();
 
         services.AddSingleton<SftpSessionLimiter>(_ => new SftpSessionLimiter(maxSessions: 8));
         services.AddSingleton<SftpConfigRepository>();
@@ -104,10 +111,23 @@ public partial class App : Application
         services.AddSingleton<IFileOrganizerService, FileOrganizerService>();
         services.AddSingleton<DownloadQueueService>();
 
+        services.AddSingleton<DomainResolver>();
+        services.AddSingleton<DomainTester>();
+
         services.AddTransient<MainWindowViewModel>();
         services.AddTransient<MainWindow>();
 
         Services = services.BuildServiceProvider();
+        // Copia ffmpeg.exe dal bundle a %LOCALAPPDATA% (se non esiste o se aggiornato)
+        try
+        {
+            var ffmpegLogger = Services.GetRequiredService<ILogger<App>>();
+            FfmpegLocator.EnsureBundledFfmpeg(ffmpegLogger);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[FFMPEG-BOOTSTRAP] {ex.Message}");
+        }
 
         // Init DB su thread pool (evita deadlock sul thread UI di Avalonia).
         Task.Run(async () =>
@@ -233,6 +253,11 @@ public partial class App : Application
             {
                 try
                 {
+                    // Ferma il FileSystemWatcher del browser locale SFTP
+                    if (desktop.MainWindow?.DataContext is MainWindowViewModel vm)
+                    {
+                        try { vm.Sftp.Dispose(); } catch { }
+                    }
                     var queue = Services!.GetRequiredService<DownloadQueueService>();
                     queue.CancelAll();
 

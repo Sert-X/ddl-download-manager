@@ -5,8 +5,11 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DownloadManager.Models;
 using DownloadManager.Persistence;
-using DownloadManager.Services.AnimeWorld;
+using DownloadManager.Services.Anime;
+using DownloadManager.Services.Anime.AnimeWorld;
+using DownloadManager.Services.Anime.AnimeSaturn;
 using DownloadManager.Services.Download;
+using Microsoft.Extensions.Logging;
 
 namespace DownloadManager.ViewModels;
 
@@ -18,12 +21,13 @@ namespace DownloadManager.ViewModels;
 public partial class DownloadTabViewModel : ViewModelBase
 {
     private readonly IAnimeWorldService _animeWorldService;
+    private readonly IAnimeSaturnService _animeSaturnService;
+    private readonly AnimeProviderRegistry _registry;
     private readonly DownloadQueueService _queueService;
     private readonly FileNameBuilder _fileNameBuilder;
     private readonly SettingsService _settings;
     private readonly SharedState _shared;
-
-    private Episode? _currentEpisode;
+    private readonly ILogger<DownloadTabViewModel> _logger;    private Episode? _currentEpisode;
     private CancellationTokenSource? _batchCts;
     private readonly DispatcherTimer _statsTimer;
     private readonly HashSet<SeriesGroup> _activeGroupsLastTick = new();
@@ -39,6 +43,21 @@ public partial class DownloadTabViewModel : ViewModelBase
     [ObservableProperty] private ObservableCollection<Episode> _episodes = new();
     [ObservableProperty] private bool _isLoadingSearchResults;
     [ObservableProperty] private bool _isLoadingEpisodes;
+    public string SearchResultsCountText =>
+        SearchResults.Count == 0 ? "" : $"({SearchResults.Count} serie)";
+    public string EpisodesCountText =>
+        Episodes.Count == 0 ? "" : $"{Episodes.Count} episodi";
+
+    public string EpisodesSelectedCountText =>
+        Episodes.Count == 0 ? "" : $"{Episodes.Count(e => e.IsSelected)} selezionati";
+
+    // ============================================================
+    //  Selezione provider
+    // ============================================================
+
+    [ObservableProperty] private IAnimeProvider? _selectedProvider;
+
+    public ObservableCollection<IAnimeProvider> AvailableProviders { get; } = new();
 
     // ============================================================
     //  PROPERTY DOWNLOAD
@@ -167,16 +186,27 @@ public partial class DownloadTabViewModel : ViewModelBase
 
     public DownloadTabViewModel(
         IAnimeWorldService animeWorldService,
+        IAnimeSaturnService animeSaturnService,
+        AnimeProviderRegistry registry,
         DownloadQueueService queueService,
         FileNameBuilder fileNameBuilder,
         SettingsService settings,
+        ILogger<DownloadTabViewModel> logger,
         SharedState shared)
     {
         _animeWorldService = animeWorldService;
+        _animeSaturnService = animeSaturnService;
+        _registry = registry;
         _queueService = queueService;
         _fileNameBuilder = fileNameBuilder;
         _settings = settings;
+        _logger = logger;
         _shared = shared;
+
+        foreach (var p in registry.Names.Select(n => registry.Get(n)!))
+        AvailableProviders.Add(p);
+
+        SelectedProvider = AvailableProviders.FirstOrDefault()!;
 
         MaxConcurrency = _settings.Current.MaxConcurrency;
         _queueService.MaxConcurrency = MaxConcurrency;
@@ -187,6 +217,27 @@ public partial class DownloadTabViewModel : ViewModelBase
             SearchHistory.Add(term);
 
         _queueService.AllItems.CollectionChanged += OnAllItemsChanged;
+
+        SearchResults.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(SearchResultsCountText));
+        };
+
+        // Hook per contatore episodi: cambia quando la lista cambia
+        Episodes.CollectionChanged += (_, e) =>
+        {
+            OnPropertyChanged(nameof(EpisodesCountText));
+            OnPropertyChanged(nameof(EpisodesSelectedCountText));
+
+            // Ascolta il cambio IsSelected di ogni episodio
+            if (e.NewItems != null)
+                foreach (Episode ep in e.NewItems)
+                    ep.PropertyChanged += OnEpisodePropertyChanged;
+
+            if (e.OldItems != null)
+                foreach (Episode ep in e.OldItems)
+                    ep.PropertyChanged -= OnEpisodePropertyChanged;
+        };
 
         foreach (var item in _queueService.AllItems)
             AddToGroup(item);
@@ -254,6 +305,26 @@ public partial class DownloadTabViewModel : ViewModelBase
     }
 
     // ============================================================
+    //  SELEZIONE PROVIDER
+    // ============================================================
+
+    partial void OnSelectedProviderChanged(IAnimeProvider? value)
+    {
+        if (value == null) return;
+
+        // Notifica UI (il ComboBox si aggiorna automaticamente)
+        OnPropertyChanged(nameof(SelectedProviderName));
+
+        // Pulisce i risultati correnti quando cambi provider
+        SearchResults.Clear();
+        Episodes.Clear();
+        SelectedAnime = null;
+        StatusMessage = $"Provider: {value.Name}. Premi 'Cerca' per iniziare.";
+    }
+
+    public string SelectedProviderName => SelectedProvider?.Name ?? "—";
+
+    // ============================================================
     //  PROPERTY CHANGED
     // ============================================================
 
@@ -291,17 +362,23 @@ public partial class DownloadTabViewModel : ViewModelBase
         try
         {
             StatusMessage = "Inizializzazione browser...";
-            await _animeWorldService.InitializeAsync(headless: true);
+            await SelectedProvider!.InitializeAsync(headless: true);
 
             StatusMessage = $"Ricerca in corso per '{term}'...";
-            var results = await _animeWorldService.SearchAsync(term);
+            var results = await SelectedProvider!.SearchAsync(term);
 
             SearchResults.Clear();
             foreach (var result in results) SearchResults.Add(result);
 
             StatusMessage = $"Trovati {results.Count} risultati per '{term}'.";
         }
-        catch (Exception ex) { StatusMessage = $"Errore: {ex.Message}"; }
+        catch (Exception ex)
+        {
+            StatusMessage = ex.Message.Contains("HTTP ")
+                ? $"⚠ {ex.Message}"
+                : $"Errore: {ex.Message}";
+            _logger.LogWarning(ex, "[DOWNLOAD-TAB] Errore ricerca");
+        }
         finally
         {
             IsLoadingSearchResults = false;
@@ -335,6 +412,11 @@ public partial class DownloadTabViewModel : ViewModelBase
         _settings.Current.SearchHistory = SearchHistory.ToList();
         _settings.Save();
     }
+    private void OnEpisodePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(Episode.IsSelected))
+            OnPropertyChanged(nameof(EpisodesSelectedCountText));
+    }
 
     [RelayCommand]
     private async Task LoadEpisodesAsync(AnimeSearchResult? anime)
@@ -347,7 +429,7 @@ public partial class DownloadTabViewModel : ViewModelBase
             SelectedAnime = anime;
             StatusMessage = $"Caricamento episodi di '{anime.Name}'...";
 
-            var episodes = await _animeWorldService.GetEpisodesAsync(anime.Link);
+            var episodes = await SelectedProvider!.GetEpisodesAsync(anime.Link);
 
             Episodes.Clear();
             foreach (var ep in episodes) Episodes.Add(ep);
@@ -377,7 +459,7 @@ public partial class DownloadTabViewModel : ViewModelBase
         _currentEpisode = episode;
 
         ct.ThrowIfCancellationRequested();
-        var videoUrl = await _animeWorldService.GetVideoUrlAsync(episode.Link);
+        var videoUrl = await SelectedProvider!.GetVideoUrlAsync(episode.Link);
 
         if (string.IsNullOrEmpty(videoUrl)) return;
         ct.ThrowIfCancellationRequested();
@@ -439,7 +521,7 @@ public partial class DownloadTabViewModel : ViewModelBase
             }
 
             StatusMessage = $"Recupero URL di {toDownload.Count} episodi...";
-            var urls = await _animeWorldService.GetVideoUrlsBatchAsync(toDownload, token);
+            var urls = await SelectedProvider!.GetVideoUrlsBatchAsync(toDownload, token);
 
             foreach (var episode in toDownload)
             {

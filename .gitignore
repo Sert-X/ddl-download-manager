@@ -28,3 +28,5 @@ Desktop.ini
 *.zip
 *.7z
 *.rar
+# Binari FFmpeg (scaricati da CI in release, localmente non committare)
+DownloadManager/Assets/ffmpeg/

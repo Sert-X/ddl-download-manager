@@ -1,4 +1,4 @@
-namespace DownloadManager.Services.AnimeWorld;
+namespace DownloadManager.Services.Anime;
 
 /// <summary>
 /// Registro dei provider anime disponibili. Oggi ce n'è uno solo
