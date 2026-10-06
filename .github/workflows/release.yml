@@ -23,6 +23,29 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Download FFmpeg
+        shell: pwsh
+        run: |
+          Write-Host "Scarico ffmpeg-release-essentials..."
+          $url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+          $zip = "$env:TEMP\ffmpeg.zip"
+          Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+
+          Write-Host "Estraggo..."
+          $extract = "$env:TEMP\ffmpeg-extract"
+          Expand-Archive -Path $zip -DestinationPath $extract -Force
+
+          $binDir = Get-ChildItem $extract -Directory | Select-Object -First 1 |
+                    ForEach-Object { Join-Path $_.FullName "bin" }
+
+          $target = "DownloadManager/Assets/ffmpeg/win-x64"
+          New-Item -ItemType Directory -Force -Path $target | Out-Null
+
+          Copy-Item "$binDir\ffmpeg.exe" "$target\"
+          Copy-Item "$binDir\ffprobe.exe" "$target\"
+
+          Get-ChildItem $target | Select-Object Name, Length
+
       - name: Read version from tag
         id: version
         shell: pwsh
