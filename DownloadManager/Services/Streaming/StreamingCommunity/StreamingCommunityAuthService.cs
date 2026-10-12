@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using DownloadManager.Models;
 using DownloadManager.Persistence;
 using DownloadManager.Services.Domains;
+using DownloadManager.Services.Proxy;
 using Microsoft.Extensions.Logging;
 
 namespace DownloadManager.Services.Streaming.StreamingCommunity;
@@ -24,15 +25,18 @@ public class StreamingCommunityAuthService
 
     public AccountCredentials Current { get; private set; }
     public event EventHandler? StateChanged;
+    private readonly IProxyProvider _proxyProvider;
 
     public StreamingCommunityAuthService(
         ILogger<StreamingCommunityAuthService> logger,
         DomainResolver domainResolver,
-        AccountRepository repository)
+        AccountRepository repository,
+        IProxyProvider proxyProvider)
     {
         _logger = logger;
         _domainResolver = domainResolver;
         _repository = repository;
+        _proxyProvider = proxyProvider;
         Current = repository.Load();
     }
 
@@ -64,8 +68,35 @@ public class StreamingCommunityAuthService
                 CookieContainer = cookies,
                 UseCookies = true,
                 AutomaticDecompression = DecompressionMethods.GZip
-                                       | DecompressionMethods.Deflate,
+                                    | DecompressionMethods.Deflate,
             };
+
+            // === Applica il proxy attivo per StreamingCommunity, se configurato ===
+            ProxyConfig? proxy = null;
+            try { proxy = _proxyProvider.GetActive(ProviderKeys.StreamingCommunity); } catch { }
+
+            if (proxy != null)
+            {
+                var scheme = proxy.Protocol == ProxyProtocol.Socks5 ? "socks5" : "http";
+                var webProxy = new WebProxy($"{scheme}://{proxy.Host}:{proxy.Port}");
+
+                if (proxy.Auth == ProxyAuthType.UserPassword && !string.IsNullOrEmpty(proxy.Username))
+                {
+                    webProxy.Credentials = new NetworkCredential(proxy.Username, proxy.Password);
+                }
+
+                handler.Proxy = webProxy;
+                handler.UseProxy = true;
+
+                _logger.LogInformation("[SC-AUTH] Login con proxy: {Host}:{Port}",
+                    proxy.Host, proxy.Port);
+            }
+            else
+            {
+                handler.UseProxy = false;
+                _logger.LogInformation("[SC-AUTH] Login senza proxy (connessione diretta)");
+            }
+
             using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
             http.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
 

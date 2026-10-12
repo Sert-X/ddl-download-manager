@@ -117,6 +117,12 @@ public partial class SftpTabViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// True se ci sono upload o download SFTP attivi o in attesa.
+    /// Usata per il pallino giallo/verde nell'header del tab.
+    /// </summary>
+    public bool HasActiveSftpItems => HasActiveUploads || HasActiveDownloads;
+
     public string RemoteStatusText
     {
         get
@@ -238,6 +244,16 @@ public partial class SftpTabViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(RemoteSortDirectionIcon));
         ReorderRemoteEntries();
+    }
+
+    partial void OnHasActiveUploadsChanged(bool value)
+    {
+        OnPropertyChanged(nameof(HasActiveSftpItems));
+    }
+
+    partial void OnHasActiveDownloadsChanged(bool value)
+    {
+        OnPropertyChanged(nameof(HasActiveSftpItems));
     }
 
     private void SetupLocalWatcher(string path)

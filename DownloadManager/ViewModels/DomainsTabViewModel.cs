@@ -14,6 +14,7 @@ namespace DownloadManager.ViewModels;
 /// <summary>
 /// Sub-ViewModel per il tab "Domini". Permette di modificare l'URL base
 /// dei provider (anime + streaming), testare la raggiungibilità e resettare ai default.
+/// I test usano il proxy attivo per ciascun provider (se configurato).
 /// </summary>
 public partial class DomainsTabViewModel : ViewModelBase
 {
@@ -48,9 +49,6 @@ public partial class DomainsTabViewModel : ViewModelBase
         _streamingCommunityService = streamingCommunityService;
         _logger = logger;
         _shared = shared;
-
-        // I provider sono già registrati nel DomainResolver via dizionario _defaults.
-        // Nessun EnsureProvider necessario.
 
         LoadDomains();
 
@@ -122,6 +120,9 @@ public partial class DomainsTabViewModel : ViewModelBase
     {
         if (cfg == null) return;
 
+        // Invalida la cache: il proxy attivo potrebbe essere cambiato
+        _tester.InvalidateCache();
+
         StatusMessage = $"Test {cfg.ProviderName}...";
         await _tester.TestAsync(cfg);
         StatusMessage = $"{cfg.ProviderName}: {cfg.StatusMessage}";
@@ -133,6 +134,9 @@ public partial class DomainsTabViewModel : ViewModelBase
     {
         if (IsTestingAll) return;
         if (Domains.Count == 0) return;
+
+        // Invalida la cache: il proxy attivo potrebbe essere cambiato
+        _tester.InvalidateCache();
 
         _testAllCts = new CancellationTokenSource();
         var token = _testAllCts.Token;
@@ -244,6 +248,9 @@ public partial class DomainsTabViewModel : ViewModelBase
         await Task.Delay(2500);
 
         if (Domains.Count == 0) return;
+
+        // Invalida la cache: al primo avvio il proxy potrebbe essere già attivo
+        _tester.InvalidateCache();
 
         _logger.LogInformation("[DOMAIN] Test automatico all'avvio...");
         await _tester.TestManyAsync(Domains.ToList(), concurrency: 4);

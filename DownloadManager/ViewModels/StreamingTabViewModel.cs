@@ -94,6 +94,17 @@ public partial class StreamingTabViewModel : ViewModelBase
     public bool IsSelectedResultSeries => SelectedResult?.IsSeries == true;
     public bool IsSelectedResultMovie => SelectedResult != null && !SelectedResult.IsSeries;
     public bool HasSeasons => Seasons.Count > 0;
+    /// <summary>
+    /// True se ci sono download streaming in corso, pending, in pausa o failed.
+    /// Usata per il pallino giallo/verde nell'header del tab.
+    /// </summary>
+    public bool HasActiveStreamingItems =>
+        _queueService.AllItems.Any(i =>
+            i.Category == CategoryName &&
+            (i.Status == DownloadStatus.Downloading ||
+            i.Status == DownloadStatus.Pending ||
+            i.Status == DownloadStatus.Paused ||
+            i.Status == DownloadStatus.Failed));
 
     // === Cartella base: usa settings streaming separati ===
     public string BaseDownloadFolder
@@ -301,6 +312,7 @@ public partial class StreamingTabViewModel : ViewModelBase
             OnPropertyChanged(nameof(GlobalSizeText));
             OnPropertyChanged(nameof(GlobalEtaText));
             OnPropertyChanged(nameof(SeriesSummaryText));
+            OnPropertyChanged(nameof(HasActiveStreamingItems));
         };
         statsTimer.Start();
 

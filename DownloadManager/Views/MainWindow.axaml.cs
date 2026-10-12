@@ -503,7 +503,7 @@ public partial class MainWindow : Window
             : $"Eliminare {entries.Count} elementi?";
         if (entries.Any(x => x.IsDirectory))
             msg += "\n\nLe cartelle verranno eliminate con tutto il contenuto.";
-        msg += "\n\nQuesta azione non puÃ² essere annullata.";
+        msg += "\n\nQuesta azione non pu\u00F2 essere annullata.";
 
         var ok = await ConfirmDialog.ShowAsync(this, msg, "Conferma eliminazione");
         if (sender is DataGrid g) g.Focus();
@@ -529,7 +529,7 @@ public partial class MainWindow : Window
             : $"Eliminare {entries.Count} elementi dal server?";
         if (entries.Any(x => x.IsDirectory))
             msg += "\n\nLe cartelle verranno eliminate con tutto il contenuto.";
-        msg += "\n\nQuesta azione non puÃ² essere annullata.";
+        msg += "\n\nQuesta azione non pu\u00F2 essere annullata.";
 
         var ok = await ConfirmDialog.ShowAsync(this, msg, "Conferma eliminazione");
         if (sender is DataGrid g) g.Focus();
@@ -577,7 +577,7 @@ public partial class MainWindow : Window
 
         var tipo = entry.IsDirectory ? "cartella" : "file";
         var extra = entry.IsDirectory ? " e tutto il suo contenuto" : "";
-        var msg = $"Eliminare la {tipo} '{entry.Name}'{extra}?\n\nQuesta azione non puÃ² essere annullata.";
+        var msg = $"Eliminare la {tipo} '{entry.Name}'{extra}?\n\nQuesta azione non pu\u00F2 essere annullata.";
 
         var ok = await ConfirmDialog.ShowAsync(this, msg, "Conferma eliminazione");
         if (!ok) return;
@@ -624,7 +624,7 @@ public partial class MainWindow : Window
 
         var tipo = entry.IsDirectory ? "cartella" : "file";
         var extra = entry.IsDirectory ? " e tutto il suo contenuto sul server" : "";
-        var msg = $"Eliminare la {tipo} remota '{entry.Name}'{extra}?\n\nQuesta azione non puÃ² essere annullata.";
+        var msg = $"Eliminare la {tipo} remota '{entry.Name}'{extra}?\n\nQuesta azione non pu\u00F2 essere annullata.";
 
         var ok = await ConfirmDialog.ShowAsync(this, msg, "Conferma eliminazione");
         if (!ok) return;

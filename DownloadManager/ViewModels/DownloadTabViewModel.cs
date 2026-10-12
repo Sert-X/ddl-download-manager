@@ -220,6 +220,18 @@ public partial class DownloadTabViewModel : ViewModelBase
     /// </summary>
     public bool CanInteractWithEpisodes => Episodes.Count > 0 && !IsLoadingEpisodes;
 
+    /// <summary>
+    /// True se ci sono download anime in corso, pending, in pausa o failed.
+    /// Usata per il pallino giallo/verde nell'header del tab.
+    /// </summary>
+    public bool HasActiveAnimeItems =>
+        _queueService.AllItems.Any(i =>
+            i.Category == "anime" &&
+            (i.Status == DownloadStatus.Downloading ||
+            i.Status == DownloadStatus.Pending ||
+            i.Status == DownloadStatus.Paused ||
+            i.Status == DownloadStatus.Failed));
+
     // ============================================================
     //  COSTRUTTORE
     // ============================================================
@@ -345,6 +357,7 @@ public partial class DownloadTabViewModel : ViewModelBase
             OnPropertyChanged(nameof(GlobalSpeedText));
             OnPropertyChanged(nameof(GlobalSizeText));
             OnPropertyChanged(nameof(SeriesSummaryText));
+            OnPropertyChanged(nameof(HasActiveAnimeItems));
         };
         _statsTimer.Start();
 
