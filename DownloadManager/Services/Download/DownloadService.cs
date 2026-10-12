@@ -2,11 +2,13 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.RegularExpressions;
 using Avalonia.Threading;
 using DownloadManager.Models;
 using DownloadManager.Persistence;
 using DownloadManager.Services.Proxy;
+using DownloadManager.Services.Streaming.StreamingCommunity;
 using Microsoft.Extensions.Logging;
 
 namespace DownloadManager.Services.Download;
@@ -17,21 +19,30 @@ public class DownloadService : IDownloadService
     private readonly DownloadRepository _repository;
     private readonly HttpClient _http;
     private readonly FfmpegLocator _ffmpegLocator;
+    private readonly YtDlpLocator _ytDlpLocator;
+    private readonly IProxyProvider _proxyProvider;
+    private readonly ProxyService _proxyService;
 
     private const long ChunkSize = 10 * 1024 * 1024;
     private const int ParallelChunksPerFile = 4;
     private const long SaveThreshold = 5 * 1024 * 1024;
     private const int UiThrottleMs = 150;
+    private const long EstimatedBitrateBytesPerSecond = 150_000;
 
     public DownloadService(
         ILogger<DownloadService> logger,
         DownloadRepository repository,
         IProxyProvider proxyProvider,
-        FfmpegLocator ffmpegLocator)
+        ProxyService proxyService,
+        FfmpegLocator ffmpegLocator,
+        YtDlpLocator ytDlpLocator)
     {
         _logger = logger;
         _repository = repository;
+        _proxyService = proxyService;
+        _proxyProvider = proxyProvider;
         _ffmpegLocator = ffmpegLocator;
+        _ytDlpLocator = ytDlpLocator;
 
         var handler = new HttpClientHandler
         {
@@ -41,28 +52,144 @@ public class DownloadService : IDownloadService
             UseProxy = true
         };
 
-        _http = new HttpClient(handler)
-        {
-            Timeout = TimeSpan.FromMinutes(30)
-        };
-
+        _http = new HttpClient(handler) { Timeout = TimeSpan.FromMinutes(30) };
         _http.DefaultRequestHeaders.UserAgent.ParseAdd(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+            "(KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36");
     }
 
     private static void SetUi(Action action)
     {
-        if (Dispatcher.UIThread.CheckAccess())
-            action();
-        else
-            Dispatcher.UIThread.Post(action);
+        if (Dispatcher.UIThread.CheckAccess()) action();
+        else Dispatcher.UIThread.Post(action);
     }
+
+    // ============================================================
+    //  WRAPPER CON RETRY PROXY
+    // ============================================================
 
     public async Task DownloadItemAsync(DownloadItem item, CancellationToken ct = default)
     {
+        const int maxAttempts = 3;
+        const string providerKeyDefault = "Downloads";
+
+        var providerKey = string.IsNullOrEmpty(item.ProviderKey)
+            ? providerKeyDefault
+            : item.ProviderKey;
+
+        for (int attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            try
+            {
+                await DownloadItemInternalAsync(item, ct);
+                return;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex) when (
+                !ct.IsCancellationRequested &&
+                IsRetryableNetworkError(ex) &&
+                attempt < maxAttempts - 1)
+            {
+                var proxy = _proxyProvider.GetActive(providerKey);
+
+                if (proxy == null)
+                {
+                    _logger.LogWarning(ex,
+                        "[RETRY] Errore di rete ma nessun proxy attivo per {P}. Abort.",
+                        providerKey);
+                    throw;
+                }
+
+                _logger.LogWarning(ex,
+                    "[RETRY] Errore di rete (tentativo {N}/{Max}). " +
+                    "Marco {Host}:{Port} come failed e ruoto per {P}...",
+                    attempt + 1, maxAttempts, proxy.Host, proxy.Port, providerKey);
+
+                try
+                {
+                    await _proxyService.MarkFailedAndRotateAsync(proxy, providerKey);
+                }
+                catch (Exception rotateEx)
+                {
+                    _logger.LogWarning(rotateEx, "[RETRY] Errore durante rotazione proxy");
+                }
+
+                SetUi(() =>
+                {
+                    item.ErrorMessage = $"Retry {attempt + 1}/{maxAttempts}: cambio proxy...";
+                    item.ProxyRetryCount = attempt + 1;
+                });
+
+                await Task.Delay(2000, ct);
+            }
+        }
+    }
+
+    // ============================================================
+    //  DOWNLOAD VERO E PROPRIO
+    // ============================================================
+
+    private async Task DownloadItemInternalAsync(DownloadItem item, CancellationToken ct = default)
+    {
+        if (ct.IsCancellationRequested) throw new OperationCanceledException();
+
+        if (item.UrlExtractor != null && ShouldReextractUrl(item.Url))
+        {
+            SetUi(() =>
+            {
+                item.Status = DownloadStatus.Downloading;
+                item.ErrorMessage = "Estrazione URL in corso...";
+            });
+
+            try
+            {
+                var fresh = await item.UrlExtractor(ct);
+                if (string.IsNullOrEmpty(fresh))
+                    throw new InvalidOperationException("UrlExtractor vuoto.");
+                item.Url = fresh;
+
+                if (item.AudioExtractor != null)
+                {
+                    try
+                    {
+                        var audioUrl = await item.AudioExtractor(ct);
+                        if (!string.IsNullOrEmpty(audioUrl))
+                            item.AudioUrl = audioUrl;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "AudioExtractor fallito");
+                    }
+                }
+
+                SetUi(() => item.ErrorMessage = string.Empty);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Errore estrazione URL: {ex.Message}", ex);
+            }
+        }
+
+        if (item.CookieExtractor != null && string.IsNullOrEmpty(item.SessionCookies))
+        {
+            try
+            {
+                var cookies = await item.CookieExtractor(ct);
+                if (!string.IsNullOrEmpty(cookies))
+                    item.SessionCookies = cookies;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "CookieExtractor fallito, procedo senza cookie");
+            }
+        }
+
         var directory = Path.GetDirectoryName(item.DestinationPath);
-        if (!string.IsNullOrEmpty(directory))
-            Directory.CreateDirectory(directory);
+        if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
 
         SetUi(() =>
         {
@@ -70,9 +197,6 @@ public class DownloadService : IDownloadService
             item.ErrorMessage = string.Empty;
         });
 
-        // ============================================================
-        //  RILEVA HLS (.m3u8) E DELEGA A FFMPEG
-        // ============================================================
         if (IsHlsUrl(item.Url))
         {
             await DownloadHlsAsync(item, ct);
@@ -89,15 +213,11 @@ public class DownloadService : IDownloadService
         SetUi(() => item.TotalBytes = totalSize);
 
         bool supportsRange = head.Headers.AcceptRanges.Contains("bytes");
-        _logger.LogInformation(
-            "Download avviato: {Url} → {Dest} ({Size} bytes, range={Range})",
-            item.Url, item.DestinationPath, totalSize, supportsRange);
 
         var tempPath = item.DestinationPath + ".part";
 
         if (File.Exists(tempPath) && File.Exists(item.DestinationPath))
         {
-            _logger.LogInformation("File già presente, salto download: {Path}", item.DestinationPath);
             SetUi(() =>
             {
                 item.Status = DownloadStatus.Completed;
@@ -110,26 +230,18 @@ public class DownloadService : IDownloadService
 
         var sw = Stopwatch.StartNew();
 
-        if (!supportsRange)
-            await DownloadSequentialAsync(item, totalSize, ct);
-        else
-            await DownloadParallelAsync(item, totalSize, sw, ct);
+        if (!supportsRange) await DownloadSequentialAsync(item, totalSize, ct);
+        else await DownloadParallelAsync(item, totalSize, sw, ct);
 
         if (!File.Exists(tempPath))
-        {
-            throw new InvalidOperationException(
-                $"Download incompleto: il file temporaneo '{tempPath}' non esiste.");
-        }
+            throw new InvalidOperationException("Download incompleto: file .part mancante.");
 
         var actualSize = new FileInfo(tempPath).Length;
         if (actualSize != totalSize)
-        {
             throw new InvalidOperationException(
-                $"Download incompleto: il file scaricato ha {actualSize} bytes invece di {totalSize}.");
-        }
+                $"File scaricato {actualSize} byte invece di {totalSize}.");
 
-        if (File.Exists(item.DestinationPath))
-            File.Delete(item.DestinationPath);
+        if (File.Exists(item.DestinationPath)) File.Delete(item.DestinationPath);
         File.Move(tempPath, item.DestinationPath);
 
         SetUi(() =>
@@ -139,19 +251,79 @@ public class DownloadService : IDownloadService
             item.SpeedBytesPerSecond = 0;
         });
         await _repository.ClearChunksAsync(item.Id);
-
-        _logger.LogInformation("Download completato: {Path}", item.DestinationPath);
     }
+
+    // ============================================================
+    //  HELPER RETRY
+    // ============================================================
+
+    private static bool IsRetryableNetworkError(Exception ex)
+    {
+        var msg = ex.Message;
+
+        if (msg.Contains("FFmpeg terminato con codice -", StringComparison.OrdinalIgnoreCase))
+            return true;
+            
+        if (msg.Contains("yt-dlp terminato con codice -", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (ex is HttpRequestException httpEx)
+        {
+            if (httpEx.StatusCode.HasValue)
+            {
+                var code = (int)httpEx.StatusCode.Value;
+                if (code == 403 || code == 407 || code == 429 ||
+                    code == 502 || code == 503 || code == 504)
+                    return true;
+            }
+            if (httpEx.Message.Contains("timed out", StringComparison.OrdinalIgnoreCase) ||
+                httpEx.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase) ||
+                httpEx.Message.Contains("connection refused", StringComparison.OrdinalIgnoreCase) ||
+                httpEx.Message.Contains("name resolution", StringComparison.OrdinalIgnoreCase) ||
+                httpEx.Message.Contains("proxy", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        if (ex is TaskCanceledException) return true;
+
+        if (msg.Contains("FFmpeg è terminato", StringComparison.OrdinalIgnoreCase) ||
+            msg.Contains("FFmpeg terminato", StringComparison.OrdinalIgnoreCase))
+        {
+            if (msg.Contains("403") || msg.Contains("407") ||
+                msg.Contains("429") || msg.Contains("503") ||
+                msg.Contains("timeout", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        if (msg.Contains("yt-dlp", StringComparison.OrdinalIgnoreCase) &&
+            (msg.Contains("403") || msg.Contains("407") ||
+             msg.Contains("429") || msg.Contains("503") ||
+             msg.Contains("timeout", StringComparison.OrdinalIgnoreCase) ||
+             msg.Contains("HTTP Error", StringComparison.OrdinalIgnoreCase)))
+            return true;
+
+        if (msg.Contains("proxy", StringComparison.OrdinalIgnoreCase) &&
+            (msg.Contains("fail", StringComparison.OrdinalIgnoreCase) ||
+             msg.Contains("refus", StringComparison.OrdinalIgnoreCase) ||
+             msg.Contains("timeout", StringComparison.OrdinalIgnoreCase)))
+            return true;
+
+        return false;
+    }
+
+    // ============================================================
+    //  SEQUENTIAL / PARALLEL (HTTP non-HLS)
+    // ============================================================
 
     private async Task DownloadSequentialAsync(DownloadItem item, long totalSize, CancellationToken ct)
     {
         var tempPath = item.DestinationPath + ".part";
-
         using var response = await _http.GetAsync(item.Url, HttpCompletionOption.ResponseHeadersRead, ct);
         response.EnsureSuccessStatusCode();
 
         await using var source = await response.Content.ReadAsStreamAsync(ct);
-        await using var fs = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true);
+        await using var fs = new FileStream(tempPath, FileMode.Create, FileAccess.Write,
+            FileShare.None, 81920, true);
 
         var buffer = new byte[81920];
         int read;
@@ -190,18 +362,12 @@ public class DownloadService : IDownloadService
         long alreadyDownloaded = doneChunks.Sum(c => c.End - c.Start + 1);
         SetUi(() => item.DownloadedBytes = alreadyDownloaded);
 
-        _logger.LogInformation(
-            "Chunk da scaricare: {Count}/{Total} (già fatti: {Done} MB)",
-            todoRanges.Count, allRanges.Count, alreadyDownloaded / 1024 / 1024);
-
         var tempPath = item.DestinationPath + ".part";
-
-        await using var fs = new FileStream(
-            tempPath, FileMode.Create, FileAccess.Write, FileShare.Write, 81920, true);
+        await using var fs = new FileStream(tempPath, FileMode.Create, FileAccess.Write,
+            FileShare.Write, 81920, true);
         fs.SetLength(totalSize);
 
         var semaphore = new SemaphoreSlim(ParallelChunksPerFile);
-
         var progressLock = new object();
         long localDownloaded = alreadyDownloaded;
         long lastUiUpdate = Environment.TickCount64;
@@ -248,18 +414,12 @@ public class DownloadService : IDownloadService
                         });
                     }
 
-                    if (doSave)
-                    {
-                        _ = _repository.UpdateAsync(item);
-                    }
+                    if (doSave) _ = _repository.UpdateAsync(item);
                 }, ct);
 
                 await _repository.SaveChunkAsync(item.Id, range.Start, range.End);
             }
-            finally
-            {
-                semaphore.Release();
-            }
+            finally { semaphore.Release(); }
         }).ToList();
 
         await Task.WhenAll(tasks);
@@ -268,33 +428,19 @@ public class DownloadService : IDownloadService
         SetUi(() => item.DownloadedBytes = finalBytes);
     }
 
-    private async Task DownloadChunkAsync(
-        string url,
-        FileStream fs,
-        (long Start, long End) range,
-        Action<long> onBytes,
-        CancellationToken ct)
+    private async Task DownloadChunkAsync(string url, FileStream fs,
+        (long Start, long End) range, Action<long> onBytes, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Range = new RangeHeaderValue(range.Start, range.End);
 
-        using var response = await _http.SendAsync(
-            request, HttpCompletionOption.ResponseHeadersRead, ct);
+        using var response = await _http.SendAsync(request,
+            HttpCompletionOption.ResponseHeadersRead, ct);
 
         if (response.StatusCode != HttpStatusCode.PartialContent &&
             response.StatusCode != HttpStatusCode.OK)
-        {
             throw new InvalidOperationException(
-                $"Il server ha risposto con {response.StatusCode}, previsto 206.");
-        }
-
-        if (response.StatusCode == HttpStatusCode.OK && range.Start > 0)
-        {
-            _logger.LogWarning(
-                "Server ha risposto 200 invece di 206 per range {Start}-{End} di {Url}. " +
-                "Il file potrebbe risultare corrotto.",
-                range.Start, range.End, url);
-        }
+                $"Server ha risposto {response.StatusCode}, previsto 206.");
 
         await using var source = await response.Content.ReadAsStreamAsync(ct);
 
@@ -326,48 +472,644 @@ public class DownloadService : IDownloadService
         }
         return ranges;
     }
+
     // ============================================================
-    //  HLS / M3U8 → FFmpeg
+    //  HLS — Router yt-dlp → FFmpeg
     // ============================================================
+
+    /// <summary>
+    /// Decide se l'URL corrente è ancora valido o va ri-estratto.
+    /// - Se è vuoto → ri-estrai
+    /// - Se è un URL vixcloud con token `expires=` in scadenza (<60s) → ri-estrai
+    /// - Altrimenti → riusa (resume)
+    /// </summary>
+    private static bool ShouldReextractUrl(string? url)
+    {
+        if (string.IsNullOrEmpty(url)) return true;
+
+        if (url.Contains("vixcloud", StringComparison.OrdinalIgnoreCase))
+        {
+            var m = Regex.Match(url, @"[?&]expires=(\d+)");
+            if (m.Success && long.TryParse(m.Groups[1].Value, out var exp))
+            {
+                var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                // Considera scaduto se mancano meno di 60 secondi
+                if (exp - now < 60) return true;
+            }
+        }
+
+        return false;
+    }
 
     private static bool IsHlsUrl(string url)
     {
         if (string.IsNullOrEmpty(url)) return false;
         var lower = url.ToLowerInvariant();
-        return lower.Contains(".m3u8");
+        return lower.Contains(".m3u8")
+            || lower.Contains("vixcloud.co/playlist/");
     }
-
-    // Bitrate tipico anime streaming (Sub ITA 1080p): ~1.2 Mbps = 150 KB/s.
-    // Usato per stimare la dimensione reale del file durante il download HLS
-    // (ffmpeg non conosce la dimensione finale in anticipo per HLS).
-    private const long EstimatedBitrateBytesPerSecond = 150_000;
 
     private async Task DownloadHlsAsync(DownloadItem item, CancellationToken ct)
     {
-        var ffmpegPath = _ffmpegLocator.GetFfmpegPath();
-        if (string.IsNullOrEmpty(ffmpegPath))
-        {
-            throw new InvalidOperationException(
-                "FFmpeg non trovato. Non è possibile scaricare stream HLS (.m3u8).");
-        }
+        var isVixcloud = item.Url.Contains("vixcloud.co", StringComparison.OrdinalIgnoreCase);
 
-        _logger.LogInformation(
-            "[HLS] Download via FFmpeg: {Url} → {Dest}", item.Url, item.DestinationPath);
-
-        // 1. Durata via ffprobe
-        var totalDuration = await ProbeDurationAsync(item.Url, ct);
-        if (totalDuration.HasValue)
+        var ytDlpPath = _ytDlpLocator.GetYtDlpPath();
+        if (!string.IsNullOrEmpty(ytDlpPath))
         {
-            // Stima dimensione finale = durata × bitrate stimato
-            var estimatedBytes = (long)(totalDuration.Value.TotalSeconds * EstimatedBitrateBytesPerSecond);
-            SetUi(() => item.TotalBytes = estimatedBytes);
-            _logger.LogInformation(
-                "[HLS] Durata: {Dur} → dimensione stimata: {MB} MB",
-                totalDuration.Value, estimatedBytes / 1024 / 1024);
+            try
+            {
+                await DownloadHlsWithYtDlpAsync(item, ytDlpPath, ct);
+                return;
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[HLS] yt-dlp fallito");
+
+                if (isVixcloud)
+                {
+                    _logger.LogError(
+                        "[HLS] vixcloud: FFmpeg non può bypassare Cloudflare, " +
+                        "salto il fallback e propago l'errore");
+                    throw;
+                }
+            }
         }
         else
         {
-            _logger.LogWarning("[HLS] ffprobe non disponibile: la barra partirà solo dopo il primo progress");
+            _logger.LogWarning("[HLS] yt-dlp non trovato, uso FFmpeg");
+        }
+
+        await DownloadHlsWithFfmpegAsync(item, ct);
+    }
+
+    // ============================================================
+    //  HLS via yt-dlp
+    // ============================================================
+
+    private async Task DownloadHlsWithYtDlpAsync(
+        DownloadItem item, string ytDlpPath, CancellationToken ct)
+    {
+        var ffmpegPath = _ffmpegLocator.GetFfmpegPath();
+        if (string.IsNullOrEmpty(ffmpegPath))
+            throw new InvalidOperationException(
+                "FFmpeg non trovato (richiesto da yt-dlp per il muxing).");
+
+        var ffmpegDir = Path.GetDirectoryName(ffmpegPath) ?? "";
+
+        _logger.LogInformation("[YT-DLP] Download HLS: {Url}", item.Url);
+
+        var tempDir = Path.Combine(
+            Path.GetTempPath(), "DDLDownloadManager", "ytdlp",
+            item.Id.ToString());
+        Directory.CreateDirectory(tempDir);
+
+        var outTemplate = Path.Combine(tempDir, "video.%(ext)s");
+        var finalMp4 = Path.Combine(tempDir, "video.mp4");
+        var planFile = Path.Combine(tempDir, "__plan.json");
+
+        // Pulisci file plan da esecuzioni precedenti
+        try { if (File.Exists(planFile)) File.Delete(planFile); } catch { }
+
+        // === Check "file finale già presente" ===
+        if (File.Exists(finalMp4) && new FileInfo(finalMp4).Length > 0)
+        {
+            bool valid = await ProbeHasAudioAndVideoAsync(finalMp4, ffmpegDir, ct);
+            if (valid)
+            {
+                _logger.LogWarning(
+                    "[YT-DLP] File finale già valido ({MB} MB), skip download",
+                    new FileInfo(finalMp4).Length / 1024 / 1024);
+
+                var destDir0 = Path.GetDirectoryName(item.DestinationPath);
+                if (!string.IsNullOrEmpty(destDir0)) Directory.CreateDirectory(destDir0);
+                if (File.Exists(item.DestinationPath)) File.Delete(item.DestinationPath);
+                File.Move(finalMp4, item.DestinationPath, overwrite: true);
+
+                try { Directory.Delete(tempDir, true); } catch { }
+
+                var finalSize0 = new FileInfo(item.DestinationPath).Length;
+                SetUi(() =>
+                {
+                    item.TotalBytes = finalSize0;
+                    item.DownloadedBytes = finalSize0;
+                    item.SpeedBytesPerSecond = 0;
+                    item.Status = DownloadStatus.Completed;
+                });
+                return;
+            }
+            else
+            {
+                _logger.LogWarning("[YT-DLP] video.mp4 senza audio: cancello e riparto");
+                try { File.Delete(finalMp4); } catch { }
+            }
+        }
+
+        // === Al resume, cancella i .part di yt-dlp ===
+        // yt-dlp non sa fare resume su HLS vixcloud: il token cambia e i
+        // frammenti già scaricati non sono più richiedibili. Meglio ricominciare.
+        try
+        {
+            var partFiles = Directory.GetFiles(tempDir, "*.part");
+            foreach (var pf in partFiles)
+            {
+                try { File.Delete(pf); } catch { }
+            }
+
+            // yt-dlp usa anche file .fXXX.mp4 / .fXXX.m4a NON completati
+            // (senza .part ma senza essere merged): cancelliamo tutto tranne
+            // il video.mp4 finale (già checkato sopra) e cookies.txt
+            var intermediateFiles = Directory.GetFiles(tempDir, "video.f*");
+            foreach (var f in intermediateFiles)
+            {
+                try { File.Delete(f); } catch { }
+            }
+
+            if (partFiles.Length > 0 || intermediateFiles.Length > 0)
+            {
+                _logger.LogWarning(
+                    "[YT-DLP] Cancellati {N} file .part/frammenti da resume precedente",
+                    partFiles.Length + intermediateFiles.Length);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[YT-DLP] Errore pulizia .part");
+        }
+
+        // === Cookie Netscape ===
+        string? cookiesFile = null;
+        if (!string.IsNullOrEmpty(item.SessionCookies))
+        {
+            try
+            {
+                cookiesFile = Path.Combine(tempDir, "cookies.txt");
+                var sanitized = SanitizeNetscapeCookies(item.SessionCookies);
+                await File.WriteAllTextAsync(cookiesFile, sanitized, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[YT-DLP] Impossibile scrivere cookies.txt");
+                cookiesFile = null;
+            }
+        }
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = ytDlpPath,
+            UseShellExecute = false,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            CreateNoWindow = true
+        };
+
+        psi.ArgumentList.Add("--impersonate");
+        psi.ArgumentList.Add("chrome");
+
+        psi.ArgumentList.Add("-o");
+        psi.ArgumentList.Add(outTemplate);
+
+        psi.ArgumentList.Add("--ffmpeg-location");
+        psi.ArgumentList.Add(ffmpegDir);
+
+        if (cookiesFile != null)
+        {
+            psi.ArgumentList.Add("--cookies");
+            psi.ArgumentList.Add(cookiesFile);
+        }
+
+        psi.ArgumentList.Add("--add-header");
+        psi.ArgumentList.Add("Referer:https://streamingcommunityz.rip/");
+
+        psi.ArgumentList.Add("--add-header");
+        psi.ArgumentList.Add($"sec-ch-ua:{StreamingCommunityService.SecChUa}");
+        psi.ArgumentList.Add("--add-header");
+        psi.ArgumentList.Add("sec-ch-ua-mobile:?0");
+        psi.ArgumentList.Add("--add-header");
+        psi.ArgumentList.Add("sec-ch-ua-platform:\"Windows\"");
+
+        psi.ArgumentList.Add("--user-agent");
+        psi.ArgumentList.Add(StreamingCommunityService.RealisticUserAgent);
+
+        psi.ArgumentList.Add("--merge-output-format");
+        psi.ArgumentList.Add("mp4");
+
+        var format = BuildYtDlpFormat(item.QualityName);
+        psi.ArgumentList.Add("-f");
+        psi.ArgumentList.Add(format);
+        _logger.LogWarning("[YT-DLP] Format: {F}", format);
+
+        var proxy = _proxyProvider.GetActive(item.ProviderKey);
+        if (proxy != null)
+        {
+            var proxyUrl = BuildFfmpegProxyUrl(proxy);
+            psi.ArgumentList.Add("--proxy");
+            psi.ArgumentList.Add(proxyUrl);
+        }
+
+        psi.ArgumentList.Add("--no-playlist");
+        psi.ArgumentList.Add("--newline");
+        psi.ArgumentList.Add("--no-warnings");
+
+        // === SCRIVE SU FILE i formati scelti (NON attiva --simulate) ===
+        psi.ArgumentList.Add("--print-to-file");
+        psi.ArgumentList.Add("before_dl:%(requested_formats)j");
+        psi.ArgumentList.Add(planFile);
+
+        // === Progress strutturato ===
+        psi.ArgumentList.Add("--progress-template");
+        psi.ArgumentList.Add("download:__PROGRESS__ %(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s");
+
+        psi.ArgumentList.Add("--concurrent-fragments");
+        psi.ArgumentList.Add("16");
+
+        psi.ArgumentList.Add("--throttled-rate");
+        psi.ArgumentList.Add("500K");
+
+        psi.ArgumentList.Add("--retry-sleep");
+        psi.ArgumentList.Add("fragment:exp=1:20");
+
+        psi.ArgumentList.Add("--sleep-requests");
+        psi.ArgumentList.Add("0.1");
+
+        psi.ArgumentList.Add("--retries");
+        psi.ArgumentList.Add("10");
+        psi.ArgumentList.Add("--fragment-retries");
+        psi.ArgumentList.Add("20");
+
+        psi.ArgumentList.Add("--socket-timeout");
+        psi.ArgumentList.Add("30");
+
+        psi.ArgumentList.Add("--force-ipv4");
+
+        psi.ArgumentList.Add(item.Url);
+
+        using var process = new Process { StartInfo = psi };
+        var stderrBuffer = new StringBuilder();
+
+        // === Stato progresso cumulativo ===
+        long plannedTotalBytes = 0;        // totale video+audio (dal plan file)
+        long completedFilesBytes = 0;      // byte dei file già COMPLETATI
+        long currentFileBytes = 0;         // dimensione file CORRENTE
+        long lastProgressTick = Environment.TickCount64;   // watchdog: ultimo progresso
+        long lastSeenBytes = 0;            // watchdog: ultimi byte visti
+
+        // === Task in background: attende __plan.json e setta plannedTotalBytes ===
+        var planTask = Task.Run(async () =>
+        {
+            for (int i = 0; i < 100; i++)   // max 20 secondi
+            {
+                if (ct.IsCancellationRequested) return;
+
+                if (File.Exists(planFile))
+                {
+                    try
+                    {
+                        // Aspetta che il file sia scritto interamente
+                        var json = await File.ReadAllTextAsync(planFile, ct);
+                        if (string.IsNullOrWhiteSpace(json))
+                        {
+                            await Task.Delay(200, ct);
+                            continue;
+                        }
+
+                        using var doc = System.Text.Json.JsonDocument.Parse(json);
+                        if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Array)
+                            return;
+
+                        long total = 0;
+                        foreach (var fmt in doc.RootElement.EnumerateArray())
+                        {
+                            long size = 0;
+                            if (fmt.TryGetProperty("filesize", out var fs) &&
+                                fs.ValueKind == System.Text.Json.JsonValueKind.Number)
+                                size = fs.GetInt64();
+                            else if (fmt.TryGetProperty("filesize_approx", out var fsa) &&
+                                fsa.ValueKind == System.Text.Json.JsonValueKind.Number)
+                                size = fsa.GetInt64();
+                            total += size;
+                        }
+
+                        if (total > 0)
+                        {
+                            plannedTotalBytes = total;
+                            _logger.LogWarning(
+                                "[YT-DLP] Piano totale: {MB} MB (video+audio)",
+                                total / 1024 / 1024);
+
+                            SetUi(() =>
+                            {
+                                item.TotalBytes = plannedTotalBytes;
+                                item.DownloadedBytes = 0;
+                            });
+                            return;
+                        }
+                    }
+                    catch (System.Text.Json.JsonException)
+                    {
+                        // File ancora in scrittura, riprova
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "[YT-DLP] plan.json read");
+                    }
+                }
+                await Task.Delay(200, ct);
+            }
+        }, ct);
+
+        // === Handler progresso ===
+        process.OutputDataReceived += (_, e) =>
+        {
+            if (string.IsNullOrEmpty(e.Data)) return;
+
+            foreach (var rawSubLine in e.Data.Split('\r'))
+            {
+                var line = rawSubLine.Trim();
+                if (string.IsNullOrEmpty(line)) continue;
+
+                // === Nuovo file in download (video → audio) ===
+                // NON resettiamo la barra: trasferiamo i byte del file completato
+                // in completedFilesBytes, così il progresso resta cumulativo.
+                var destMatch = Regex.Match(line, @"Destination:\s+(.+)$");
+                if (destMatch.Success)
+                {
+                    if (currentFileBytes > 0)
+                    {
+                        completedFilesBytes += currentFileBytes;
+                    }
+                    currentFileBytes = 0;
+
+                    _logger.LogInformation("[YT-DLP] Inizio file: {File}",
+                        destMatch.Groups[1].Value.Trim());
+                    continue;
+                }
+
+                // === Riga __PROGRESS__ ===
+                if (line.StartsWith("__PROGRESS__"))
+                {
+                    var payload = line.Substring("__PROGRESS__".Length).Trim();
+                    var parts = payload.Split('|');
+                    if (parts.Length < 4) continue;
+
+                    long downloaded = 0;
+                    if (!long.TryParse(parts[0], out downloaded))
+                    {
+                        if (!double.TryParse(parts[0], NumberStyles.Float,
+                            CultureInfo.InvariantCulture, out var dblD))
+                            continue;
+                        downloaded = (long)dblD;
+                    }
+
+                    long fileTotal = 0;
+                    if (!long.TryParse(parts[1], out fileTotal))
+                    {
+                        if (double.TryParse(parts[1], NumberStyles.Float,
+                            CultureInfo.InvariantCulture, out var dblT))
+                            fileTotal = (long)dblT;
+                    }
+                    if (fileTotal <= 0)
+                    {
+                        if (double.TryParse(parts[2], NumberStyles.Float,
+                            CultureInfo.InvariantCulture, out var dblE))
+                            fileTotal = (long)dblE;
+                    }
+
+                    double speedBps = 0;
+                    double.TryParse(parts[3], NumberStyles.Float,
+                        CultureInfo.InvariantCulture, out speedBps);
+
+                    if (fileTotal > 0) currentFileBytes = fileTotal;
+                    // Notifica il watchdog che c'è progresso
+                    Interlocked.Exchange(ref lastSeenBytes, completedFilesBytes + downloaded);
+                    Interlocked.Exchange(ref lastProgressTick, Environment.TickCount64);
+
+                    // === Progresso cumulativo ===
+                    // done = byte di file completati + progresso file corrente
+                    var totalDone = completedFilesBytes + downloaded;
+
+                    // totale = planned se disponibile, altrimenti stima locale
+                    var totalForUi = plannedTotalBytes > 0
+                        ? plannedTotalBytes
+                        : (completedFilesBytes + currentFileBytes);
+
+                    var capturedSpeed = (long)speedBps;
+
+                    SetUi(() =>
+                    {
+                        item.DownloadedBytes = totalDone;
+                        if (totalForUi > 0)
+                            item.TotalBytes = totalForUi;
+                        if (capturedSpeed > 0)
+                            item.SpeedBytesPerSecond = capturedSpeed;
+                    });
+                    continue;
+                }
+
+                // === Log solo righe importanti ===
+                if (line.StartsWith("[info]") ||
+                    line.Contains("[Merger]") ||
+                    line.Contains("ERROR") ||
+                    line.Contains("WARNING"))
+                {
+                    _logger.LogInformation("[YT-DLP] {Line}", line);
+                }
+            }
+        };
+
+        process.ErrorDataReceived += (_, e) =>
+        {
+            if (string.IsNullOrEmpty(e.Data)) return;
+            lock (stderrBuffer)
+            {
+                if (stderrBuffer.Length < 4000)
+                    stderrBuffer.AppendLine(e.Data);
+            }
+        };
+
+        // === Watchdog: se per 60s non c'è progresso, killa yt-dlp ===
+
+        // Aggiorna il tick ogni volta che ricevi __PROGRESS__ (lo aggiorniamo nell'handler)
+        // (vedi patch sotto)
+
+        var watchdogCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var watchdogTask = Task.Run(async () =>
+        {
+            while (!watchdogCts.Token.IsCancellationRequested)
+            {
+                await Task.Delay(5000, watchdogCts.Token);
+
+                var now = Environment.TickCount64;
+                var currentBytes = Interlocked.Read(ref lastSeenBytes);
+
+                // Se non ci sono stati progressi per 60s → kill
+                if (currentBytes == lastSeenBytes && now - lastProgressTick > 60_000)
+                {
+                    _logger.LogError(
+                        "[YT-DLP] Watchdog: nessun progresso da 60s, kill del processo");
+                    try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
+                    return;
+                }
+
+                lastSeenBytes = currentBytes;
+                if (currentBytes != 0) lastProgressTick = now;
+            }
+        });
+
+        process.Start();
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
+        using var reg = ct.Register(() =>
+        {
+            try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
+        });
+
+        try { watchdogCts.Cancel(); } catch { }
+
+        await process.WaitForExitAsync(CancellationToken.None);
+        try { await planTask; } catch { }
+
+        if (ct.IsCancellationRequested) throw new OperationCanceledException();
+
+        var finalFile = Directory.GetFiles(tempDir)
+            .FirstOrDefault(f =>
+                Regex.IsMatch(Path.GetFileName(f), @"^video\.[a-z0-9]+$",
+                    RegexOptions.IgnoreCase));
+
+        if (process.ExitCode != 0 && finalFile == null)
+        {
+            var err = stderrBuffer.ToString();
+            _logger.LogError("[YT-DLP] EXIT {Code}. STDERR completo:\n{Err}",
+                process.ExitCode, err);
+
+            throw new InvalidOperationException(
+                $"yt-dlp terminato con codice {process.ExitCode}.");
+        }
+
+        if (finalFile == null)
+        {
+            throw new InvalidOperationException(
+                "yt-dlp non ha prodotto un file di output.");
+        }
+
+        if (process.ExitCode != 0)
+        {
+            _logger.LogWarning(
+                "[YT-DLP] Exit {Code} ma file finale presente: proseguo",
+                process.ExitCode);
+        }
+
+        bool hasAv = await ProbeHasAudioAndVideoAsync(finalFile, ffmpegDir, ct);
+        if (!hasAv)
+        {
+            _logger.LogWarning(
+                "[YT-DLP] File finale senza traccia audio ({Path}).",
+                finalFile);
+        }
+
+        var destDir = Path.GetDirectoryName(item.DestinationPath);
+        if (!string.IsNullOrEmpty(destDir)) Directory.CreateDirectory(destDir);
+
+        if (File.Exists(item.DestinationPath)) File.Delete(item.DestinationPath);
+        File.Move(finalFile, item.DestinationPath, overwrite: true);
+
+        try { Directory.Delete(tempDir, true); } catch { }
+
+        var finalSize = new FileInfo(item.DestinationPath).Length;
+        SetUi(() =>
+        {
+            item.TotalBytes = finalSize;
+            item.DownloadedBytes = finalSize;
+            item.SpeedBytesPerSecond = 0;
+            item.Status = DownloadStatus.Completed;
+        });
+
+        _logger.LogInformation("[YT-DLP] Completato: {Path} ({MB} MB)",
+            item.DestinationPath, finalSize / 1024 / 1024);
+    }
+
+    private static async Task<bool> ProbeHasAudioAndVideoAsync(
+        string filePath, string ffmpegDir, CancellationToken ct)
+    {
+        try
+        {
+            var ffprobe = Path.Combine(ffmpegDir, "ffprobe.exe");
+            if (!File.Exists(ffprobe)) return false;
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = ffprobe,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+            psi.ArgumentList.Add("-v");
+            psi.ArgumentList.Add("error");
+            psi.ArgumentList.Add("-show_entries");
+            psi.ArgumentList.Add("stream=codec_type");
+            psi.ArgumentList.Add("-of");
+            psi.ArgumentList.Add("csv=p=0");
+            psi.ArgumentList.Add(filePath);
+
+            using var proc = new Process { StartInfo = psi };
+            proc.Start();
+
+            var output = await proc.StandardOutput.ReadToEndAsync();
+            await proc.WaitForExitAsync(ct);
+
+            var hasVideo = output.Contains("video", StringComparison.OrdinalIgnoreCase);
+            var hasAudio = output.Contains("audio", StringComparison.OrdinalIgnoreCase);
+
+            return hasVideo && hasAudio;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string BuildYtDlpFormat(string qualityName)
+    {
+        if (string.IsNullOrEmpty(qualityName) ||
+            qualityName.StartsWith("Auto", StringComparison.OrdinalIgnoreCase))
+        {
+            return "bv*+ba[language=ita]/bv*+ba/b";
+        }
+
+        var m = Regex.Match(qualityName, @"(\d{3,4})p");
+        if (m.Success && int.TryParse(m.Groups[1].Value, out var h) && h > 0)
+        {
+            return
+                $"bv*[height<={h}]+ba[language=ita]/" +
+                $"bv*[height<={h}]+ba/" +
+                $"b[height<={h}]/b";
+        }
+
+        return "bv*+ba[language=ita]/bv*+ba/b";
+    }
+
+    // ============================================================
+    //  HLS via FFmpeg (fallback)
+    // ============================================================
+
+    private async Task DownloadHlsWithFfmpegAsync(DownloadItem item, CancellationToken ct)
+    {
+        var ffmpegPath = _ffmpegLocator.GetFfmpegPath();
+        if (string.IsNullOrEmpty(ffmpegPath))
+            throw new InvalidOperationException("FFmpeg non trovato.");
+
+        bool hasSeparateAudio = !string.IsNullOrEmpty(item.AudioUrl);
+
+        _logger.LogInformation("[HLS-FFMPEG] Download: video={V}, audio={A}",
+            item.Url, hasSeparateAudio ? item.AudioUrl : "(nel master)");
+
+        var totalDuration = await ProbeDurationAsync(item.Url, ct);
+        if (totalDuration.HasValue)
+        {
+            var estimatedBytes = (long)(totalDuration.Value.TotalSeconds * EstimatedBitrateBytesPerSecond);
+            SetUi(() => item.TotalBytes = estimatedBytes);
         }
 
         var tempPath = item.DestinationPath + ".part.mp4";
@@ -382,12 +1124,44 @@ public class DownloadService : IDownloadService
             CreateNoWindow = true
         };
 
+        bool isVixcloud = item.Url.Contains("vixcloud", StringComparison.OrdinalIgnoreCase)
+            || (item.AudioUrl?.Contains("vixcloud", StringComparison.OrdinalIgnoreCase) ?? false);
+
+        var providerKey = string.IsNullOrEmpty(item.ProviderKey)
+            ? "Downloads"
+            : item.ProviderKey;
+
+        var proxy = _proxyProvider.GetActive(providerKey);
+
+        if (proxy != null && !isVixcloud)
+        {
+            var proxyUrl = BuildFfmpegProxyUrl(proxy);
+            psi.ArgumentList.Add("-http_proxy");
+            psi.ArgumentList.Add(proxyUrl);
+        }
+
         psi.ArgumentList.Add("-hide_banner");
         psi.ArgumentList.Add("-nostats");
         psi.ArgumentList.Add("-progress");
         psi.ArgumentList.Add("pipe:1");
+
         psi.ArgumentList.Add("-i");
         psi.ArgumentList.Add(item.Url);
+
+        if (hasSeparateAudio)
+        {
+            psi.ArgumentList.Add("-i");
+            psi.ArgumentList.Add(item.AudioUrl ?? "");
+        }
+
+        if (hasSeparateAudio)
+        {
+            psi.ArgumentList.Add("-map");
+            psi.ArgumentList.Add("0:v:0");
+            psi.ArgumentList.Add("-map");
+            psi.ArgumentList.Add("1:a:0");
+        }
+
         psi.ArgumentList.Add("-c");
         psi.ArgumentList.Add("copy");
         psi.ArgumentList.Add("-bsf:a");
@@ -397,27 +1171,23 @@ public class DownloadService : IDownloadService
 
         using var process = new Process { StartInfo = psi };
         var startTime = DateTime.UtcNow;
+        var stderrBuffer = new StringBuilder();
 
         process.OutputDataReceived += (_, e) =>
         {
             if (string.IsNullOrEmpty(e.Data)) return;
-
-            // out_time_us=N → ffmpeg ha processato N microsecondi di video
             if (e.Data.StartsWith("out_time_us=", StringComparison.Ordinal))
             {
                 var valStr = e.Data.Substring("out_time_us=".Length);
                 if (long.TryParse(valStr, out var microSeconds) && microSeconds > 0)
                 {
-                    // Converti microsecondi → secondi → byte stimati
                     var seconds = microSeconds / 1_000_000.0;
-                    var estimatedDownloadedBytes = (long)(seconds * EstimatedBitrateBytesPerSecond);
-
+                    var est = (long)(seconds * EstimatedBitrateBytesPerSecond);
                     var elapsed = (DateTime.UtcNow - startTime).TotalSeconds;
-                    var speed = elapsed > 0 ? (long)(estimatedDownloadedBytes / elapsed) : 0;
-
+                    var speed = elapsed > 0 ? (long)(est / elapsed) : 0;
                     SetUi(() =>
                     {
-                        item.DownloadedBytes = estimatedDownloadedBytes;
+                        item.DownloadedBytes = est;
                         item.SpeedBytesPerSecond = speed;
                     });
                 }
@@ -428,7 +1198,12 @@ public class DownloadService : IDownloadService
         {
             if (string.IsNullOrEmpty(e.Data)) return;
 
-            // Fallback: se ffprobe non ha dato la durata
+            lock (stderrBuffer)
+            {
+                if (stderrBuffer.Length < 4000)
+                    stderrBuffer.AppendLine(e.Data);
+            }
+
             if (!totalDuration.HasValue)
             {
                 var dm = DurationRegex.Match(e.Data);
@@ -439,11 +1214,8 @@ public class DownloadService : IDownloadService
                         int.Parse(dm.Groups[2].Value),
                         int.Parse(dm.Groups[3].Value));
                     totalDuration = dur;
-
-                    var estimatedBytes = (long)(dur.TotalSeconds * EstimatedBitrateBytesPerSecond);
-                    SetUi(() => item.TotalBytes = estimatedBytes);
-                    _logger.LogInformation("[HLS] Durata (stderr): {Dur} → stimata: {MB} MB",
-                        dur, estimatedBytes / 1024 / 1024);
+                    var est = (long)(dur.TotalSeconds * EstimatedBitrateBytesPerSecond);
+                    SetUi(() => item.TotalBytes = est);
                 }
             }
         };
@@ -454,30 +1226,33 @@ public class DownloadService : IDownloadService
 
         using var reg = ct.Register(() =>
         {
-            try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
-            catch { }
+            try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
         });
 
         await process.WaitForExitAsync(CancellationToken.None);
 
-        if (ct.IsCancellationRequested)
-            throw new OperationCanceledException();
+        if (ct.IsCancellationRequested) throw new OperationCanceledException();
 
         if (process.ExitCode != 0)
         {
             try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
+
+            var err = stderrBuffer.ToString();
+            if (err.Length > 2000) err = err.Substring(err.Length - 2000);
+
+            _logger.LogError("[HLS-FFMPEG] EXIT {Code}. Ultime righe:\n{Err}",
+                process.ExitCode, err);
+
             throw new InvalidOperationException(
-                $"FFmpeg è terminato con codice {process.ExitCode}.");
+                $"FFmpeg terminato con codice {process.ExitCode}.");
         }
 
         if (!File.Exists(tempPath))
-            throw new InvalidOperationException("FFmpeg non ha prodotto il file di output.");
+            throw new InvalidOperationException("FFmpeg non ha prodotto l'output.");
 
-        if (File.Exists(item.DestinationPath))
-            File.Delete(item.DestinationPath);
+        if (File.Exists(item.DestinationPath)) File.Delete(item.DestinationPath);
         File.Move(tempPath, item.DestinationPath);
 
-        // Alla fine: aggiorno alla dimensione reale (piccolo aggiustamento vs stima)
         var finalSize = new FileInfo(item.DestinationPath).Length;
         SetUi(() =>
         {
@@ -486,12 +1261,11 @@ public class DownloadService : IDownloadService
             item.SpeedBytesPerSecond = 0;
             item.Status = DownloadStatus.Completed;
         });
-
-        _logger.LogInformation(
-            "[HLS] Completato: {Path} ({Size} MB, stimato era {Est} MB)",
-            item.DestinationPath, finalSize / 1024 / 1024,
-            (long)(totalDuration?.TotalSeconds * EstimatedBitrateBytesPerSecond ?? 0) / 1024 / 1024);
     }
+
+    // ============================================================
+    //  HELPER FFMPEG
+    // ============================================================
 
     private async Task<TimeSpan?> ProbeDurationAsync(string url, CancellationToken ct)
     {
@@ -528,11 +1302,9 @@ public class DownloadService : IDownloadService
 
             if (proc.ExitCode != 0) return null;
 
-            if (double.TryParse(output.Trim(),
-                    NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds))
-            {
+            if (double.TryParse(output.Trim(), NumberStyles.Float,
+                CultureInfo.InvariantCulture, out var seconds))
                 return TimeSpan.FromSeconds(seconds);
-            }
         }
         catch { }
         return null;
@@ -542,4 +1314,97 @@ public class DownloadService : IDownloadService
         @"Duration:\s*(\d+):(\d+):(\d+)\.(\d+)",
         RegexOptions.Compiled);
 
+    private static string BuildFfmpegProxyUrl(ProxyConfig p)
+    {
+        var scheme = p.Protocol == ProxyProtocol.Socks5 ? "socks5" : "http";
+
+        string auth = "";
+        if (p.Auth == ProxyAuthType.UserPassword && !string.IsNullOrEmpty(p.Username))
+        {
+            var u = Uri.EscapeDataString(p.Username);
+            var pw = Uri.EscapeDataString(p.Password ?? "");
+            auth = $"{u}:{pw}@";
+        }
+
+        return $"{scheme}://{auth}{p.Host}:{p.Port}";
+    }
+
+    // ============================================================
+    //  HELPER COOKIE
+    // ============================================================
+
+    private static string ConvertNetscapeToCookieHeader(string netscapeCookies)
+    {
+        if (string.IsNullOrEmpty(netscapeCookies)) return "";
+
+        var sb = new StringBuilder();
+        foreach (var line in netscapeCookies.Split('\n'))
+        {
+            var trimmed = line.Trim();
+            if (string.IsNullOrEmpty(trimmed)) continue;
+            if (trimmed.StartsWith("#") && !trimmed.StartsWith("#HttpOnly_")) continue;
+
+            var work = trimmed.StartsWith("#HttpOnly_")
+                ? trimmed.Substring("#HttpOnly_".Length)
+                : trimmed;
+
+            var parts = work.Split('\t');
+            if (parts.Length < 7) continue;
+
+            var name = parts[5].Trim();
+            var value = parts[6].Trim();
+            if (string.IsNullOrEmpty(name)) continue;
+
+            if (sb.Length > 0) sb.Append("; ");
+            sb.Append(name).Append('=').Append(value);
+        }
+
+        return sb.ToString();
+    }
+
+    private static string SanitizeNetscapeCookies(string raw)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("# Netscape HTTP Cookie File");
+
+        if (string.IsNullOrEmpty(raw)) return sb.ToString();
+
+        foreach (var rawLine in raw.Split('\n'))
+        {
+            var line = rawLine.TrimEnd('\r', ' ', '\t');
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            if (line.StartsWith("#") && !line.StartsWith("#HttpOnly_")) continue;
+
+            var work = line;
+            if (work.StartsWith("#HttpOnly_"))
+                work = work.Substring("#HttpOnly_".Length);
+
+            var parts = work.Split('\t');
+            if (parts.Length < 7) continue;
+
+            var domain = parts[0].Trim().TrimStart(':').Trim();
+            if (string.IsNullOrEmpty(domain)) continue;
+            if (domain.StartsWith(":")) continue;
+            if (!domain.StartsWith(".")) domain = "." + domain;
+
+            var path = parts[2].Trim();
+            if (string.IsNullOrEmpty(path) || !path.StartsWith("/")) path = "/";
+
+            var secure = parts[3].Trim().ToUpperInvariant();
+            if (secure != "TRUE" && secure != "FALSE") secure = "TRUE";
+
+            var expiryRaw = parts[4].Trim();
+            var expiry = long.TryParse(expiryRaw, out var e) && e > 0
+                ? e
+                : DateTimeOffset.UtcNow.AddDays(30).ToUnixTimeSeconds();
+
+            var name = parts[5].Trim();
+            var value = parts[6];
+            if (string.IsNullOrEmpty(name)) continue;
+
+            sb.AppendLine($"{domain}\tTRUE\t{path}\t{secure}\t{expiry}\t{name}\t{value}");
+        }
+
+        return sb.ToString();
+    }
 }

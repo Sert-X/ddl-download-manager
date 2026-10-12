@@ -36,10 +36,12 @@ public class DownloadRepository
                 DestinationPath TEXT NOT NULL,
                 SeriesName TEXT NOT NULL DEFAULT '',
                 EpisodeNumber INTEGER NOT NULL DEFAULT 0,
+                SeasonNumber INTEGER NOT NULL DEFAULT 0,
                 TotalBytes INTEGER NOT NULL DEFAULT 0,
                 DownloadedBytes INTEGER NOT NULL DEFAULT 0,
                 Status INTEGER NOT NULL DEFAULT 0,
                 ErrorMessage TEXT NOT NULL DEFAULT '',
+                Category TEXT NOT NULL DEFAULT 'anime',
                 CreatedAt TEXT NOT NULL DEFAULT (datetime('now'))
             );
 
@@ -55,6 +57,80 @@ public class DownloadRepository
                 ON DownloadChunks(DownloadId);
         ");
 
+        // --- Migrazioni per DB pre-esistenti ---
+        try
+        {
+            var cols = (await conn.QueryAsync<string>(
+                "SELECT name FROM pragma_table_info('Downloads')")).ToList();
+
+            if (!cols.Contains("Category", StringComparer.OrdinalIgnoreCase))
+            {
+                _logger.LogInformation("Migrazione DB: aggiungo colonna Category");
+                await conn.ExecuteAsync(
+                    "ALTER TABLE Downloads ADD COLUMN Category TEXT NOT NULL DEFAULT 'anime'");
+            }
+
+            if (!cols.Contains("SeasonNumber", StringComparer.OrdinalIgnoreCase))
+            {
+                _logger.LogInformation("Migrazione DB: aggiungo colonna SeasonNumber");
+                await conn.ExecuteAsync(
+                    "ALTER TABLE Downloads ADD COLUMN SeasonNumber INTEGER NOT NULL DEFAULT 0");
+            }
+
+            if (!cols.Contains("EpisodeTitle", StringComparer.OrdinalIgnoreCase))
+            {
+                _logger.LogInformation("Migrazione DB: aggiungo colonna EpisodeTitle");
+                await conn.ExecuteAsync(
+                    "ALTER TABLE Downloads ADD COLUMN EpisodeTitle TEXT NOT NULL DEFAULT ''");
+            }
+
+            if (!cols.Contains("ProviderKey", StringComparer.OrdinalIgnoreCase))
+            {
+                _logger.LogInformation("Migrazione DB: aggiungo colonna ProviderKey");
+                await conn.ExecuteAsync(
+                    "ALTER TABLE Downloads ADD COLUMN ProviderKey TEXT NOT NULL DEFAULT ''");
+            }
+
+            if (!cols.Contains("QualityName", StringComparer.OrdinalIgnoreCase))
+            {
+                _logger.LogInformation("Migrazione DB: aggiungo colonna QualityName");
+                await conn.ExecuteAsync(
+                    "ALTER TABLE Downloads ADD COLUMN QualityName TEXT NOT NULL DEFAULT ''");
+            }
+
+            if (!cols.Contains("ContentLink", StringComparer.OrdinalIgnoreCase))
+            {
+                _logger.LogInformation("Migrazione DB: aggiungo colonna ContentLink");
+                await conn.ExecuteAsync(
+                    "ALTER TABLE Downloads ADD COLUMN ContentLink TEXT NOT NULL DEFAULT ''");
+            }
+
+            if (!cols.Contains("EpisodeId", StringComparer.OrdinalIgnoreCase))
+            {
+                _logger.LogInformation("Migrazione DB: aggiungo colonna EpisodeId");
+                await conn.ExecuteAsync(
+                    "ALTER TABLE Downloads ADD COLUMN EpisodeId INTEGER NOT NULL DEFAULT 0");
+            }
+
+            if (!cols.Contains("IsSeries", StringComparer.OrdinalIgnoreCase))
+            {
+                _logger.LogInformation("Migrazione DB: aggiungo colonna IsSeries");
+                await conn.ExecuteAsync(
+                    "ALTER TABLE Downloads ADD COLUMN IsSeries INTEGER NOT NULL DEFAULT 0");
+            }
+
+            if (!cols.Contains("AudioUrl", StringComparer.OrdinalIgnoreCase))
+            {
+                _logger.LogInformation("Migrazione DB: aggiungo colonna AudioUrl");
+                await conn.ExecuteAsync(
+                    "ALTER TABLE Downloads ADD COLUMN AudioUrl TEXT NOT NULL DEFAULT ''");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Impossibile eseguire la migrazione colonne (DB forse nuovo)");
+        }
+
         _logger.LogInformation("Database inizializzato in {Path}", _dbPath);
     }
 
@@ -62,8 +138,14 @@ public class DownloadRepository
     {
         await using var conn = new SqliteConnection(_connectionString);
         var id = await conn.ExecuteScalarAsync<int>(@"
-            INSERT INTO Downloads (Url, DestinationPath, SeriesName, EpisodeNumber, TotalBytes, DownloadedBytes, Status, ErrorMessage)
-            VALUES (@Url, @DestinationPath, @SeriesName, @EpisodeNumber, @TotalBytes, @DownloadedBytes, @Status, @ErrorMessage);
+            INSERT INTO Downloads
+                (Url, DestinationPath, SeriesName, EpisodeNumber, SeasonNumber,
+                 TotalBytes, DownloadedBytes, Status, ErrorMessage, Category,
+                 EpisodeTitle, ProviderKey, QualityName, ContentLink, EpisodeId, IsSeries, AudioUrl)
+            VALUES
+                (@Url, @DestinationPath, @SeriesName, @EpisodeNumber, @SeasonNumber,
+                 @TotalBytes, @DownloadedBytes, @Status, @ErrorMessage, @Category,
+                 @EpisodeTitle, @ProviderKey, @QualityName, @ContentLink, @EpisodeId, @IsSeries, @AudioUrl);
             SELECT last_insert_rowid();
         ", new
         {
@@ -71,10 +153,19 @@ public class DownloadRepository
             item.DestinationPath,
             item.SeriesName,
             item.EpisodeNumber,
+            item.SeasonNumber,
             item.TotalBytes,
             item.DownloadedBytes,
             Status = (int)item.Status,
-            item.ErrorMessage
+            item.ErrorMessage,
+            item.Category,
+            item.EpisodeTitle,
+            item.ProviderKey,
+            item.QualityName,
+            item.ContentLink,
+            item.EpisodeId,
+            IsSeries = item.IsSeries ? 1 : 0,
+            item.AudioUrl
         });
         item.Id = id;
         return id;
@@ -89,10 +180,19 @@ public class DownloadRepository
                 DestinationPath = @DestinationPath,
                 SeriesName = @SeriesName,
                 EpisodeNumber = @EpisodeNumber,
+                SeasonNumber = @SeasonNumber,
                 TotalBytes = @TotalBytes,
                 DownloadedBytes = @DownloadedBytes,
                 Status = @Status,
-                ErrorMessage = @ErrorMessage
+                ErrorMessage = @ErrorMessage,
+                Category = @Category,
+                EpisodeTitle = @EpisodeTitle,
+                ProviderKey = @ProviderKey,
+                QualityName = @QualityName,
+                ContentLink = @ContentLink,
+                EpisodeId = @EpisodeId,
+                IsSeries = @IsSeries,
+                AudioUrl = @AudioUrl
             WHERE Id = @Id;
         ", new
         {
@@ -101,10 +201,19 @@ public class DownloadRepository
             item.DestinationPath,
             item.SeriesName,
             item.EpisodeNumber,
+            item.SeasonNumber,
             item.TotalBytes,
             item.DownloadedBytes,
             Status = (int)item.Status,
-            item.ErrorMessage
+            item.ErrorMessage,
+            item.Category,
+            item.EpisodeTitle,
+            item.ProviderKey,
+            item.QualityName,
+            item.ContentLink,
+            item.EpisodeId,
+            IsSeries = item.IsSeries ? 1 : 0,
+            item.AudioUrl
         });
     }
 
@@ -112,7 +221,6 @@ public class DownloadRepository
     {
         await using var conn = new SqliteConnection(_connectionString);
 
-        // Includiamo anche Cancelled e Failed SE hanno byte parziali e non sono completi.
         var rows = await conn.QueryAsync<DownloadRow>(@"
             SELECT * FROM Downloads
             WHERE Status IN (@Pending, @Downloading, @Paused)
@@ -138,11 +246,19 @@ public class DownloadRepository
             DestinationPath = r.DestinationPath,
             SeriesName = r.SeriesName,
             EpisodeNumber = r.EpisodeNumber,
+            SeasonNumber = r.SeasonNumber,
             TotalBytes = r.TotalBytes,
             DownloadedBytes = r.DownloadedBytes,
-            // Al riavvio consideriamo tutto come Pending, così riparte.
             Status = DownloadStatus.Pending,
-            ErrorMessage = string.Empty
+            ErrorMessage = string.Empty,
+            Category = string.IsNullOrWhiteSpace(r.Category) ? "anime" : r.Category,
+            EpisodeTitle = r.EpisodeTitle ?? "",
+            ProviderKey = r.ProviderKey ?? "",
+            QualityName = r.QualityName ?? "",
+            ContentLink = r.ContentLink ?? "",
+            EpisodeId = r.EpisodeId,
+            IsSeries = r.IsSeries != 0,
+            AudioUrl = r.AudioUrl ?? ""
         }).ToList();
     }
 
@@ -151,8 +267,6 @@ public class DownloadRepository
         await using var conn = new SqliteConnection(_connectionString);
         await conn.ExecuteAsync("DELETE FROM Downloads WHERE Id = @Id;", new { Id = id });
     }
-
-    // --- Chunks per il resume ---
 
     public async Task SaveChunkAsync(int downloadId, long start, long end)
     {
@@ -183,9 +297,6 @@ public class DownloadRepository
             new { DownloadId = downloadId });
     }
 
-    /// <summary>
-    /// Classe interna per mappare le righe del DB.
-    /// </summary>
     private class DownloadRow
     {
         public int Id { get; set; }
@@ -193,10 +304,21 @@ public class DownloadRepository
         public string DestinationPath { get; set; } = "";
         public string SeriesName { get; set; } = "";
         public int EpisodeNumber { get; set; }
+        public int SeasonNumber { get; set; }
         public long TotalBytes { get; set; }
         public long DownloadedBytes { get; set; }
         public int Status { get; set; }
         public string ErrorMessage { get; set; } = "";
+        public string Category { get; set; } = "anime";
         public string CreatedAt { get; set; } = "";
+
+        // Nuove colonne
+        public string EpisodeTitle { get; set; } = "";
+        public string ProviderKey { get; set; } = "";
+        public string QualityName { get; set; } = "";
+        public string ContentLink { get; set; } = "";
+        public int EpisodeId { get; set; }
+        public int IsSeries { get; set; }
+        public string AudioUrl { get; set; } = "";
     }
 }

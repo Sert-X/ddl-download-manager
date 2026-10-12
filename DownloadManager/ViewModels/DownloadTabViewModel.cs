@@ -10,6 +10,9 @@ using DownloadManager.Services.Anime.AnimeWorld;
 using DownloadManager.Services.Anime.AnimeSaturn;
 using DownloadManager.Services.Download;
 using Microsoft.Extensions.Logging;
+using System.IO;
+using System.Net.Http;
+using Avalonia.Media.Imaging;
 
 namespace DownloadManager.ViewModels;
 
@@ -82,7 +85,8 @@ public partial class DownloadTabViewModel : ViewModelBase
 
     public ObservableCollection<string> SearchHistory { get; } = new();
     public ObservableCollection<SeriesGroup> SeriesGroups { get; } = new();
-    public ObservableCollection<DownloadItem> Downloads => _queueService.AllItems;
+    private readonly ObservableCollection<DownloadItem> _downloads = new();
+    public ObservableCollection<DownloadItem> Downloads => _downloads;
 
     public string[] NamingPresets { get; } = new[]
     {
@@ -103,7 +107,14 @@ public partial class DownloadTabViewModel : ViewModelBase
     public bool CreateSeriesFolder
     {
         get => _shared.CreateSeriesFolder;
-        set => _shared.CreateSeriesFolder = value;
+        set
+        {
+            if (_shared.CreateSeriesFolder == value) return;
+            _shared.CreateSeriesFolder = value;
+            _settings.Current.CreateSeriesFolder = value;
+            _settings.Save();
+            OnPropertyChanged();
+        }
     }
 
     // ============================================================
@@ -128,11 +139,17 @@ public partial class DownloadTabViewModel : ViewModelBase
     {
         get
         {
-            double totalSpeed = _queueService.AllItems.Sum(i => i.SpeedBytesPerSecond);
+            double totalSpeed = _queueService.AllItems
+                .Where(i => i.Category == "anime")
+                .Sum(i => i.SpeedBytesPerSecond);
             if (totalSpeed <= 0) return "-";
 
-            long totalBytes = _queueService.AllItems.Sum(i => i.TotalBytes);
-            long downloaded = _queueService.AllItems.Sum(i => i.DownloadedBytes);
+            long totalBytes = _queueService.AllItems
+                .Where(i => i.Category == "anime")
+                .Sum(i => i.TotalBytes);
+            long downloaded = _queueService.AllItems
+                .Where(i => i.Category == "anime")
+                .Sum(i => i.DownloadedBytes);
             long remaining = totalBytes - downloaded;
 
             if (remaining <= 0) return "0s";
@@ -149,7 +166,9 @@ public partial class DownloadTabViewModel : ViewModelBase
     {
         get
         {
-            double speed = _queueService.AllItems.Sum(i => i.SpeedBytesPerSecond);
+            double speed = _queueService.AllItems
+                .Where(i => i.Category == "anime")
+                .Sum(i => i.SpeedBytesPerSecond);
             return speed > 0 ? $"{speed / 1024 / 1024:F2} MB/s" : "-";
         }
     }
@@ -158,9 +177,15 @@ public partial class DownloadTabViewModel : ViewModelBase
     {
         get
         {
-            long total = _queueService.AllItems.Sum(i => i.TotalBytes);
-            long done = _queueService.AllItems.Sum(i => i.DownloadedBytes);
-            return total > 0 ? $"{done / 1024.0 / 1024 / 1024:F2} / {total / 1024.0 / 1024 / 1024:F2} GB" : "-";
+            long total = _queueService.AllItems
+                .Where(i => i.Category == "anime")
+                .Sum(i => i.TotalBytes);
+            long done = _queueService.AllItems
+                .Where(i => i.Category == "anime")
+                .Sum(i => i.DownloadedBytes);
+            return total > 0
+                ? $"{done / 1024.0 / 1024 / 1024:F2} / {total / 1024.0 / 1024 / 1024:F2} GB"
+                : "-";
         }
     }
 
@@ -188,6 +213,12 @@ public partial class DownloadTabViewModel : ViewModelBase
             return $"{groups.Count} serie · {string.Join(" · ", parts)}";
         }
     }
+
+    /// <summary>
+    /// True se l'utente può interagire con i pulsanti degli episodi
+    /// (ci sono episodi caricati e non è in corso un caricamento).
+    /// </summary>
+    public bool CanInteractWithEpisodes => Episodes.Count > 0 && !IsLoadingEpisodes;
 
     // ============================================================
     //  COSTRUTTORE
@@ -227,6 +258,26 @@ public partial class DownloadTabViewModel : ViewModelBase
 
         _queueService.AllItems.CollectionChanged += OnAllItemsChanged;
 
+        // Popola la lista filtrata per "anime"
+        foreach (var item in _queueService.AllItems.Where(i => i.Category == "anime"))
+            _downloads.Add(item);
+
+        // Tieni sincronizzata la lista filtrata con la coda globale
+        _queueService.AllItems.CollectionChanged += (_, e) =>
+        {
+            if (e.NewItems != null)
+                foreach (DownloadItem it in e.NewItems)
+                    if (it.Category == "anime" && !_downloads.Contains(it))
+                        _downloads.Add(it);
+
+            if (e.OldItems != null)
+                foreach (DownloadItem it in e.OldItems)
+                    _downloads.Remove(it);
+
+            if (e.Action == NotifyCollectionChangedAction.Reset)
+                _downloads.Clear();
+        };
+
         SearchResults.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(SearchResultsCountText));
@@ -235,6 +286,7 @@ public partial class DownloadTabViewModel : ViewModelBase
         // Hook per contatore episodi: cambia quando la lista cambia
         Episodes.CollectionChanged += (_, e) =>
         {
+            OnPropertyChanged(nameof(CanInteractWithEpisodes));
             OnPropertyChanged(nameof(EpisodesCountText));
             OnPropertyChanged(nameof(EpisodesSelectedCountText));
 
@@ -303,7 +355,8 @@ public partial class DownloadTabViewModel : ViewModelBase
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 var restored = _queueService.AllItems.Count(i =>
-                    i.Status == DownloadStatus.Pending || i.Status == DownloadStatus.Paused);
+                    i.Category == "anime" &&
+                    (i.Status == DownloadStatus.Pending || i.Status == DownloadStatus.Paused));
 
                 if (restored > 0)
                 {
@@ -350,11 +403,53 @@ public partial class DownloadTabViewModel : ViewModelBase
         if (_settings != null) { _settings.Current.MaxConcurrency = value; _settings.Save(); }
     }
 
-    partial void OnNamingPatternChanged(string value) => OnPropertyChanged(nameof(PatternPreview));
+    partial void OnNamingPatternChanged(string value)
+    {
+        OnPropertyChanged(nameof(PatternPreview));
+        _settings.Current.NamingPattern = value;
+        _settings.Save();
+    }
 
     // ============================================================
     //  RICERCA
     // ============================================================
+
+    private static readonly HttpClient _posterHttp = new HttpClient
+    {
+        Timeout = TimeSpan.FromSeconds(15)
+    };
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Bitmap> _posterCache = new();
+
+    private static async Task LoadPosterAsync(AnimeSearchResult result)
+    {
+        if (string.IsNullOrEmpty(result.PosterUrl)) return;
+
+        if (_posterCache.TryGetValue(result.PosterUrl, out var cached))
+        {
+            await Dispatcher.UIThread.InvokeAsync(() => result.Poster = cached);
+            return;
+        }
+
+        try
+        {
+            var bytes = await _posterHttp.GetByteArrayAsync(result.PosterUrl);
+            using var ms = new MemoryStream(bytes);
+            var bmp = new Bitmap(ms);
+
+            _posterCache[result.PosterUrl] = bmp;
+
+            await Dispatcher.UIThread.InvokeAsync(() => result.Poster = bmp);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[POSTER] {result.PosterUrl}: {ex.Message}");
+        }
+    }
+    partial void OnIsLoadingEpisodesChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanInteractWithEpisodes));
+    }
 
     [RelayCommand]
     private async Task SearchAsync()
@@ -384,7 +479,11 @@ public partial class DownloadTabViewModel : ViewModelBase
             var results = await SelectedProvider!.SearchAsync(term);
 
             SearchResults.Clear();
-            foreach (var result in results) SearchResults.Add(result);
+            foreach (var result in results)
+            {
+                SearchResults.Add(result);
+                _ = LoadPosterAsync(result);
+            }
 
             StatusMessage = $"Trovati {results.Count} risultati per '{term}'.";
         }
@@ -498,7 +597,12 @@ public partial class DownloadTabViewModel : ViewModelBase
             SeriesName = seriesName,
             EpisodeNumber = episodeNumber,
             EpisodeTitle = episode.Title,
-            Status = DownloadStatus.Pending
+            Status = DownloadStatus.Pending,
+            Category = "anime",
+
+            // === NUOVI: per coerenza col sistema rewire (futuro) ===
+            ProviderKey = SelectedProvider?.Name ?? "",
+            ContentLink = episode.Link
         };
 
         item.DestinationPath = _fileNameBuilder.BuildDestinationPath(item, videoUrl, episode.Title);
@@ -526,7 +630,7 @@ public partial class DownloadTabViewModel : ViewModelBase
             foreach (var ep in selected)
             {
                 var epNum = int.TryParse(ep.Number, out var n) ? n : 0;
-                if (_queueService.ContainsEpisode(seriesName, epNum)) { skipped++; continue; }
+                if (_queueService.ContainsEpisode("anime", seriesName, epNum)) { skipped++; continue; }
                 toDownload.Add(ep);
             }
 
@@ -584,51 +688,6 @@ public partial class DownloadTabViewModel : ViewModelBase
     // ============================================================
 
     [RelayCommand]
-    private void StartAll()
-    {
-        var count = _queueService.AllItems.Count(i =>
-            i.Status == DownloadStatus.Pending || i.Status == DownloadStatus.Paused || i.Status == DownloadStatus.Failed);
-
-        if (count == 0) { StatusMessage = "Nessun download da avviare."; return; }
-        _queueService.StartAll();
-        StatusMessage = $"Avvio di {count} download.";
-    }
-
-    [RelayCommand]
-    private void PauseAll()
-    {
-        _batchCts?.Cancel();
-        var active = _queueService.ActiveCount;
-        var pending = _queueService.PendingCount;
-        if (active == 0 && pending == 0) { StatusMessage = "Nessun download in corso o in attesa."; return; }
-        _queueService.PauseAll();
-        StatusMessage = $"In pausa {active} download attivi.";
-    }
-
-    [RelayCommand]
-    private void CancelAllDownloads()
-    {
-        var cancellable = _queueService.AllItems.Count(i =>
-            i.Status == DownloadStatus.Downloading ||
-            i.Status == DownloadStatus.Pending ||
-            i.Status == DownloadStatus.Paused ||
-            i.Status == DownloadStatus.Failed);
-
-        if (cancellable == 0) { StatusMessage = "Nessun download da annullare."; return; }
-        _queueService.CancelAll();
-        StatusMessage = $"Annullati {cancellable} download.";
-    }
-
-    [RelayCommand]
-    private async Task DeleteEverythingAsync()
-    {
-        var count = _queueService.AllItems.Count;
-        if (count == 0) { StatusMessage = "La lista è già vuota."; return; }
-        await _queueService.DeleteEverythingAsync();
-        StatusMessage = $"Eliminati {count} download.";
-    }
-
-    [RelayCommand]
     private async Task DeleteAllAsync()
     {
         _batchCts?.Cancel();
@@ -640,30 +699,60 @@ public partial class DownloadTabViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private void StartAll()
+    {
+        var count = _queueService.AllItems.Count(i =>
+            i.Category == "anime" &&
+            (i.Status == DownloadStatus.Pending ||
+            i.Status == DownloadStatus.Paused ||
+            i.Status == DownloadStatus.Failed));
+
+        if (count == 0) { StatusMessage = "Nessun download da avviare."; return; }
+        _queueService.StartAll("anime");
+        StatusMessage = $"Avvio di {count} download.";
+    }
+
+    [RelayCommand]
+    private void PauseAll()
+    {
+        _batchCts?.Cancel();
+        _queueService.PauseAll("anime");
+        StatusMessage = "In pausa.";
+    }
+
+    [RelayCommand]
+    private void CancelAllDownloads()
+    {
+        _queueService.CancelAll("anime");
+        StatusMessage = "Annullati.";
+    }
+
+    [RelayCommand]
+    private async Task DeleteEverythingAsync()
+    {
+        await _queueService.DeleteEverythingAsync("anime");
+        StatusMessage = "Eliminati.";
+    }
+
+    [RelayCommand]
     private void ClearCompleted()
     {
-        var completed = _queueService.AllItems.Count(d => d.Status == DownloadStatus.Completed);
-        if (completed == 0) { StatusMessage = "Nessun completato."; return; }
-        _queueService.ClearCompleted();
-        StatusMessage = $"Rimossi {completed} completati.";
+        _queueService.ClearCompleted("anime");
+        StatusMessage = "Rimossi completati.";
     }
 
     [RelayCommand]
     private void ClearCancelledDownloads()
     {
-        var cancelled = _queueService.AllItems.Count(d => d.Status == DownloadStatus.Cancelled);
-        if (cancelled == 0) { StatusMessage = "Nessun annullato."; return; }
-        _queueService.ClearCancelled();
-        StatusMessage = $"Rimossi {cancelled} annullati.";
+        _queueService.ClearCancelled("anime");
+        StatusMessage = "Rimossi annullati.";
     }
 
     [RelayCommand]
     private void ClearFailedDownloads()
     {
-        var failed = _queueService.AllItems.Count(d => d.Status == DownloadStatus.Failed);
-        if (failed == 0) { StatusMessage = "Nessun failed."; return; }
-        _queueService.ClearFailed();
-        StatusMessage = $"Rimossi {failed} failed.";
+        _queueService.ClearFailed("anime");
+        StatusMessage = "Rimossi failed.";
     }
 
     // ============================================================
@@ -749,6 +838,8 @@ public partial class DownloadTabViewModel : ViewModelBase
 
     private void AddToGroup(DownloadItem item)
     {
+        if (item.Category != "anime") return;
+
         var seriesName = string.IsNullOrWhiteSpace(item.SeriesName) ? "Senza serie" : item.SeriesName;
 
         var group = SeriesGroups.FirstOrDefault(g => g.SeriesName == seriesName);

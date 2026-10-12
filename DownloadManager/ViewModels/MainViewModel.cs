@@ -1,10 +1,13 @@
 using System.Collections.ObjectModel;
+using System.IO;
+using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DownloadManager.Models;
 using DownloadManager.Persistence;
 using DownloadManager.Services.Anime.AnimeWorld;
 using DownloadManager.Services.Anime.AnimeSaturn;
+using DownloadManager.Services.Streaming.StreamingCommunity;
 using DownloadManager.Services.Anime;
 using DownloadManager.Services.Download;
 using DownloadManager.Services.FileOrganizer;
@@ -21,6 +24,7 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly IAnimeWorldService _animeWorldService;
     private readonly IAnimeSaturnService _animeSaturnService;
     private readonly AnimeProviderRegistry _animeProviderRegistry;
+    private readonly IStreamingCommunityService _streamingCommunityService;
     private readonly DownloadQueueService _queueService;
     private readonly FileNameBuilder _fileNameBuilder;
     private readonly SettingsService _settings;
@@ -39,7 +43,9 @@ public partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private string _themeVariant = "Default";
 
     // --- Sub-ViewModel ---
-    public DownloadTabViewModel Download { get; }
+    public DownloadTabViewModel AnimeDownload { get; }
+    public StreamingTabViewModel Streaming { get; }
+    public AccountTabViewModel Account { get; }
     public ProxyTabViewModel Proxy { get; }
     public OrganizerTabViewModel Organizer { get; }
     public SftpTabViewModel Sftp { get; }
@@ -49,11 +55,34 @@ public partial class MainWindowViewModel : ViewModelBase
     public ObservableCollection<LogEntry> Logs => _logService.Logs;
 
     // --- Badge proxy (top bar) ---
-    public string ActiveProxyBadgeText => Proxy.Proxies.Any(p => p.IsEnabled)
-        ? $"🌐 {Proxy.Proxies.First(p => p.IsEnabled).Name}"
-        : "🌐 off";
+    public string ActiveProxyBadgeText
+    {
+        get
+        {
+            var s = _settings.Current;
+            var providers = new List<string>();
+            if (s.UseProxyForAnimeWorld && Proxy.Proxies.Any(p => p.IsEnabledForAnimeWorld)) providers.Add("AW");
+            if (s.UseProxyForAnimeSaturn && Proxy.Proxies.Any(p => p.IsEnabledForAnimeSaturn)) providers.Add("AS");
+            if (s.UseProxyForStreamingCommunity && Proxy.Proxies.Any(p => p.IsEnabledForStreamingCommunity)) providers.Add("SC");
+            if (s.UseProxyForDownloads && Proxy.Proxies.Any(p => p.IsEnabledForDownloads)) providers.Add("DL");
 
-    public bool IsProxyActive => Proxy.Proxies.Any(p => p.IsEnabled);
+            if (providers.Count == 0) return "🌐 Off";
+            return $"🌐 {string.Join("+", providers)}";
+        }
+    }
+
+    public bool IsProxyActive
+    {
+        get
+        {
+            var s = _settings.Current;
+            return Proxy.Proxies.Any(p =>
+                (s.UseProxyForAnimeWorld && p.IsEnabledForAnimeWorld) ||
+                (s.UseProxyForAnimeSaturn && p.IsEnabledForAnimeSaturn) ||
+                (s.UseProxyForStreamingCommunity && p.IsEnabledForStreamingCommunity) ||
+                (s.UseProxyForDownloads && p.IsEnabledForDownloads));
+        }
+    }
 
     // --- Badge domini (top bar) ---
 
@@ -77,7 +106,10 @@ public partial class MainWindowViewModel : ViewModelBase
         DownloadManager.Services.Domains.DomainTester domainTester,
         ILogger<DomainsTabViewModel> domainsLogger,
         ILogger<SftpTabViewModel> sftpLogger,
-        ILogger<DownloadTabViewModel> downloadLogger)
+        ILogger<DownloadTabViewModel> downloadLogger,
+        ILogger<StreamingTabViewModel> streamingLogger,
+        IStreamingCommunityService streamingCommunityService,
+        AccountTabViewModel accountVm)
     {
         Shared = new SharedState();
         _animeWorldService = animeWorldService;
@@ -94,12 +126,13 @@ public partial class MainWindowViewModel : ViewModelBase
         _proxyService = proxyService;
         _logService = logService;
         _sftpLogger = sftpLogger;
+        _streamingCommunityService = streamingCommunityService;
 
         // ============================================================
         //  SUB-VIEWMODEL
         // ============================================================
 
-        Download = new DownloadTabViewModel(
+        AnimeDownload = new DownloadTabViewModel(
             _animeWorldService,
             _animeSaturnService,
             _animeProviderRegistry,
@@ -109,9 +142,33 @@ public partial class MainWindowViewModel : ViewModelBase
             downloadLogger,
             Shared);
 
+        Streaming = new StreamingTabViewModel(
+            _streamingCommunityService,
+            _queueService,
+            _fileNameBuilder,
+            _settings,
+            streamingLogger,
+            Shared);
+
+        Account = accountVm;
+
+        // ============================================================
+        //  TOP BAR — BADGE PROXY
+        // ============================================================
+
+        Shared.ActiveProxyChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(ActiveProxyBadgeText));
+            OnPropertyChanged(nameof(IsProxyActive));
+        };
+
         Proxy = new ProxyTabViewModel(
             _proxyService,
             _animeWorldService,
+            _animeSaturnService,
+            _streamingCommunityService,
+            domainsResolver,
+             _settings,
             Shared);
 
         Organizer = new OrganizerTabViewModel(
@@ -138,6 +195,7 @@ public partial class MainWindowViewModel : ViewModelBase
             domainTester,
             _animeWorldService,
             _animeSaturnService,
+            _streamingCommunityService,
             domainsLogger,
             Shared);
 
@@ -152,15 +210,7 @@ public partial class MainWindowViewModel : ViewModelBase
             if (e.PropertyName == nameof(SharedState.HasDomainIssues))
                 OnPropertyChanged(nameof(HasDomainIssues));
         };
-        // ============================================================
-        //  TOP BAR — BADGE PROXY
-        // ============================================================
-
-        Shared.ActiveProxyChanged += (_, _) =>
-        {
-            OnPropertyChanged(nameof(ActiveProxyBadgeText));
-            OnPropertyChanged(nameof(IsProxyActive));
-        };
+        
 
         // ============================================================
         //  IMPOSTAZIONI INIZIALI
@@ -189,6 +239,78 @@ public partial class MainWindowViewModel : ViewModelBase
     // ============================================================
     //  LOG
     // ============================================================
+
+    [RelayCommand]
+    private async Task CopyLogsAsync()
+    {
+        try
+        {
+            var text = string.Join(Environment.NewLine,
+                Logs.Select(l => $"{l.TimestampText} {l.LevelIcon} [{l.Category}] {l.Message}"));
+
+            // Usa clip.exe di Windows: sempre presente, indipendente dall'API Avalonia.
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "clip.exe",
+                RedirectStandardInput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var proc = System.Diagnostics.Process.Start(psi);
+            if (proc == null) return;
+
+            await proc.StandardInput.WriteAsync(text);
+            proc.StandardInput.Close();
+            await proc.WaitForExitAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[COPY-LOG] {ex}");
+        }
+    }
+
+    [RelayCommand]
+    private async Task ExportLogsAsync()
+    {
+        try
+        {
+            if (Avalonia.Application.Current?.ApplicationLifetime
+                is not Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
+                || desktop.MainWindow is null)
+                return;
+
+            var topLevel = Avalonia.Controls.TopLevel.GetTopLevel(desktop.MainWindow);
+            if (topLevel is null) return;
+
+            var file = await topLevel.StorageProvider.SaveFilePickerAsync(
+                new Avalonia.Platform.Storage.FilePickerSaveOptions
+                {
+                    Title = "Salva log",
+                    SuggestedFileName = $"ddl-log-{DateTime.Now:yyyyMMdd-HHmmss}.txt",
+                    DefaultExtension = "txt",
+                    FileTypeChoices = new[]
+                    {
+                        new Avalonia.Platform.Storage.FilePickerFileType("File di testo")
+                        {
+                            Patterns = new[] { "*.txt" }
+                        }
+                    }
+                });
+
+            if (file is null) return;
+
+            var path = file.Path.LocalPath;
+            var lines = Logs.Select(l =>
+                $"{l.TimestampText} {l.LevelIcon} [{l.Category}] {l.Message}");
+
+            await File.WriteAllLinesAsync(path, lines);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[EXPORT-LOG] {ex}");
+        }
+    }
 
     [RelayCommand]
     private void ClearLogs() => _logService.Clear();

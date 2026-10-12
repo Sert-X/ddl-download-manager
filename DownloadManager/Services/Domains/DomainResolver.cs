@@ -5,19 +5,27 @@ using Microsoft.Extensions.Logging;
 namespace DownloadManager.Services.Domains;
 
 /// <summary>
-/// Risolve l'URL base corrente di ogni provider anime.
-/// Legge/scive in AppSettings.ProviderDomains e fornisce i default.
+/// Risolve l'URL base corrente di ogni provider (anime + streaming).
+/// Legge/scrive in AppSettings.ProviderDomains e fornisce i default.
 /// </summary>
 public class DomainResolver
 {
     private readonly SettingsService _settings;
     private readonly ILogger<DomainResolver> _logger;
 
-    /// <summary>URL di default per provider (hardcoded). Vanno aggiornati qui se il sito cambia dominio base.</summary>
+    /// <summary>
+    /// URL di default per provider (hardcoded). Vanno aggiornati qui se il sito
+    /// cambia dominio base.
+    ///
+    /// NOTA StreamingCommunity: il dominio cambia molto spesso per eludere
+    /// gli oscuramenti AGCOM. Questo default è solo un punto di partenza:
+    /// aggiornalo dalla tab Domini quando cambia.
+    /// </summary>
     private readonly Dictionary<string, string> _defaults = new(StringComparer.OrdinalIgnoreCase)
     {
         { "AnimeWorld", "https://www.animeworld.ac" },
-        { "AnimeSaturn", "https://www.animesaturn.net" }
+        { "AnimeSaturn", "https://www.animesaturn.net" },
+        { "StreamingCommunity", "https://streamingcommunity.rip" }
     };
 
     public DomainResolver(SettingsService settings, ILogger<DomainResolver> logger)
@@ -92,4 +100,20 @@ public class DomainResolver
 
     /// <summary>Nomi dei provider con default noti.</summary>
     public IEnumerable<string> KnownProviders => _defaults.Keys;
+
+    /// <summary>
+    /// Registra un nuovo provider nel resolver a runtime (idempotente).
+    /// Se il provider esiste già, non fa nulla.
+    /// Utile per provider plug-in o caricati dinamicamente.
+    /// </summary>
+    public void RegisterProvider(string providerName, string defaultUrl)
+    {
+        if (string.IsNullOrWhiteSpace(providerName)) return;
+        if (_defaults.ContainsKey(providerName)) return;
+
+        _defaults[providerName] = defaultUrl.TrimEnd('/');
+        _logger.LogInformation(
+            "[DOMAIN] Registrato nuovo provider {Provider} con default {Url}",
+            providerName, defaultUrl);
+    }
 }

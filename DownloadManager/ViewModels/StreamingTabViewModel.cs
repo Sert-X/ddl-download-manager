@@ -1,0 +1,1242 @@
+using System.Collections.Concurrent;
+using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
+using Avalonia.Threading;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using DownloadManager.Models;
+using DownloadManager.Persistence;
+using DownloadManager.Services.Download;
+using DownloadManager.Services.Streaming.StreamingCommunity;
+using Microsoft.Extensions.Logging;
+using System.IO;
+using System.Net.Http;
+using Avalonia.Media.Imaging;
+
+namespace DownloadManager.ViewModels;
+
+public partial class StreamingTabViewModel : ViewModelBase
+{
+    private readonly IStreamingCommunityService _service;
+    private readonly DownloadQueueService _queueService;
+    private readonly FileNameBuilder _fileNameBuilder;
+    private readonly SettingsService _settings;
+    private readonly SharedState _shared;
+    private readonly ILogger<StreamingTabViewModel> _logger;
+    private readonly ObservableCollection<DownloadItem> _downloads = new();
+    private CancellationTokenSource? _batchCts;
+    private bool _loadingQualities;
+
+    private const string CategoryName = "streaming";
+    private const int ExtractionParallelism = 6;
+
+    // ============================================================
+    //  PROPERTY RICERCA
+    // ============================================================
+
+    [ObservableProperty] private string _searchQuery = string.Empty;
+    [ObservableProperty] private string _statusMessage = "Cerca un film o una serie TV per iniziare.";
+    [ObservableProperty] private ObservableCollection<MovieSearchResult> _searchResults = new();
+    [ObservableProperty] private MovieSearchResult? _selectedResult;
+    [ObservableProperty] private ObservableCollection<Season> _seasons = new();
+    [ObservableProperty] private Season? _selectedSeason;
+    [ObservableProperty] private ObservableCollection<StreamingEpisode> _episodes = new();
+    [ObservableProperty] private bool _isQualitiesLoading;
+    [ObservableProperty] private bool _isLoadingSearchResults;
+    [ObservableProperty] private bool _isLoadingEpisodes;
+    [ObservableProperty] private bool _isBatchActive;
+
+    // === Due pattern separati per Film e Serie ===
+    [ObservableProperty] private string _movieNamingPattern = "{Series} ({Anno})";
+    [ObservableProperty] private string _seriesNamingPattern = "{Episode}";
+    [ObservableProperty] private string _seasonFolderPattern = "Stagione {number}";
+
+    [ObservableProperty] private ObservableCollection<VideoQuality> _availableQualities = new();
+    [ObservableProperty] private VideoQuality? _selectedQuality;
+
+    [ObservableProperty] private int _maxConcurrency = 1;
+
+    // ============================================================
+    //  COLLEZIONI
+    // ============================================================
+
+    public ObservableCollection<string> SearchHistory { get; } = new();
+    public ObservableCollection<SeriesGroup> SeriesGroups { get; } = new();
+    public ObservableCollection<DownloadItem> RecentDownloads => _downloads;
+
+    public string[] MovieNamingPresets { get; } = new[]
+    {
+        "{Series} ({Anno})",
+        "{Series}",
+        "{OriginalFileName}"
+    };
+
+    public string[] SeriesNamingPresets { get; } = new[]
+    {
+        "{Episode}",
+        "{Episode:D2}",
+        "{Episode:D3}",
+        "{Series} - {Episode:D3}",
+        "{Series} S{Season:D2}E{Episode:D2}",
+        "{OriginalFileName}"
+    };
+
+    // ============================================================
+    //  COMPUTED
+    // ============================================================
+
+    public string SearchResultsCountText => SearchResults.Count == 0 ? "" : $"({SearchResults.Count} risultati)";
+    public string EpisodesCountText => Episodes.Count == 0 ? "" : $"{Episodes.Count} episodi";
+    public string EpisodesSelectedCountText => Episodes.Count == 0 ? "" : $"{Episodes.Count(e => e.IsSelected)} selezionati";
+    public string SelectedResultName => SelectedResult?.Title ?? string.Empty;
+    public bool HasSelectedResult => SelectedResult != null;
+    public bool IsSelectedResultSeries => SelectedResult?.IsSeries == true;
+    public bool IsSelectedResultMovie => SelectedResult != null && !SelectedResult.IsSeries;
+    public bool HasSeasons => Seasons.Count > 0;
+
+    // === Cartella base: usa settings streaming separati ===
+    public string BaseDownloadFolder
+    {
+        get => _settings.Current.StreamingBaseDownloadFolder;
+        set
+        {
+            _settings.Current.StreamingBaseDownloadFolder = value;
+            _settings.Save();
+            OnPropertyChanged();
+        }
+    }
+
+    public bool CreateSeriesFolder
+    {
+        get => _settings.Current.StreamingCreateSeriesFolder;
+        set
+        {
+            _settings.Current.StreamingCreateSeriesFolder = value;
+            _settings.Save();
+            OnPropertyChanged();
+        }
+    }
+
+    // === Anteprime separate ===
+    public string MoviePatternPreview
+    {
+        get
+        {
+            try
+            {
+                var preview = FileNameBuilder.ApplyPattern(
+                    MovieNamingPattern, "Nome Film", 1, "Titolo", "file", year: "2024");
+                return preview + ".mp4";
+            }
+            catch { return "(pattern non valido)"; }
+        }
+    }
+
+    public string SeriesPatternPreview
+    {
+        get
+        {
+            try
+            {
+                var preview = FileNameBuilder.ApplyPattern(
+                    SeriesNamingPattern, "Nome Serie", 5, "Titolo Ep", "file");
+                return preview + ".mp4";
+            }
+            catch { return "(pattern non valido)"; }
+        }
+    }
+
+    public string SeasonFolderPreview
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(SeasonFolderPattern))
+                return "(nessuna sottocartella)";
+            try
+            {
+                return SeasonFolderPattern
+                    .Replace("{number:D2}", "01")
+                    .Replace("{number:D3}", "001")
+                    .Replace("{number}", "1");
+            }
+            catch { return "(pattern non valido)"; }
+        }
+    }
+
+    public string GlobalSpeedText
+    {
+        get
+        {
+            double speed = _queueService.AllItems
+                .Where(i => i.Category == CategoryName)
+                .Sum(i => i.SpeedBytesPerSecond);
+            return speed > 0 ? $"{speed / 1024 / 1024:F2} MB/s" : "-";
+        }
+    }
+
+    public string GlobalSizeText
+    {
+        get
+        {
+            long total = _queueService.AllItems.Where(i => i.Category == CategoryName).Sum(i => i.TotalBytes);
+            long done = _queueService.AllItems.Where(i => i.Category == CategoryName).Sum(i => i.DownloadedBytes);
+            return total > 0 ? $"{done / 1024.0 / 1024 / 1024:F2} / {total / 1024.0 / 1024 / 1024:F2} GB" : "-";
+        }
+    }
+
+    public string GlobalEtaText
+    {
+        get
+        {
+            double totalSpeed = _queueService.AllItems.Where(i => i.Category == CategoryName).Sum(i => i.SpeedBytesPerSecond);
+            if (totalSpeed <= 0) return "-";
+            long totalBytes = _queueService.AllItems.Where(i => i.Category == CategoryName).Sum(i => i.TotalBytes);
+            long downloaded = _queueService.AllItems.Where(i => i.Category == CategoryName).Sum(i => i.DownloadedBytes);
+            long remaining = totalBytes - downloaded;
+            if (remaining <= 0) return "0s";
+            var s = remaining / totalSpeed;
+            if (s < 60) return $"{(int)s}s";
+            if (s < 3600) return $"{(int)(s / 60)}m {(int)(s % 60)}s";
+            return $"{(int)(s / 3600)}h {(int)((s % 3600) / 60)}m";
+        }
+    }
+
+    public string SeriesSummaryText
+    {
+        get
+        {
+            var groups = SeriesGroups;
+            if (groups.Count == 0) return "Nessuna serie in coda.";
+
+            int total = groups.Sum(g => g.Items.Count);
+            int completed = groups.Sum(g => g.Items.Count(i => i.Status == DownloadStatus.Completed));
+            int active = groups.Sum(g => g.Items.Count(i => i.Status == DownloadStatus.Downloading));
+            int pending = groups.Sum(g => g.Items.Count(i =>
+                i.Status == DownloadStatus.Pending || i.Status == DownloadStatus.Paused));
+            int failed = groups.Sum(g => g.Items.Count(i => i.Status == DownloadStatus.Failed));
+
+            var parts = new List<string> { $"{total} episodi" };
+            if (completed > 0) parts.Add($"{completed} completati");
+            if (active > 0) parts.Add($"{active} in corso");
+            if (pending > 0) parts.Add($"{pending} in attesa");
+            if (failed > 0) parts.Add($"{failed} falliti");
+
+            return $"{groups.Count} serie · {string.Join(" · ", parts)}";
+        }
+    }
+
+    /// <summary>
+    /// True se l'utente può interagire con i pulsanti di download
+    /// (ci sono episodi, non sta caricando episodi né qualità).
+    /// </summary>
+    public bool CanInteractWithEpisodes =>
+        Episodes.Count > 0 && !IsLoadingEpisodes && !IsQualitiesLoading;
+
+    // ============================================================
+    //  COSTRUTTORE
+    // ============================================================
+
+    public StreamingTabViewModel(
+        IStreamingCommunityService service,
+        DownloadQueueService queueService,
+        FileNameBuilder fileNameBuilder,
+        SettingsService settings,
+        ILogger<StreamingTabViewModel> logger,
+        SharedState shared)
+    {
+        _service = service;
+        _queueService = queueService;
+        _fileNameBuilder = fileNameBuilder;
+        _settings = settings;
+        _logger = logger;
+        _shared = shared;
+
+        MovieNamingPattern = _settings.Current.StreamingMovieNamingPattern;
+        SeriesNamingPattern = _settings.Current.StreamingSeriesNamingPattern;
+        SeasonFolderPattern = _settings.Current.SeasonFolderPattern;
+        MaxConcurrency = _settings.Current.MaxConcurrency;
+        _queueService.MaxConcurrency = MaxConcurrency;
+        MaxConcurrency = 1;
+        _queueService.MaxConcurrency = 1;
+
+        SearchResults.CollectionChanged += (_, _) =>
+            OnPropertyChanged(nameof(SearchResultsCountText));
+
+        Episodes.CollectionChanged += (_, e) =>
+        {
+            OnPropertyChanged(nameof(CanInteractWithEpisodes));
+            OnPropertyChanged(nameof(EpisodesCountText));
+            OnPropertyChanged(nameof(EpisodesSelectedCountText));
+
+            if (e.NewItems != null)
+                foreach (StreamingEpisode ep in e.NewItems)
+                    ep.PropertyChanged += OnEpisodePropertyChanged;
+
+            if (e.OldItems != null)
+                foreach (StreamingEpisode ep in e.OldItems)
+                    ep.PropertyChanged -= OnEpisodePropertyChanged;
+        };
+
+        // Sync con SharedState SOLO per il badge globale — non per la cartella
+        _shared.PropertyChanged += (_, e) =>
+        {
+            // Non sincronizziamo più BaseDownloadFolder/CreateSeriesFolder:
+            // ora sono separate da Anime e vivono in _settings.
+        };
+
+        foreach (var item in _queueService.AllItems.Where(i => i.Category == CategoryName))
+        {
+            _downloads.Add(item);
+            AddToGroup(item);
+        }
+
+        _queueService.AllItems.CollectionChanged += OnQueueCollectionChanged;
+
+        var statsTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1000) };
+        statsTimer.Tick += (_, _) =>
+        {
+            foreach (var g in SeriesGroups) g.RefreshStats();
+            OnPropertyChanged(nameof(GlobalSpeedText));
+            OnPropertyChanged(nameof(GlobalSizeText));
+            OnPropertyChanged(nameof(GlobalEtaText));
+            OnPropertyChanged(nameof(SeriesSummaryText));
+        };
+        statsTimer.Start();
+
+        // Notifica ripresa coda streaming
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(1500);
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                var restored = _queueService.AllItems.Count(i =>
+                    i.Category == CategoryName &&
+                    (i.Status == DownloadStatus.Pending || i.Status == DownloadStatus.Paused));
+
+                if (restored > 0)
+                {
+                    StatusMessage = $"Ripristinati {restored} download in coda dalla sessione precedente. Premi ▶ Avvia tutti per riprenderli.";
+                }
+            });
+        });
+    }
+
+    private void OnQueueCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.Action == NotifyCollectionChangedAction.Reset)
+        {
+            _downloads.Clear();
+            SeriesGroups.Clear();
+            return;
+        }
+
+        if (e.NewItems != null)
+            foreach (DownloadItem it in e.NewItems)
+                if (it.Category == CategoryName)
+                {
+                    if (!_downloads.Contains(it)) _downloads.Add(it);
+                    AddToGroup(it);
+                }
+
+        if (e.OldItems != null)
+            foreach (DownloadItem it in e.OldItems)
+            {
+                _downloads.Remove(it);
+                RemoveFromGroup(it);
+            }
+    }
+
+    private void AddToGroup(DownloadItem item)
+    {
+        if (item.Category != CategoryName) return;
+
+        var seriesName = string.IsNullOrWhiteSpace(item.SeriesName) ? "Senza serie" : item.SeriesName;
+        var group = SeriesGroups.FirstOrDefault(g => g.SeriesName == seriesName);
+
+        if (group == null)
+        {
+            group = new SeriesGroup { SeriesName = seriesName, IsExpanded = false };
+            SeriesGroups.Add(group);
+        }
+
+        if (!group.Items.Contains(item))
+        {
+            group.Items.Add(item);
+            item.PropertyChanged += OnDownloadItemPropertyChanged;
+        }
+        OnPropertyChanged(nameof(SeriesSummaryText));
+    }
+
+    private void RemoveFromGroup(DownloadItem item)
+    {
+        var seriesName = string.IsNullOrWhiteSpace(item.SeriesName) ? "Senza serie" : item.SeriesName;
+        var group = SeriesGroups.FirstOrDefault(g => g.SeriesName == seriesName);
+        if (group != null)
+        {
+            item.PropertyChanged -= OnDownloadItemPropertyChanged;
+            group.Items.Remove(item);
+            if (group.Items.Count == 0) SeriesGroups.Remove(group);
+        }
+        OnPropertyChanged(nameof(SeriesSummaryText));
+    }
+
+    private void OnDownloadItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is not DownloadItem item) return;
+        if (e.PropertyName != nameof(DownloadItem.Status)) return;
+
+        var seriesName = string.IsNullOrWhiteSpace(item.SeriesName) ? "Senza serie" : item.SeriesName;
+        var group = SeriesGroups.FirstOrDefault(g => g.SeriesName == seriesName);
+        group?.RefreshStats();
+    }
+
+    private void OnEpisodePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(StreamingEpisode.IsSelected))
+            OnPropertyChanged(nameof(EpisodesSelectedCountText));
+    }
+
+    // ============================================================
+    //  PROPERTY CHANGED
+    // ============================================================
+
+    partial void OnSelectedResultChanged(MovieSearchResult? value)
+    {
+        OnPropertyChanged(nameof(SelectedResultName));
+        OnPropertyChanged(nameof(HasSelectedResult));
+        OnPropertyChanged(nameof(IsSelectedResultSeries));
+        OnPropertyChanged(nameof(IsSelectedResultMovie));
+
+        Episodes.Clear();
+        Seasons.Clear();
+        SelectedSeason = null;
+        AvailableQualities.Clear();
+        SelectedQuality = null;
+        IsQualitiesLoading = false;   // ← NUOVO (reset nel caso rimanesse appeso)
+        OnPropertyChanged(nameof(HasSeasons));
+    }
+
+    partial void OnSelectedSeasonChanged(Season? value)
+    {
+        if (value == null) return;
+        if (SelectedResult == null || !SelectedResult.IsSeries) return;
+
+        _ = LoadEpisodesForSeasonAsync(SelectedResult.Link, value.Number);
+        _ = LoadQualitiesForCurrentSelectionAsync();
+    }
+
+    partial void OnMovieNamingPatternChanged(string value)
+    {
+        _settings.Current.StreamingMovieNamingPattern = value;
+        _settings.Save();
+        OnPropertyChanged(nameof(MoviePatternPreview));
+    }
+
+    partial void OnSeriesNamingPatternChanged(string value)
+    {
+        _settings.Current.StreamingSeriesNamingPattern = value;
+        _settings.Save();
+        OnPropertyChanged(nameof(SeriesPatternPreview));
+    }
+
+    partial void OnSeasonFolderPatternChanged(string value)
+    {
+        _settings.Current.SeasonFolderPattern = value;
+        _settings.Save();
+        OnPropertyChanged(nameof(SeasonFolderPreview));
+    }
+
+    partial void OnMaxConcurrencyChanged(int value)
+    {
+        if (_queueService != null) _queueService.MaxConcurrency = value;
+        if (_settings != null) { _settings.Current.MaxConcurrency = value; _settings.Save(); }
+    }
+
+    // ============================================================
+    //  RICERCA
+    // ============================================================
+
+    [RelayCommand]
+    private async Task SearchAsync()
+    {
+        if (string.IsNullOrWhiteSpace(SearchQuery)) { StatusMessage = "Inserisci un termine."; return; }
+        await SearchWithTermAsync(SearchQuery);
+    }
+
+    public async Task SearchWithTermAsync(string term)
+    {
+        if (string.IsNullOrWhiteSpace(term)) { StatusMessage = "Inserisci un termine."; return; }
+
+        SearchQuery = term;
+        SaveSearchToHistory(term.Trim());
+
+        IsLoadingSearchResults = true;
+        try
+        {
+            StatusMessage = $"Ricerca in corso per '{term}'...";
+            var results = await _service.SearchAsync(term);
+
+            SearchResults.Clear();
+            foreach (var r in results)
+            {
+                SearchResults.Add(r);
+                _ = LoadPosterAsync(r);   // scarica in background, non blocca la UI
+            }
+
+            StatusMessage = $"Trovati {results.Count} risultati per '{term}'.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Errore: {ex.Message}";
+            _logger.LogWarning(ex, "[STREAMING-TAB] Errore ricerca");
+        }
+        finally { IsLoadingSearchResults = false; }
+    }
+
+    [RelayCommand]
+    private void ClearSearchHistory()
+    {
+        SearchHistory.Clear();
+        StatusMessage = "Cronologia ricerche svuotata.";
+    }
+
+    private void SaveSearchToHistory(string term)
+    {
+        if (string.IsNullOrEmpty(term)) return;
+        var existing = SearchHistory.FirstOrDefault(h =>
+            string.Equals(h, term, StringComparison.OrdinalIgnoreCase));
+        if (existing != null) SearchHistory.Remove(existing);
+        SearchHistory.Insert(0, term);
+        while (SearchHistory.Count > 20) SearchHistory.RemoveAt(SearchHistory.Count - 1);
+    }
+
+    private static readonly HttpClient _posterHttp = new HttpClient
+    {
+        Timeout = TimeSpan.FromSeconds(15)
+    };
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Bitmap> _posterCache = new();
+
+    private static async Task LoadPosterAsync(MovieSearchResult result)
+    {
+        if (string.IsNullOrEmpty(result.PosterUrl)) return;
+
+        // Già in cache?
+        if (_posterCache.TryGetValue(result.PosterUrl, out var cached))
+        {
+            await Dispatcher.UIThread.InvokeAsync(() => result.Poster = cached);
+            return;
+        }
+
+        try
+        {
+            var bytes = await _posterHttp.GetByteArrayAsync(result.PosterUrl);
+            using var ms = new MemoryStream(bytes);
+            var bmp = new Bitmap(ms);
+
+            _posterCache[result.PosterUrl] = bmp;
+
+            await Dispatcher.UIThread.InvokeAsync(() => result.Poster = bmp);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[POSTER] Errore {result.PosterUrl}: {ex.Message}");
+        }
+    }
+
+    // ============================================================
+    //  STAGIONI / EPISODI
+    // ============================================================
+
+    partial void OnIsLoadingEpisodesChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanInteractWithEpisodes));
+    }
+
+    partial void OnIsQualitiesLoadingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanInteractWithEpisodes));
+    }
+
+    [RelayCommand]
+    private async Task LoadSeasonsAsync(MovieSearchResult? result)
+    {
+        if (result == null) return;
+
+        SelectedResult = result;
+        IsLoadingEpisodes = true;
+
+        try
+        {
+            StatusMessage = $"Analisi di '{result.Title}'...";
+            var seasons = await _service.GetSeasonsAsync(result.Link);
+
+            if (seasons.Count == 0)
+            {
+                result.IsSeries = false;
+                OnPropertyChanged(nameof(IsSelectedResultSeries));
+                OnPropertyChanged(nameof(IsSelectedResultMovie));
+
+                StatusMessage = $"Film selezionato: '{result.Title}'. Clicca 'Scarica film' per procedere.";
+                _ = LoadQualitiesForCurrentSelectionAsync();
+                return;
+            }
+
+            result.IsSeries = true;
+            OnPropertyChanged(nameof(IsSelectedResultSeries));
+            OnPropertyChanged(nameof(IsSelectedResultMovie));
+
+            Seasons.Clear();
+            foreach (var s in seasons) Seasons.Add(s);
+            OnPropertyChanged(nameof(HasSeasons));
+
+            SelectedSeason = Seasons[0];
+            StatusMessage = $"'{result.Title}': {seasons.Count} stagioni caricate.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Errore: {ex.Message}";
+            _logger.LogWarning(ex, "[STREAMING-TAB] Errore caricamento stagioni");
+        }
+        finally { IsLoadingEpisodes = false; }
+    }
+
+    private async Task LoadEpisodesForSeasonAsync(string seriesLink, int seasonNumber)
+    {
+        IsLoadingEpisodes = true;
+        try
+        {
+            StatusMessage = $"Caricamento episodi stagione {seasonNumber}...";
+            var episodes = await _service.GetEpisodesAsync(seriesLink, seasonNumber);
+
+            Episodes.Clear();
+            foreach (var ep in episodes) Episodes.Add(ep);
+
+            StatusMessage = $"Trovati {episodes.Count} episodi (stagione {seasonNumber}).";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Errore: {ex.Message}";
+            _logger.LogWarning(ex, "[STREAMING-TAB] Errore caricamento episodi");
+        }
+        finally { IsLoadingEpisodes = false; }
+    }
+
+    private async Task LoadQualitiesForCurrentSelectionAsync()
+    {
+        if (_loadingQualities) return;
+        _loadingQualities = true;
+        IsQualitiesLoading = true;   // ← NUOVO
+
+        try
+        {
+            AvailableQualities.Clear();
+            SelectedQuality = null;
+
+            if (SelectedResult == null) return;
+            if (SelectedResult.IsSeries && SelectedSeason == null) return;
+
+            int seasonNum = SelectedSeason?.Number ?? 1;
+            bool isSeries = SelectedResult.IsSeries;
+
+            StatusMessage = "Analisi qualità disponibili...";
+            var qualities = await _service.GetAvailableQualitiesAsync(
+                SelectedResult.Link, isSeries, seasonNum, 1);
+
+            AvailableQualities.Add(new VideoQuality
+            {
+                Name = "Auto (max)",
+                Url = "",
+                Bandwidth = 0    // ← MODIFICATO
+            });
+
+            foreach (var q in qualities) AvailableQualities.Add(q);
+
+            SelectedQuality = AvailableQualities.FirstOrDefault();
+
+            StatusMessage = qualities.Count > 0
+                ? $"Qualità: {string.Join(", ", qualities.Select(q => q.Name))}"
+                : "Nessuna qualità rilevata (uso auto).";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[STREAMING-TAB] Errore caricamento qualità");
+        }
+        finally
+        {
+            _loadingQualities = false;
+            IsQualitiesLoading = false;   // ← NUOVO
+        }
+    }
+
+    // ============================================================
+    //  DOWNLOAD FILM
+    // ============================================================
+
+    [RelayCommand]
+    private async Task DownloadMovieAsync(MovieSearchResult? movie)
+    {
+        movie ??= SelectedResult;
+        if (movie == null || movie.IsSeries) return;
+
+        try
+        {
+            StatusMessage = $"Recupero URL di '{movie.Title}'...";
+
+            var masterUrl = await _service.GetMovieStreamUrlAsync(movie.Link);
+
+            if (string.IsNullOrEmpty(masterUrl))
+            {
+                StatusMessage = "Impossibile recuperare l'URL del video.";
+                return;
+            }
+
+            if (masterUrl.Contains("type=video", StringComparison.OrdinalIgnoreCase) ||
+                masterUrl.Contains("rendition=", StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning(
+                    "[STREAMING-TAB] Master film contiene rendition: {Url}", masterUrl);
+            }
+
+            var item = BuildDownloadItem(
+                masterUrl, movie.Title, 1, movie.Title,
+                contentLink: movie.Link,
+                episodeId: 0,
+                isSeries: false,
+                year: movie.Year ?? "");
+
+            await _queueService.EnqueueAsync(item);
+
+            StatusMessage = $"Film accodato: {movie.Title}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Errore: {ex.Message}";
+            _logger.LogWarning(ex, "[STREAMING-TAB] Errore download film");
+        }
+    }
+
+    // ============================================================
+    //  DOWNLOAD EPISODI SELEZIONATI
+    // ============================================================
+
+    [RelayCommand]
+    private async Task DownloadSelectedEpisodesAsync()
+    {
+        var selected = Episodes.Where(e => e.IsSelected).ToList();
+        if (selected.Count == 0) { StatusMessage = "Nessun episodio selezionato."; return; }
+        if (IsBatchActive) { StatusMessage = "Accodamento già in corso."; return; }
+        if (SelectedResult == null || SelectedSeason == null) return;
+
+        _batchCts = new CancellationTokenSource();
+        var token = _batchCts.Token;
+        IsBatchActive = true;
+
+        try
+        {
+            var seriesName = SelectedResult.Title;
+            if (Seasons.Count > 1)
+                seriesName = $"{SelectedResult.Title} S{SelectedSeason.Number:D2}";
+
+            var seasonNumber = SelectedSeason.Number;
+
+            var toDownload = new List<StreamingEpisode>();
+            int skipped = 0;
+            foreach (var ep in selected)
+            {
+                var epNum = int.TryParse(ep.Number, out var n) ? n : 0;
+                if (_queueService.ContainsEpisode(CategoryName, seriesName, epNum)) { skipped++; continue; }
+                toDownload.Add(ep);
+            }
+
+            if (toDownload.Count == 0)
+            {
+                StatusMessage = $"Tutti i {skipped} episodi selezionati già in coda.";
+                return;
+            }
+
+            var queued = await EnqueueWithParallelExtractionAsync(
+                SelectedResult.Link, seasonNumber, seriesName, toDownload, token);
+
+            var msg = $"{queued} episodi accodati";
+            if (skipped > 0) msg += $", {skipped} già in coda";
+            StatusMessage = msg + ".";
+        }
+        catch (OperationCanceledException) { StatusMessage = "Annullato."; }
+        catch (Exception ex) { StatusMessage = $"Errore: {ex.Message}"; }
+        finally
+        {
+            _batchCts?.Dispose();
+            _batchCts = null;
+            IsBatchActive = false;
+        }
+    }
+
+    // ============================================================
+    //  SCARICA STAGIONE / SERIE
+    // ============================================================
+
+    [RelayCommand]
+    private async Task DownloadCurrentSeasonAsync()
+    {
+        if (SelectedResult == null || SelectedSeason == null) return;
+        if (IsBatchActive) { StatusMessage = "Accodamento già in corso."; return; }
+
+        var season = SelectedSeason;
+        var series = SelectedResult;
+
+        if (Episodes.Count == 0)
+            await LoadEpisodesForSeasonAsync(series.Link, season.Number);
+
+        if (Episodes.Count == 0)
+        {
+            StatusMessage = $"Nessun episodio per la stagione {season.Number}.";
+            return;
+        }
+
+        _batchCts = new CancellationTokenSource();
+        var token = _batchCts.Token;
+        IsBatchActive = true;
+
+        try
+        {
+            var seriesName = Seasons.Count > 1
+                ? $"{series.Title} S{season.Number:D2}"
+                : series.Title;
+
+            var toAdd = new List<StreamingEpisode>();
+            foreach (var ep in Episodes)
+            {
+                var epNum = int.TryParse(ep.Number, out var n) ? n : 0;
+                if (epNum <= 0) continue;
+                if (_queueService.ContainsEpisode(CategoryName, seriesName, epNum)) continue;
+                toAdd.Add(ep);
+            }
+
+            var queued = await EnqueueWithParallelExtractionAsync(
+                series.Link, season.Number, seriesName, toAdd, token);
+
+            StatusMessage = queued > 0
+                ? $"Stagione {season.Number}: {queued} episodi accodati."
+                : "Nessun nuovo episodio da accodare.";
+        }
+        catch (OperationCanceledException) { StatusMessage = "Annullato."; }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Errore: {ex.Message}";
+            _logger.LogWarning(ex, "[STREAMING-TAB] Errore scarica stagione");
+        }
+        finally
+        {
+            _batchCts?.Dispose();
+            _batchCts = null;
+            IsBatchActive = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task DownloadAllSeasonsAsync()
+    {
+        if (SelectedResult == null) return;
+        if (Seasons.Count == 0) { StatusMessage = "Nessuna stagione."; return; }
+        if (IsBatchActive) { StatusMessage = "Accodamento già in corso."; return; }
+
+        var series = SelectedResult;
+        _batchCts = new CancellationTokenSource();
+        var token = _batchCts.Token;
+        IsBatchActive = true;
+
+        int totalQueued = 0;
+        int seasonIdx = 0;
+
+        try
+        {
+            foreach (var season in Seasons)
+            {
+                token.ThrowIfCancellationRequested();
+                seasonIdx++;
+
+                var seriesName = Seasons.Count > 1
+                    ? $"{series.Title} S{season.Number:D2}"
+                    : series.Title;
+
+                StatusMessage = $"Stagione {season.Number} ({seasonIdx}/{Seasons.Count})...";
+
+                try
+                {
+                    var eps = await _service.GetEpisodesAsync(series.Link, season.Number);
+                    var toAdd = eps.Where(ep => ep.EpisodeId > 0).ToList();
+
+                    var queued = await EnqueueWithParallelExtractionAsync(
+                        series.Link, season.Number, seriesName, toAdd, token);
+
+                    totalQueued += queued;
+                    StatusMessage = $"Accodati: {totalQueued} episodi ({seasonIdx}/{Seasons.Count} stagioni)";
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "[STREAMING-TAB] Errore stagione {N}", season.Number);
+                }
+            }
+
+            StatusMessage = $"Tutta la serie: {totalQueued} episodi accodati.";
+        }
+        catch (OperationCanceledException) { StatusMessage = $"Annullato dopo {totalQueued}."; }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Errore: {ex.Message}";
+        }
+        finally
+        {
+            _batchCts?.Dispose();
+            _batchCts = null;
+            IsBatchActive = false;
+        }
+    }
+
+    // ============================================================
+    //  ESTRAZIONE PARALLELA
+    // ============================================================
+
+    private async Task<int> EnqueueWithParallelExtractionAsync(
+        string seriesLink, int seasonNumber, string seriesName,
+        List<StreamingEpisode> episodes, CancellationToken ct)
+    {
+        if (episodes.Count == 0) return 0;
+
+        var capturedQuality = SelectedQuality?.Name ?? "";
+        if (capturedQuality.StartsWith("Auto")) capturedQuality = "";
+
+        StatusMessage = $"Estrazione URL ({episodes.Count} episodi, {ExtractionParallelism} in parallelo)...";
+
+        var extracted = new ConcurrentBag<(StreamingEpisode Ep, string? Url)>();
+
+        using var sem = new SemaphoreSlim(ExtractionParallelism, ExtractionParallelism);
+
+        int done = 0;
+
+        var tasks = episodes.Select(async ep =>
+        {
+            await sem.WaitAsync(ct);
+            try
+            {
+                ct.ThrowIfCancellationRequested();
+
+                var epNumParsed = int.TryParse(ep.Number, out var epNumTmp) ? epNumTmp : 0;
+                if (epNumParsed <= 0) return;
+
+                try
+                {
+                    var masterUrl = await _service.GetVideoUrlAsync(
+                        seriesLink, isSeries: true,
+                        seasonNumber: seasonNumber,
+                        episodeNumber: epNumParsed,
+                        episodeId: ep.EpisodeId);
+
+                    if (string.IsNullOrEmpty(masterUrl))
+                    {
+                        extracted.Add((ep, null));
+                        return;
+                    }
+
+                    if (masterUrl.Contains("type=video", StringComparison.OrdinalIgnoreCase) ||
+                        masterUrl.Contains("rendition=", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _logger.LogWarning(
+                            "[STREAMING-TAB] ATTENZIONE: master contiene ancora rendition: {Url}",
+                            masterUrl);
+                    }
+
+                    extracted.Add((ep, masterUrl));
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex,
+                        "[STREAMING-TAB] Estrazione fallita per ep {Ep}", ep.Number);
+                    extracted.Add((ep, null));
+                }
+                finally
+                {
+                    var completed = Interlocked.Increment(ref done);
+                    StatusMessage = $"Estrazione {completed}/{episodes.Count}...";
+                }
+            }
+            finally
+            {
+                sem.Release();
+            }
+        }).ToList();
+
+        await Task.WhenAll(tasks);
+
+        int queued = 0;
+        var ordered = extracted
+            .OrderBy(e => int.TryParse(e.Ep.Number, out var orderNum) ? orderNum : 0)
+            .ToList();
+
+        foreach (var (ep, url) in ordered)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var epNumOrdered = int.TryParse(ep.Number, out var epNumOrdTmp) ? epNumOrdTmp : 0;
+            if (epNumOrdered <= 0) continue;
+            if (_queueService.ContainsEpisode(CategoryName, seriesName, epNumOrdered)) continue;
+
+            var capturedUrl = url;
+            var capturedEp = epNumOrdered;
+            var capturedEpId = ep.EpisodeId;
+            var capturedLink = seriesLink;
+            var capturedSeason = seasonNumber;
+            var q = capturedQuality;
+
+            Func<CancellationToken, Task<string?>> extractor = async t =>
+            {
+                if (!string.IsNullOrEmpty(capturedUrl) && !IsVixcloudTokenExpired(capturedUrl))
+                    return capturedUrl;
+
+                _logger.LogWarning(
+                    "[STREAMING-TAB] URL scaduto/mancante per ep {Ep}, ri-estraggo...", capturedEp);
+
+                var master = await _service.GetVideoUrlAsync(
+                    capturedLink, isSeries: true,
+                    seasonNumber: capturedSeason, episodeNumber: capturedEp,
+                    episodeId: capturedEpId);
+
+                return master;
+            };
+
+            Func<CancellationToken, Task<string?>>? audioExtractor = null;
+
+            var item = BuildDownloadItem(
+                capturedUrl ?? "", seriesName, capturedEp, ep.Title, seasonNumber,
+                extractor, audioExtractor,
+                contentLink: capturedLink,
+                episodeId: capturedEpId,
+                isSeries: true);
+
+            await _queueService.EnqueueAsync(item);
+            queued++;
+        }
+
+        return queued;
+    }
+
+    private static bool IsVixcloudTokenExpired(string url)
+    {
+        try
+        {
+            var qIdx = url.IndexOf('?');
+            if (qIdx < 0) return false;
+
+            var qs = url.Substring(qIdx + 1);
+            foreach (var kv in qs.Split('&'))
+            {
+                if (kv.StartsWith("expires=", StringComparison.OrdinalIgnoreCase))
+                {
+                    var val = kv.Substring("expires=".Length);
+                    if (long.TryParse(val, out var exp))
+                    {
+                        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                        return exp - now < 30;
+                    }
+                }
+            }
+        }
+        catch { }
+        return false;
+    }
+
+    [RelayCommand]
+    private void CancelBatch()
+    {
+        _batchCts?.Cancel();
+        StatusMessage = "Annullamento...";
+    }
+
+    // ============================================================
+    //  HELPER
+    // ============================================================
+
+    private DownloadItem BuildDownloadItem(
+        string videoUrl, string seriesName,
+        int episodeNumber, string title,
+        int seasonNumber = 0,
+        Func<CancellationToken, Task<string?>>? urlExtractor = null,
+        Func<CancellationToken, Task<string?>>? audioExtractor = null,
+        string contentLink = "",
+        int episodeId = 0,
+        bool isSeries = false,
+        string year = "")
+    {
+        // === Pattern corretto in base al tipo ===
+        var pattern = isSeries ? SeriesNamingPattern : MovieNamingPattern;
+
+        var item = new DownloadItem
+        {
+            Url = videoUrl,
+            SeriesName = seriesName,
+            EpisodeNumber = episodeNumber,
+            SeasonNumber = seasonNumber,
+            EpisodeTitle = title,
+            Year = year,
+            Status = DownloadStatus.Pending,
+            Category = CategoryName,
+            UrlExtractor = urlExtractor,
+            AudioExtractor = audioExtractor,
+            CookieExtractor = async token =>
+            {
+                return await _service.GetSessionCookiesNetscapeAsync();
+            },
+            QualityName = SelectedQuality?.Name ?? "",
+            ProviderKey = "StreamingCommunity",
+
+            ContentLink = contentLink,
+            EpisodeId = episodeId,
+            IsSeries = isSeries
+        };
+
+        var dummy = string.IsNullOrEmpty(videoUrl)
+            ? "https://placeholder/episode.mp4"
+            : videoUrl;
+        item.DestinationPath = _fileNameBuilder.BuildDestinationPath(
+            item, dummy, title, patternOverride: pattern);
+        return item;
+    }
+
+    // ============================================================
+    //  SELEZIONE EPISODI
+    // ============================================================
+
+    [RelayCommand]
+    private void SelectAllEpisodes()
+    {
+        foreach (var ep in Episodes) ep.IsSelected = true;
+        StatusMessage = $"Selezionati {Episodes.Count} episodi.";
+    }
+
+    [RelayCommand]
+    private void DeselectAllEpisodes()
+    {
+        foreach (var ep in Episodes) ep.IsSelected = false;
+        StatusMessage = "Deselezionati.";
+    }
+
+    [RelayCommand]
+    private void InvertEpisodeSelection()
+    {
+        foreach (var ep in Episodes) ep.IsSelected = !ep.IsSelected;
+        StatusMessage = "Selezione invertita.";
+    }
+
+    // ============================================================
+    //  CONTROLLI GLOBALI CODA
+    // ============================================================
+
+    [RelayCommand]
+    private void StartAll()
+    {
+        var count = _queueService.AllItems.Count(i =>
+            i.Category == CategoryName &&
+            (i.Status == DownloadStatus.Pending ||
+             i.Status == DownloadStatus.Paused ||
+             i.Status == DownloadStatus.Failed));
+
+        if (count == 0) { StatusMessage = "Nessun download da avviare."; return; }
+        _queueService.StartAll(CategoryName);
+        StatusMessage = $"Avvio di {count} download.";
+    }
+
+    [RelayCommand]
+    private void CancelAllDownloads()
+    {
+        _queueService.CancelAll(CategoryName);
+        StatusMessage = "Annullati.";
+    }
+
+    [RelayCommand]
+    private async Task DeleteEverythingAsync()
+    {
+        await _queueService.DeleteEverythingAsync(CategoryName);
+        StatusMessage = "Eliminati.";
+    }
+
+    [RelayCommand]
+    private void ClearCompleted()
+    {
+        _queueService.ClearCompleted(CategoryName);
+        StatusMessage = "Rimossi completati.";
+    }
+
+    [RelayCommand]
+    private void ClearCancelledDownloads()
+    {
+        _queueService.ClearCancelled(CategoryName);
+        StatusMessage = "Rimossi annullati.";
+    }
+
+    [RelayCommand]
+    private void ClearFailedDownloads()
+    {
+        _queueService.ClearFailed(CategoryName);
+        StatusMessage = "Rimossi failed.";
+    }
+
+    // ============================================================
+    //  METODI PUBBLICI (per code-behind)
+    // ============================================================
+
+    public void ResumeItemPublic(DownloadItem item) => _queueService.ResumeItem(item);
+    public void ForceItemPublic(DownloadItem item) => _queueService.ForceQueueItem(item);
+    public void UnforceItemPublic(DownloadItem item) => _queueService.UnforceQueueItem(item);
+    public void CancelItemPublic(DownloadItem item) => _queueService.CancelItem(item);
+    public Task RemoveItemPublicAsync(DownloadItem item) => _queueService.RemoveItemAsync(item);
+    public Task RetryItemPublicAsync(DownloadItem item) => _queueService.RetryItemAsync(item);
+
+    public void ResumeGroupPublic(SeriesGroup g)
+    {
+        foreach (var i in g.Items.ToList()) _queueService.ResumeItem(i);
+    }
+
+    public void ForceGroupPublic(SeriesGroup g) => _queueService.ForceQueueGroup(g);
+    public void UnforceGroupPublic(SeriesGroup g) => _queueService.UnforceQueueGroup(g);
+    public void CancelGroupPublic(SeriesGroup g) => _queueService.CancelGroup(g);
+
+    public async Task RemoveGroupPublicAsync(SeriesGroup g)
+    {
+        foreach (var i in g.Items.ToList())
+            await _queueService.RemoveItemAsync(i);
+    }
+
+    public Task RetryFailedGroupPublicAsync(SeriesGroup g)
+        => _queueService.RetryFailedInGroupAsync(g);
+
+    public Task RetryCancelledGroupPublicAsync(SeriesGroup g)
+        => _queueService.RetryCancelledInGroupAsync(g);
+
+    // ============================================================
+    //  IMPOSTAZIONI
+    // ============================================================
+
+    [RelayCommand]
+    private void SaveSettings()
+    {
+        _settings.Current.StreamingMovieNamingPattern = MovieNamingPattern;
+        _settings.Current.StreamingSeriesNamingPattern = SeriesNamingPattern;
+        _settings.Current.StreamingCreateSeriesFolder = CreateSeriesFolder;
+        _settings.Current.StreamingBaseDownloadFolder = BaseDownloadFolder;
+        _settings.Current.SeasonFolderPattern = SeasonFolderPattern;
+        _settings.Current.MaxConcurrency = MaxConcurrency;
+        _settings.Save();
+        StatusMessage = "Impostazioni salvate.";
+    }
+
+    public void SetBaseDownloadFolder(string folder)
+    {
+        _settings.Current.StreamingBaseDownloadFolder = folder;
+        _settings.Save();
+        OnPropertyChanged(nameof(BaseDownloadFolder));
+    }
+}

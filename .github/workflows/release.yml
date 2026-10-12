@@ -46,6 +46,16 @@ jobs:
 
           Get-ChildItem $target | Select-Object Name, Length
 
+      - name: Download yt-dlp
+        shell: pwsh
+        run: |
+          Write-Host "Scarico yt-dlp.exe..."
+          $url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
+          $out = "DownloadManager/Assets/yt-dlp/win-x64"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          Invoke-WebRequest -Uri $url -OutFile "$out/yt-dlp.exe" -UseBasicParsing
+          Get-Item "$out/yt-dlp.exe" | Select-Object Name, Length
+
       - name: Read version from tag
         id: version
         shell: pwsh
@@ -63,6 +73,14 @@ jobs:
           dotnet publish DownloadManager/DownloadManager.csproj `
             -c Release -r win-x64 --self-contained true `
             -o ./publish
+
+      - name: Verify binaries in publish
+        shell: pwsh
+        run: |
+          Write-Host "Controllo binari nel pacchetto..."
+          Get-ChildItem ./publish -Recurse -File |
+            Where-Object { $_.Name -in @('ffmpeg.exe','ffprobe.exe','yt-dlp.exe','WinSCP.exe') } |
+            Select-Object FullName, Length
 
       - name: Install vpk
         run: dotnet tool install -g vpk

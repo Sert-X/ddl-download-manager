@@ -9,7 +9,6 @@ public class FileNameBuilder
 {
     private readonly SettingsService _settings;
 
-    // Regex per trovare placeholder tipo {Episode:D3} o {Series}.
     private static readonly Regex PlaceholderRegex = new(
         @"\{(?<name>[A-Za-z]+)(?::(?<format>[^}]+))?\}",
         RegexOptions.Compiled);
@@ -21,12 +20,18 @@ public class FileNameBuilder
 
     /// <summary>
     /// Calcola il percorso completo di destinazione per un DownloadItem.
+    /// Il pattern viene preso da settings.NamingPattern, a meno che non venga
+    /// passato esplicitamente patternOverride (per distinguere Anime/Streaming).
     /// </summary>
-    public string BuildDestinationPath(DownloadItem item, string originalVideoUrl, string episodeTitle)
+    public string BuildDestinationPath(
+        DownloadItem item,
+        string originalVideoUrl,
+        string episodeTitle,
+        string? patternOverride = null)
     {
         var settings = _settings.Current;
+        var pattern = patternOverride ?? settings.NamingPattern;
 
-        // 1. Estrai nome file ed estensione dall'URL
         string originalFileName;
         string ext;
 
@@ -42,42 +47,78 @@ public class FileNameBuilder
             ext = "";
         }
 
-        // Rileva se è un HLS playlist (.m3u8) → il nome file è inutile ("playlist"/"master")
         bool isHls = ext.Equals("m3u8", StringComparison.OrdinalIgnoreCase)
-                     || originalFileName.Equals("playlist", StringComparison.OrdinalIgnoreCase)
-                     || originalFileName.Equals("master", StringComparison.OrdinalIgnoreCase)
-                     || string.IsNullOrEmpty(originalFileName);
+                    || originalFileName.Equals("playlist", StringComparison.OrdinalIgnoreCase)
+                    || originalFileName.Equals("master", StringComparison.OrdinalIgnoreCase)
+                    || string.IsNullOrEmpty(originalFileName)
+                    || originalVideoUrl.Contains("vixcloud.co/playlist/", StringComparison.OrdinalIgnoreCase);
 
         if (isHls)
         {
-            // Usa un nome generico basato sull'episodio
             originalFileName = $"Episode_{item.EpisodeNumber:D3}";
-            ext = "mp4"; // il file scaricato da ffmpeg sarà sempre mp4
+            ext = "mp4";
         }
         else if (string.IsNullOrEmpty(ext))
         {
             ext = "mp4";
         }
 
-        // 2. Applica il pattern
         var fileNameWithoutExt = ApplyPattern(
-            settings.NamingPattern,
+            pattern,
             series: item.SeriesName,
             episodeNumber: item.EpisodeNumber,
             title: episodeTitle,
-            originalFileName: originalFileName);
+            originalFileName: originalFileName,
+            year: item.Year);
 
         fileNameWithoutExt = SanitizeFileName(fileNameWithoutExt);
 
-        // 3. Componi la cartella finale
-        var folder = settings.BaseDownloadFolder;
-        if (settings.CreateSeriesFolder && !string.IsNullOrWhiteSpace(item.SeriesName))
+        // Cartella base: usa quella Streaming se pattern override è Streaming
+        // (l'override è passato solo dal tab Streaming → settings streaming)
+        var baseFolder = patternOverride != null
+            ? settings.StreamingBaseDownloadFolder
+            : settings.BaseDownloadFolder;
+
+        var createFolder = patternOverride != null
+            ? settings.StreamingCreateSeriesFolder
+            : settings.CreateSeriesFolder;
+
+        var folder = string.IsNullOrEmpty(baseFolder)
+            ? settings.BaseDownloadFolder
+            : baseFolder;
+
+        if (createFolder && !string.IsNullOrWhiteSpace(item.SeriesName))
         {
             var seriesFolder = SanitizeFileName(item.SeriesName);
             folder = Path.Combine(folder, seriesFolder);
+
+            if (item.SeasonNumber > 0 &&
+                !string.IsNullOrWhiteSpace(settings.SeasonFolderPattern))
+            {
+                var seasonFolder = BuildSeasonFolderName(
+                    settings.SeasonFolderPattern, item.SeasonNumber);
+                if (!string.IsNullOrWhiteSpace(seasonFolder))
+                    folder = Path.Combine(folder, seasonFolder);
+            }
         }
 
         return Path.Combine(folder, fileNameWithoutExt + "." + ext);
+    }
+
+    private static string BuildSeasonFolderName(string pattern, int seasonNumber)
+    {
+        var result = Regex.Replace(pattern, @"\{number(?::(D\d+))?\}", m =>
+        {
+            var format = m.Groups[1].Success ? m.Groups[1].Value : null;
+            if (!string.IsNullOrEmpty(format) && format.StartsWith("D", StringComparison.OrdinalIgnoreCase))
+            {
+                if (int.TryParse(format.Substring(1), out var digits))
+                    return seasonNumber.ToString("D" + digits);
+            }
+            return seasonNumber.ToString();
+        });
+
+        return SanitizeFileName(result);
     }
 
     public static string ApplyPattern(
@@ -85,7 +126,8 @@ public class FileNameBuilder
         string series,
         int episodeNumber,
         string title,
-        string originalFileName)
+        string originalFileName,
+        string year = "")
     {
         return PlaceholderRegex.Replace(pattern, match =>
         {
@@ -98,6 +140,7 @@ public class FileNameBuilder
                 "Episode"          => FormatNumber(episodeNumber, format),
                 "Title"            => title ?? "",
                 "OriginalFileName" => originalFileName ?? "",
+                "Anno"             => year ?? "",
                 _ => match.Value
             };
         });
@@ -105,7 +148,6 @@ public class FileNameBuilder
 
     private static string FormatNumber(int number, string? format)
     {
-        // Supporto "D3" → 001, "D2" → 01, ecc.
         if (!string.IsNullOrEmpty(format) && format.StartsWith("D", StringComparison.OrdinalIgnoreCase))
         {
             if (int.TryParse(format.Substring(1), out var digits))

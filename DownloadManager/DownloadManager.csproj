@@ -14,9 +14,9 @@
     <!-- ============================================================ -->
     <AssemblyName>DDLDownloadManager</AssemblyName>
     <RootNamespace>DownloadManager</RootNamespace>
-    <Version>1.0.9</Version>
-    <FileVersion>1.0.9.0</FileVersion>
-    <AssemblyVersion>1.0.9.0</AssemblyVersion>
+    <Version>1.1.0</Version>
+    <FileVersion>1.1.0.0</FileVersion>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
     <Product>DDL Download Manager</Product>
     <Company>DDL</Company>
     <Description>Download manager per AnimeWorld con organizer locale/remoto e SFTP.</Description>
@@ -42,8 +42,12 @@
     <WinscpExePath Condition="'$(WinscpExePath)' == ''">$(NuGetPackageRoot)winscp\6.5.7\tools\WinSCP.exe</WinscpExePath>
   </PropertyGroup>
 
+  <!-- ============================================================ -->
+  <!--  RISORSE AVALONIA (esclude i binari eseguibili)               -->
+  <!-- ============================================================ -->
   <ItemGroup>
-    <AvaloniaResource Include="Assets\**" />
+    <AvaloniaResource Include="Assets\**"
+                      Exclude="Assets\ffmpeg\**;Assets\yt-dlp\**" />
   </ItemGroup>
 
   <ItemGroup>
@@ -72,35 +76,46 @@
   <!-- ============================================================ -->
   <!--  COPIA WinSCP.exe ACCANTO ALL'EXE PUBBLICATO                  -->
   <!-- ============================================================ -->
-  <Target Name="CopyWinscpExe" AfterTargets="Publish" Condition="'$(PublishSingleFile)' == 'true' AND Exists('$(WinscpExePath)')">
-    <Copy SourceFiles="$(WinscpExePath)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+  <Target Name="CopyWinscpExe" AfterTargets="Publish"
+          Condition="Exists('$(WinscpExePath)')">
+    <Copy SourceFiles="$(WinscpExePath)"
+          DestinationFolder="$(PublishDir)"
+          SkipUnchangedFiles="true" />
   </Target>
 
   <!-- ============================================================ -->
-  <!--  COPIA LA CARTELLA .playwright NELLA CARTELLA DI PUBBLICAZIONE -->
+  <!--  COPIA LA CARTELLA .playwright (driver Node) NELLA PUBBLICAZIONE -->
   <!-- ============================================================ -->
   <Target Name="CopyPlaywrightFilesToPublish" AfterTargets="Publish">
     <ItemGroup>
       <PlaywrightFiles Include="$(OutputPath).playwright\**\*" />
     </ItemGroup>
-    <Copy SourceFiles="@(PlaywrightFiles)" DestinationFiles="@(PlaywrightFiles->'$(PublishDir).playwright\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(PlaywrightFiles)"
+          DestinationFiles="@(PlaywrightFiles->'$(PublishDir).playwright\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
   </Target>
-  <Target Name="CopyPlaywrightBrowsers" AfterTargets="Publish">
-  <ItemGroup>
-    <PlaywrightBrowsers Include="$(LOCALAPPDATA)\ms-playwright\**\*" />
-  </ItemGroup>
-  <Copy SourceFiles="@(PlaywrightBrowsers)" DestinationFiles="@(PlaywrightBrowsers->'$(PublishDir)ms-playwright\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
-</Target>
+
+  <!-- ============================================================ -->
+  <!--  BINARI ESTERNI — copiati in output E in publish              -->
+  <!-- ============================================================ -->
   <ItemGroup>
     <None Include="Assets\ffmpeg\win-x64\ffmpeg.exe"
           Condition="Exists('Assets\ffmpeg\win-x64\ffmpeg.exe')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <Link>ffmpeg\ffmpeg.exe</Link>
     </None>
     <None Include="Assets\ffmpeg\win-x64\ffprobe.exe"
           Condition="Exists('Assets\ffmpeg\win-x64\ffprobe.exe')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <Link>ffmpeg\ffprobe.exe</Link>
+    </None>
+    <None Include="Assets\yt-dlp\win-x64\yt-dlp.exe"
+          Condition="Exists('Assets\yt-dlp\win-x64\yt-dlp.exe')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      <Link>yt-dlp\yt-dlp.exe</Link>
     </None>
   </ItemGroup>
 </Project>

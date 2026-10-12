@@ -9,7 +9,26 @@ public partial class DownloadItem : ObservableObject
     public string DestinationPath { get; set; } = string.Empty;
     public string SeriesName { get; set; } = string.Empty;
     public int EpisodeNumber { get; set; }
+    public int SeasonNumber { get; set; }
     public string EpisodeTitle { get; set; } = string.Empty;
+    public string Year { get; set; } = string.Empty;
+
+    public string Category { get; set; } = "anime";
+    public int ProxyRetryCount { get; set; }
+    public string AudioUrl { get; set; } = string.Empty;
+
+    public string ProviderKey { get; set; } = "";
+    public string QualityName { get; set; } = "";
+    public string SessionCookies { get; set; } = "";
+
+    // === NUOVI: necessari per ricostruire gli extractor al restore ===
+    public string ContentLink { get; set; } = "";  // es. https://streamingcommunityz.rip/it/titles/123-slug
+    public int EpisodeId { get; set; }              // ID episodio streamingcommunity (0 = film)
+    public bool IsSeries { get; set; }              // true se è una serie
+
+    public Func<CancellationToken, Task<string?>>? UrlExtractor { get; set; }
+    public Func<CancellationToken, Task<string?>>? AudioExtractor { get; set; }
+    public Func<CancellationToken, Task<string?>>? CookieExtractor { get; set; }
 
     [ObservableProperty] private bool _isPriority;
     [ObservableProperty] private DownloadStatus _status = DownloadStatus.Pending;
@@ -46,10 +65,8 @@ public partial class DownloadItem : ObservableObject
         get
         {
             if (Status != DownloadStatus.Downloading || SpeedBytesPerSecond <= 0) return "-";
-
             var remaining = TotalBytes - DownloadedBytes;
             if (remaining <= 0) return "0s";
-
             var seconds = remaining / SpeedBytesPerSecond;
             return FormatEta(seconds);
         }

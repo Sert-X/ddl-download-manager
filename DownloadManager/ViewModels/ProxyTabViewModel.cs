@@ -3,42 +3,191 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DownloadManager.Models;
-using DownloadManager.Services.Anime;
+using DownloadManager.Persistence;
 using DownloadManager.Services.Anime.AnimeWorld;
+using DownloadManager.Services.Anime.AnimeSaturn;
+using DownloadManager.Services.Domains;
 using DownloadManager.Services.Proxy;
+using DownloadManager.Services.Streaming.StreamingCommunity;
 
 namespace DownloadManager.ViewModels;
 
-/// <summary>
-/// Sub-ViewModel per il tab "Proxy". Gestisce la lista proxy, i test,
-/// l'import da file, l'attivazione. Il badge in top bar resta sul MainVM
-/// e viene notificato via SharedState.ActiveProxyChanged.
-/// </summary>
 public partial class ProxyTabViewModel : ViewModelBase
 {
     private readonly ProxyService _proxyService;
     private readonly IAnimeWorldService _animeWorldService;
+    private readonly IAnimeSaturnService _animeSaturnService;
+    private readonly IStreamingCommunityService _streamingCommunityService;
+    private readonly DomainResolver _domainResolver;
+    private readonly SettingsService _settings;
     private readonly SharedState _shared;
 
     private CancellationTokenSource? _proxyTestCts;
 
+    /// <summary>Tutti i proxy (dal DB).</summary>
     public ObservableCollection<ProxyConfig> Proxies { get; } = new();
+
+    /// <summary>Proxy visibili nella lista per il provider selezionato.</summary>
+    public ObservableCollection<ProxyConfig> VisibleProxies { get; } = new();
 
     [ObservableProperty] private ProxyConfig? _selectedProxy;
     [ObservableProperty] private bool _isProxyBusy;
     [ObservableProperty] private string _proxyStatusMessage = string.Empty;
     [ObservableProperty] private int _proxyTestConcurrency = 5;
 
+    public ObservableCollection<string> TestProviders { get; } = new()
+    {
+        ProviderKeys.AnimeWorld,
+        ProviderKeys.AnimeSaturn,
+        ProviderKeys.StreamingCommunity,
+        "httpbin (base)"
+    };
+
+    [ObservableProperty] private string _selectedTestProvider = ProviderKeys.AnimeWorld;
+
+    // ==== Checkbox globali "usa proxy per..." ====
+    public bool UseProxyAnimeWorld
+    {
+        get => _settings.Current.UseProxyForAnimeWorld;
+        set
+        {
+            _settings.Current.UseProxyForAnimeWorld = value;
+            _settings.Save();
+            OnPropertyChanged();
+            _shared.NotifyActiveProxyChanged();
+        }
+    }
+
+    public bool UseProxyAnimeSaturn
+    {
+        get => _settings.Current.UseProxyForAnimeSaturn;
+        set
+        {
+            _settings.Current.UseProxyForAnimeSaturn = value;
+            _settings.Save();
+            OnPropertyChanged();
+            _shared.NotifyActiveProxyChanged();
+        }
+    }
+
+    public bool UseProxyStreamingCommunity
+    {
+        get => _settings.Current.UseProxyForStreamingCommunity;
+        set
+        {
+            _settings.Current.UseProxyForStreamingCommunity = value;
+            _settings.Save();
+            OnPropertyChanged();
+            _shared.NotifyActiveProxyChanged();
+        }
+    }
+
+    public bool UseProxyDownloads
+    {
+        get => _settings.Current.UseProxyForDownloads;
+        set
+        {
+            _settings.Current.UseProxyForDownloads = value;
+            _settings.Save();
+            OnPropertyChanged();
+            _shared.NotifyActiveProxyChanged();
+        }
+    }
+
+    // ==== Abilitazione pulsanti ====
+    public bool CanActivateForProvider
+    {
+        get
+        {
+            if (SelectedProxy == null) return false;
+            if (SelectedTestProvider == "httpbin (base)") return false;
+            return !ProxyService.IsEnabledFor(SelectedProxy, SelectedTestProvider);
+        }
+    }
+
+    public bool CanDeactivateForProvider
+    {
+        get
+        {
+            if (SelectedTestProvider == "httpbin (base)") return false;
+            return Proxies.Any(p => ProxyService.IsEnabledFor(p, SelectedTestProvider));
+        }
+    }
+
+    public bool CanRotateForProvider => CanDeactivateForProvider;
+    public string VisibleCountText => $"{VisibleProxies.Count} / {Proxies.Count}";
+
     public ProxyTabViewModel(
         ProxyService proxyService,
         IAnimeWorldService animeWorldService,
+        IAnimeSaturnService animeSaturnService,
+        IStreamingCommunityService streamingCommunityService,
+        DomainResolver domainResolver,
+        SettingsService settings,
         SharedState shared)
     {
         _proxyService = proxyService;
         _animeWorldService = animeWorldService;
+        _animeSaturnService = animeSaturnService;
+        _streamingCommunityService = streamingCommunityService;
+        _domainResolver = domainResolver;
+        _settings = settings;
         _shared = shared;
 
         _ = Task.Run(ProxyLoadAllAsync);
+    }
+
+    // ============================================================
+    //  PROPERTY CHANGED
+    // ============================================================
+
+    partial void OnSelectedProxyChanged(ProxyConfig? value)
+    {
+        OnPropertyChanged(nameof(CanActivateForProvider));
+        OnPropertyChanged(nameof(CanDeactivateForProvider));
+        OnPropertyChanged(nameof(CanRotateForProvider));
+    }
+
+    partial void OnSelectedTestProviderChanged(string value)
+    {
+        foreach (var proxy in Proxies)
+        {
+            proxy.TestResult = proxy.ProviderResults.TryGetValue(value, out var r) ? r : "";
+        }
+
+        RefreshVisibleProxies();
+        RefreshActiveForSelectedProvider();
+
+        OnPropertyChanged(nameof(CanActivateForProvider));
+        OnPropertyChanged(nameof(CanDeactivateForProvider));
+        OnPropertyChanged(nameof(CanRotateForProvider));
+
+        // Log per capire cosa succede al cambio provider
+        var totalRemoved = Proxies.Sum(p => p.RemovedFromProviders.Count);
+        ProxyStatusMessage = $"Vista {value}. Totale item \"removed\": {totalRemoved}. Visibili: {VisibleProxies.Count}/{Proxies.Count}.";
+    }
+
+    private void RefreshVisibleProxies()
+    {
+        var key = SelectedTestProvider;
+        if (string.IsNullOrEmpty(key)) return;
+
+        VisibleProxies.Clear();
+
+        foreach (var p in Proxies)
+        {
+            if (p.RemovedFromProviders.Contains(key)) continue;
+            VisibleProxies.Add(p);
+        }
+
+        System.Diagnostics.Debug.WriteLine(
+            $"[PROXY] Refresh key={key}, Proxies={Proxies.Count}, Visible={VisibleProxies.Count}");
+        OnPropertyChanged(nameof(VisibleCountText));
+    }
+    private void RefreshActiveForSelectedProvider()
+    {
+        foreach (var p in Proxies)
+            p.IsActiveForSelectedProvider = ProxyService.IsEnabledFor(p, SelectedTestProvider);
     }
 
     // ============================================================
@@ -51,12 +200,28 @@ public partial class ProxyTabViewModel : ViewModelBase
         try
         {
             await _proxyService.LoadAllAsync();
-            Proxies.Clear();
-            foreach (var p in _proxyService.All)
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                p.IsSelected = false;
-                Proxies.Add(p);
-            }
+                Proxies.Clear();
+                foreach (var p in _proxyService.All)
+                {
+                    p.IsSelected = false;
+                    Proxies.Add(p);
+                }
+
+                // Sincronizza TestResult con il provider corrente
+                foreach (var p in Proxies)
+                    p.TestResult = p.ProviderResults.TryGetValue(SelectedTestProvider, out var r)
+                        ? r
+                        : "";
+
+                RefreshVisibleProxies();
+                RefreshActiveForSelectedProvider();
+
+                // ▼▼▼ Notifica dal thread UI (fix badge) ▼▼▼
+                _shared.NotifyActiveProxyChanged();
+            });
 
             ProxyStatusMessage = Proxies.Count == 0
                 ? "Nessun proxy configurato."
@@ -75,6 +240,7 @@ public partial class ProxyTabViewModel : ViewModelBase
         SelectedProxy = null;
         var p = new ProxyConfig { Name = "Nuovo proxy", IsSelected = false };
         Proxies.Add(p);
+        VisibleProxies.Add(p);
         SelectedProxy = p;
         ProxyStatusMessage = "Nuovo proxy aggiunto. Compila i campi e premi 💾.";
     }
@@ -87,23 +253,10 @@ public partial class ProxyTabViewModel : ViewModelBase
         try
         {
             IsProxyBusy = true;
-
-            // Assicura che solo UNO sia abilitato
-            if (SelectedProxy.IsEnabled)
-            {
-                foreach (var p in Proxies.Where(p => p != SelectedProxy))
-                    p.IsEnabled = false;
-            }
-
             await _proxyService.SaveAsync(SelectedProxy);
-
             ProxyStatusMessage = $"Proxy '{SelectedProxy.Name}' salvato.";
-            ApplyActiveProxy();
-            _ = Task.Run(async () =>
-            {
-                try { await _animeWorldService.NotifyProxyChangedAsync(); }
-                catch { }
-            });
+            _shared.NotifyActiveProxyChanged();
+            await NotifyAllProvidersAsync();
         }
         catch (Exception ex) { ProxyStatusMessage = $"Errore: {ex.Message}"; }
         finally { IsProxyBusy = false; }
@@ -113,29 +266,25 @@ public partial class ProxyTabViewModel : ViewModelBase
     private async Task ProxyDeleteFailedAsync()
     {
         var failed = Proxies.Where(p => p.IsFailed || p.TestResult.StartsWith("❌")).ToList();
-        if (failed.Count == 0)
-        {
-            ProxyStatusMessage = "Nessun proxy fallito da eliminare.";
-            return;
-        }
+        if (failed.Count == 0) { ProxyStatusMessage = "Nessun proxy fallito."; return; }
 
         IsProxyBusy = true;
         try
         {
-            foreach (var p in failed)
-            {
-                try { await _proxyService.DeleteAsync(p); } catch { }
-            }
+            foreach (var p in failed) { try { await _proxyService.DeleteAsync(p); } catch { } }
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                foreach (var p in failed) Proxies.Remove(p);
+                foreach (var p in failed)
+                {
+                    Proxies.Remove(p);
+                    VisibleProxies.Remove(p);
+                }
                 if (SelectedProxy != null && failed.Contains(SelectedProxy))
-                    SelectedProxy = Proxies.FirstOrDefault();
+                    SelectedProxy = VisibleProxies.FirstOrDefault();
             });
 
             ProxyStatusMessage = $"{failed.Count} proxy falliti eliminati.";
-            ApplyActiveProxy();
         }
         finally { IsProxyBusy = false; }
     }
@@ -148,9 +297,9 @@ public partial class ProxyTabViewModel : ViewModelBase
         {
             await _proxyService.DeleteAsync(SelectedProxy);
             Proxies.Remove(SelectedProxy);
-            SelectedProxy = Proxies.FirstOrDefault();
+            VisibleProxies.Remove(SelectedProxy);
+            SelectedProxy = VisibleProxies.FirstOrDefault();
             ProxyStatusMessage = "Proxy eliminato.";
-            ApplyActiveProxy();
         }
         catch (Exception ex) { ProxyStatusMessage = $"Errore: {ex.Message}"; }
     }
@@ -159,39 +308,30 @@ public partial class ProxyTabViewModel : ViewModelBase
     private async Task ProxyDeleteSelectedAsync()
     {
         var targets = Proxies.Where(p => p.IsSelected).ToList();
-        if (targets.Count == 0) { ProxyStatusMessage = "Nessun proxy selezionato."; return; }
+        if (targets.Count == 0) { ProxyStatusMessage = "Nessun selezionato."; return; }
 
         IsProxyBusy = true;
         try
         {
             var gate = new SemaphoreSlim(8);
-            int ok = 0, fail = 0;
-
-            var tasks = targets.Select(async p =>
+            await Task.WhenAll(targets.Select(async p =>
             {
                 await gate.WaitAsync();
-                try
-                {
-                    await _proxyService.DeleteAsync(p);
-                    Interlocked.Increment(ref ok);
-                }
-                catch { Interlocked.Increment(ref fail); }
+                try { await _proxyService.DeleteAsync(p); } catch { }
                 finally { gate.Release(); }
-            }).ToList();
-
-            await Task.WhenAll(tasks);
+            }));
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                foreach (var p in targets) Proxies.Remove(p);
+                foreach (var p in targets)
+                {
+                    Proxies.Remove(p);
+                    VisibleProxies.Remove(p);
+                }
                 if (SelectedProxy != null && targets.Contains(SelectedProxy))
-                    SelectedProxy = Proxies.FirstOrDefault();
+                    SelectedProxy = VisibleProxies.FirstOrDefault();
             });
-
-            ProxyStatusMessage = fail == 0
-                ? $"{ok} proxy eliminati."
-                : $"{ok} eliminati, {fail} falliti.";
-            ApplyActiveProxy();
+            ProxyStatusMessage = $"{targets.Count} proxy eliminati.";
         }
         finally { IsProxyBusy = false; }
     }
@@ -199,9 +339,9 @@ public partial class ProxyTabViewModel : ViewModelBase
     [RelayCommand]
     private async Task ProxyDeleteAllAsync()
     {
-        if (Proxies.Count == 0) { ProxyStatusMessage = "Lista già vuota."; return; }
-
+        if (Proxies.Count == 0) return;
         var snapshot = Proxies.ToList();
+
         IsProxyBusy = true;
         try
         {
@@ -216,13 +356,109 @@ public partial class ProxyTabViewModel : ViewModelBase
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 Proxies.Clear();
+                VisibleProxies.Clear();
                 SelectedProxy = null;
             });
-
             ProxyStatusMessage = $"Eliminati {snapshot.Count} proxy.";
-            ApplyActiveProxy();
         }
         finally { IsProxyBusy = false; }
+    }
+
+    // ============================================================
+    //  RIMUOVI DALLA LISTA CORRENTE (senza toccare il DB)
+    // ============================================================
+
+    [RelayCommand]
+    private async Task ProxyRemoveFromCurrentListAsync()
+    {
+        if (SelectedTestProvider == "httpbin (base)")
+        {
+            ProxyStatusMessage = "Seleziona un provider.";
+            return;
+        }
+
+        var targets = VisibleProxies.Where(p => p.IsSelected).ToList();
+        if (targets.Count == 0)
+        {
+            ProxyStatusMessage = "Nessun proxy selezionato.";
+            return;
+        }
+
+        var key = SelectedTestProvider;
+
+        foreach (var p in targets)
+        {
+            p.ProviderResults.Remove(key);
+            ProxyService.SetEnabledFor(p, key, false);
+            ProxyService.SetManuallyDisabledFor(p, key, false);
+            p.RemovedFromProviders.Add(key);
+            if (key == SelectedTestProvider) p.TestResult = "";
+            await _proxyService.SaveAsync(p);
+        }
+
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            RefreshVisibleProxies();
+            RefreshActiveForSelectedProvider();
+        });
+
+        _shared.NotifyActiveProxyChanged();
+        await NotifyAllProvidersAsync();
+
+        OnPropertyChanged(nameof(CanActivateForProvider));
+        OnPropertyChanged(nameof(CanDeactivateForProvider));
+        OnPropertyChanged(nameof(CanRotateForProvider));
+
+        var dbg = string.Join(",", targets[0].RemovedFromProviders);
+        ProxyStatusMessage = $"Rimossi {targets.Count} da {key}. Set del primo: [{dbg}]. " +
+                            $"Visibili ora: {VisibleProxies.Count}/{Proxies.Count}";
+    }
+
+    [RelayCommand]
+    private async Task ProxyClearFailedFromCurrentListAsync()
+    {
+        if (SelectedTestProvider == "httpbin (base)")
+        {
+            ProxyStatusMessage = "Seleziona un provider.";
+            return;
+        }
+
+        var key = SelectedTestProvider;
+
+        var failed = VisibleProxies
+            .Where(p => p.ProviderResults.TryGetValue(key, out var r) && r.StartsWith("❌"))
+            .ToList();
+
+        if (failed.Count == 0)
+        {
+            ProxyStatusMessage = $"Nessun proxy fallito per {key}.";
+            return;
+        }
+
+        foreach (var p in failed)
+        {
+            p.ProviderResults.Remove(key);
+            ProxyService.SetEnabledFor(p, key, false);
+            ProxyService.SetManuallyDisabledFor(p, key, false);
+            p.RemovedFromProviders.Add(key);
+            if (key == SelectedTestProvider) p.TestResult = "";
+            await _proxyService.SaveAsync(p);
+        }
+
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            RefreshVisibleProxies();
+            RefreshActiveForSelectedProvider();
+        });
+
+        _shared.NotifyActiveProxyChanged();
+        await NotifyAllProvidersAsync();
+
+        OnPropertyChanged(nameof(CanActivateForProvider));
+        OnPropertyChanged(nameof(CanDeactivateForProvider));
+        OnPropertyChanged(nameof(CanRotateForProvider));
+
+        ProxyStatusMessage = $"Rimossi {failed.Count} proxy falliti dalla lista {key}.";
     }
 
     // ============================================================
@@ -232,14 +468,14 @@ public partial class ProxyTabViewModel : ViewModelBase
     [RelayCommand]
     private void ProxySelectAll()
     {
-        foreach (var p in Proxies) p.IsSelected = true;
-        ProxyStatusMessage = $"Selezionati {Proxies.Count} proxy.";
+        foreach (var p in VisibleProxies) p.IsSelected = true;
+        ProxyStatusMessage = $"Selezionati {VisibleProxies.Count}.";
     }
 
     [RelayCommand]
     private void ProxyDeselectAll()
     {
-        foreach (var p in Proxies) p.IsSelected = false;
+        foreach (var p in VisibleProxies) p.IsSelected = false;
         ProxyStatusMessage = "Selezione azzerata.";
     }
 
@@ -248,56 +484,25 @@ public partial class ProxyTabViewModel : ViewModelBase
     // ============================================================
 
     [RelayCommand]
-    private async Task ProxyTestAsync()
-    {
-        if (SelectedProxy == null) { ProxyStatusMessage = "Nessun proxy selezionato."; return; }
-        await RunProxyTestAsync(SelectedProxy);
-    }
-
-    [RelayCommand]
     private async Task ProxyTestSelectedAsync()
     {
-        var targets = Proxies.Where(p => p.IsSelected).ToList();
-        if (targets.Count == 0) { ProxyStatusMessage = "Nessun proxy selezionato."; return; }
-
+        var targets = VisibleProxies.Where(p => p.IsSelected).ToList();
+        if (targets.Count == 0) { ProxyStatusMessage = "Nessun selezionato."; return; }
         await RunProxyTestBatchAsync(targets, "selezionati");
     }
 
     [RelayCommand]
     private async Task ProxyTestAllAsync()
     {
-        if (Proxies.Count == 0) { ProxyStatusMessage = "Nessun proxy da testare."; return; }
-        await RunProxyTestBatchAsync(Proxies.ToList(), "totali");
-    }
-
-    private async Task RunProxyTestAsync(ProxyConfig proxy)
-    {
-        try
-        {
-            proxy.IsTesting = true;
-            proxy.TestResult = "Test in corso...";
-
-            var (ok, msg, _) = await _proxyService.TestAsync(proxy);
-
-            proxy.IsTesting = false;
-            proxy.TestResult = ok ? $"✅ {msg}" : $"❌ {msg}";
-            proxy.LastTested = DateTime.Now;
-
-            if (ReferenceEquals(proxy, SelectedProxy))
-                ProxyStatusMessage = proxy.TestResult;
-        }
-        catch (Exception ex)
-        {
-            proxy.IsTesting = false;
-            proxy.TestResult = $"❌ {ex.Message}";
-        }
+        if (VisibleProxies.Count == 0) return;
+        await RunProxyTestBatchAsync(VisibleProxies.ToList(), "totali");
     }
 
     private async Task RunProxyTestBatchAsync(List<ProxyConfig> targets, string label)
     {
         if (_proxyTestCts != null)
         {
-            ProxyStatusMessage = "Test già in corso. Fermalo prima di avviarne un altro.";
+            ProxyStatusMessage = "Test già in corso.";
             return;
         }
 
@@ -308,10 +513,9 @@ public partial class ProxyTabViewModel : ViewModelBase
         try
         {
             int total = targets.Count;
-            int completed = 0;
-            int okCount = 0;
-            int failCount = 0;
+            int completed = 0, okCount = 0, failCount = 0;
             var gate = new SemaphoreSlim(Math.Max(1, ProxyTestConcurrency));
+            string providerChoice = SelectedTestProvider;
 
             var tasks = targets.Select(async proxy =>
             {
@@ -319,40 +523,54 @@ public partial class ProxyTabViewModel : ViewModelBase
                 try
                 {
                     token.ThrowIfCancellationRequested();
-
                     proxy.IsTesting = true;
                     proxy.TestResult = "Test in corso...";
 
-                    var (ok, msg, _) = await _proxyService.TestAsync(proxy, token);
+                    var (ok, msg, _) = await TestSingleAsync(proxy, providerChoice, token);
 
                     await Dispatcher.UIThread.InvokeAsync(() =>
                     {
+                        var fullResult = ok ? $"✅ {msg}" : $"❌ {msg}";
                         proxy.IsTesting = false;
-                        proxy.TestResult = ok ? $"✅ {msg}" : $"❌ {msg}";
                         proxy.LastTested = DateTime.Now;
+                        proxy.SetProviderResult(providerChoice, fullResult);
+
+                        if (providerChoice == SelectedTestProvider)
+                            proxy.TestResult = fullResult;
 
                         completed++;
                         if (ok) okCount++; else failCount++;
 
-                        ProxyStatusMessage = $"Test {label}: {completed}/{total} — {okCount} ok, {failCount} ko";
+                        ProxyStatusMessage = $"Test {label} [{providerChoice}]: {completed}/{total} — {okCount} ok, {failCount} ko";
                     });
 
                     try { await _proxyService.SaveAsync(proxy); } catch { }
+
+                    if (providerChoice != "httpbin (base)")
+                    {
+                        await _proxyService.ApplyAutoSelectAfterTestAsync(proxy, providerChoice, ok);
+                    }
                 }
                 catch (OperationCanceledException) { }
-                finally
-                {
-                    gate.Release();
-                }
+                finally { gate.Release(); }
             }).ToList();
 
-            try { await Task.WhenAll(tasks); }
-            catch (OperationCanceledException) { }
+            try { await Task.WhenAll(tasks); } catch (OperationCanceledException) { }
 
-            if (token.IsCancellationRequested)
-                ProxyStatusMessage = $"Test {label} interrotto: {completed}/{total} completati.";
-            else
+            if (!token.IsCancellationRequested)
+            {
                 ProxyStatusMessage = $"Test {label} completato: {okCount}/{total} funzionanti.";
+                await NotifyAllProvidersAsync();
+                RefreshActiveForSelectedProvider();
+
+                OnPropertyChanged(nameof(CanActivateForProvider));
+                OnPropertyChanged(nameof(CanDeactivateForProvider));
+                OnPropertyChanged(nameof(CanRotateForProvider));
+            }
+            else
+            {
+                ProxyStatusMessage = $"Test interrotto: {completed}/{total}.";
+            }
         }
         finally
         {
@@ -362,49 +580,172 @@ public partial class ProxyTabViewModel : ViewModelBase
         }
     }
 
+    private async Task<(bool ok, string msg, string? ip)> TestSingleAsync(
+        ProxyConfig proxy, string provider, CancellationToken ct)
+    {
+        if (provider == "httpbin (base)")
+            return await _proxyService.TestAsync(proxy, ct);
+
+        if (provider == ProviderKeys.AnimeWorld)
+        {
+            var url = _domainResolver.GetBaseUrl("AnimeWorld");
+            var (ok, msg) = await _proxyService.TestProviderAsync(proxy, "AnimeWorld", url, ct);
+            return (ok, msg, null);
+        }
+
+        if (provider == ProviderKeys.AnimeSaturn)
+        {
+            var url = _domainResolver.GetBaseUrl("AnimeSaturn");
+            var (ok, msg) = await _proxyService.TestProviderAsync(proxy, "AnimeSaturn", url, ct);
+            return (ok, msg, null);
+        }
+
+        if (provider == ProviderKeys.StreamingCommunity)
+        {
+            var url = _domainResolver.GetBaseUrl("StreamingCommunity") + "/it";
+            var (ok, msg) = await _proxyService.TestProviderAsync(proxy, "StreamingCommunity", url, ct);
+            return (ok, msg, null);
+        }
+
+        return (false, "Provider sconosciuto", null);
+    }
+
     [RelayCommand]
     private void ProxyStopTest()
     {
-        if (_proxyTestCts == null)
-        {
-            ProxyStatusMessage = "Nessun test in corso.";
-            return;
-        }
-
+        if (_proxyTestCts == null) return;
         _proxyTestCts.Cancel();
         ProxyStatusMessage = "Interruzione test...";
     }
 
     // ============================================================
-    //  ATTIVAZIONE
+    //  ATTIVAZIONE / ROTAZIONE (per provider)
     // ============================================================
 
     [RelayCommand]
-    private async Task ProxyToggleAsync()
+    private async Task ProxyActivateAsync()
     {
         if (SelectedProxy == null) return;
-
-        SelectedProxy.IsEnabled = !SelectedProxy.IsEnabled;
-
-        if (SelectedProxy.IsEnabled)
+        if (SelectedTestProvider == "httpbin (base)")
         {
-            foreach (var p in Proxies.Where(p => p != SelectedProxy))
-                p.IsEnabled = false;
+            ProxyStatusMessage = "Seleziona un provider per attivare il proxy.";
+            return;
         }
+
+        var key = SelectedTestProvider;
+
+        // Se il proxy era stato rimosso dalla lista corrente, lo ripristino
+        if (SelectedProxy.RemovedFromProviders.Contains(key))
+        {
+            SelectedProxy.RemovedFromProviders.Remove(key);
+            RefreshVisibleProxies();
+            RefreshActiveForSelectedProvider();
+        }
+
+        // Test automatico se manca un ✅ per questo provider
+        if (!SelectedProxy.HasTestOkFor(key))
+        {
+            ProxyStatusMessage = $"Test automatico su {key}...";
+            var (ok, msg, _) = await TestSingleAsync(SelectedProxy, key, CancellationToken.None);
+            SelectedProxy.SetProviderResult(key, ok ? $"✅ {msg}" : $"❌ {msg}");
+            if (key == SelectedTestProvider)
+                SelectedProxy.TestResult = ok ? $"✅ {msg}" : $"❌ {msg}";
+
+            if (!ok)
+            {
+                ProxyStatusMessage = $"❌ Il proxy non funziona su {key}: {msg}";
+                await _proxyService.SaveAsync(SelectedProxy);
+                return;
+            }
+        }
+
+        foreach (var p in Proxies) ProxyService.SetEnabledFor(p, key, false);
+        ProxyService.SetEnabledFor(SelectedProxy, key, true);
+        ProxyService.ClearManualDisabled(SelectedProxy, key);
 
         foreach (var p in Proxies)
             await _proxyService.SaveAsync(p);
 
-        ApplyActiveProxy();
-        _ = Task.Run(async () =>
-        {
-            try { await _animeWorldService.NotifyProxyChangedAsync(); }
-            catch { }
-        });
+        _shared.NotifyActiveProxyChanged();
+        await NotifyAllProvidersAsync();
+        RefreshActiveForSelectedProvider();
 
-        ProxyStatusMessage = SelectedProxy.IsEnabled
-            ? $"Proxy '{SelectedProxy.Name}' ATTIVO."
-            : "Proxy disattivato.";
+        OnPropertyChanged(nameof(CanActivateForProvider));
+        OnPropertyChanged(nameof(CanDeactivateForProvider));
+        OnPropertyChanged(nameof(CanRotateForProvider));
+
+        ProxyStatusMessage = $"Proxy '{SelectedProxy.Name}' ATTIVO per {key}.";
+    }
+
+    [RelayCommand]
+    private async Task ProxyDeactivateAsync()
+    {
+        if (SelectedTestProvider == "httpbin (base)")
+        {
+            ProxyStatusMessage = "Seleziona un provider.";
+            return;
+        }
+
+        var key = SelectedTestProvider;
+        bool changed = false;
+
+        foreach (var p in Proxies)
+        {
+            if (ProxyService.IsEnabledFor(p, key))
+            {
+                ProxyService.SetEnabledFor(p, key, false);
+                ProxyService.SetManuallyDisabledFor(p, key, true);
+                await _proxyService.SaveAsync(p);
+                changed = true;
+            }
+        }
+
+        _shared.NotifyActiveProxyChanged();
+        await NotifyAllProvidersAsync();
+
+        RefreshActiveForSelectedProvider();
+
+        OnPropertyChanged(nameof(CanActivateForProvider));
+        OnPropertyChanged(nameof(CanDeactivateForProvider));
+        OnPropertyChanged(nameof(CanRotateForProvider));
+
+        ProxyStatusMessage = changed
+            ? $"Proxy disattivato per {key}."
+            : $"Nessun proxy attivo per {key}.";
+    }
+
+    [RelayCommand]
+    private async Task ProxyRotateNextAsync()
+    {
+        if (SelectedTestProvider == "httpbin (base)")
+        {
+            ProxyStatusMessage = "Seleziona un provider.";
+            return;
+        }
+
+        try
+        {
+            IsProxyBusy = true;
+            var next = await _proxyService.RotateNextForAsync(SelectedTestProvider);
+
+            if (next == null)
+            {
+                ProxyStatusMessage = $"Nessun proxy di riserva per {SelectedTestProvider}.";
+                return;
+            }
+
+            _shared.NotifyActiveProxyChanged();
+            await NotifyAllProvidersAsync();
+
+            RefreshActiveForSelectedProvider();
+
+            OnPropertyChanged(nameof(CanActivateForProvider));
+            OnPropertyChanged(nameof(CanDeactivateForProvider));
+            OnPropertyChanged(nameof(CanRotateForProvider));
+
+            ProxyStatusMessage = $"Ruotato su: {next.Name} ({next.Host}:{next.Port}) per {SelectedTestProvider}";
+        }
+        finally { IsProxyBusy = false; }
     }
 
     // ============================================================
@@ -413,19 +754,11 @@ public partial class ProxyTabViewModel : ViewModelBase
 
     public void ProxyImportFromString(string content)
     {
-        if (string.IsNullOrWhiteSpace(content))
-        {
-            ProxyStatusMessage = "File vuoto.";
-            return;
-        }
+        if (string.IsNullOrWhiteSpace(content)) { ProxyStatusMessage = "File vuoto."; return; }
 
         var (parsed, errors) = DownloadManager.Services.Proxy.ProxyFileParser.Parse(content);
 
-        if (parsed.Count == 0 && errors.Count == 0)
-        {
-            ProxyStatusMessage = "Nessun proxy trovato nel file.";
-            return;
-        }
+        if (parsed.Count == 0 && errors.Count == 0) { ProxyStatusMessage = "Nessun proxy trovato."; return; }
 
         int added = 0;
         foreach (var p in parsed)
@@ -433,38 +766,47 @@ public partial class ProxyTabViewModel : ViewModelBase
             if (string.IsNullOrEmpty(p.Name)) p.Name = p.DisplayText;
             p.IsSelected = false;
             Proxies.Add(p);
+            VisibleProxies.Add(p);
             added++;
         }
 
         var msg = $"Importati {added} proxy.";
-        if (errors.Count > 0)
-            msg += $" {errors.Count} righe ignorate.";
-
+        if (errors.Count > 0) msg += $" {errors.Count} righe ignorate.";
         ProxyStatusMessage = msg;
 
         _ = Task.Run(async () =>
         {
-            foreach (var p in parsed)
-            {
-                try { await _proxyService.SaveAsync(p); } catch { }
-            }
+            foreach (var p in parsed) { try { await _proxyService.SaveAsync(p); } catch { } }
         });
     }
 
     // ============================================================
-    //  BADGE
+    //  HELPER
     // ============================================================
 
-    private void ApplyActiveProxy()
+    private async Task NotifyAllProvidersAsync()
     {
-        var active = Proxies.FirstOrDefault(p => p.IsEnabled);
+        try { await _animeWorldService.NotifyProxyChangedAsync(); } catch { }
+        try { await _animeSaturnService.NotifyProxyChangedAsync(); } catch { }
+        try { await _streamingCommunityService.NotifyProxyChangedAsync(); } catch { }
+    }
+    [RelayCommand]
+    private async Task ProxyResetFiltersAsync()
+    {
+        var affected = Proxies.Where(p => p.RemovedFromProviders.Count > 0).ToList();
 
-        if (active != null)
-            ProxyStatusMessage = $"Proxy attivo: {active.Name} ({active.DisplayText})";
-        else
-            ProxyStatusMessage = "Nessun proxy attivo. Connessione diretta.";
+        foreach (var p in affected)
+        {
+            p.RemovedFromProviders.Clear();
+            await _proxyService.SaveAsync(p);
+        }
 
-        // Notifica il MainVM (badge top bar)
-        _shared.NotifyActiveProxyChanged();
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            RefreshVisibleProxies();
+            RefreshActiveForSelectedProvider();
+        });
+
+        ProxyStatusMessage = $"Filtri rimossi: {affected.Count} proxy sono di nuovo visibili.";
     }
 }

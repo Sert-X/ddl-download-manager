@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using DownloadManager.Models;
 using DownloadManager.Services.Anime;
 using DownloadManager.Services.Proxy;
@@ -23,6 +24,10 @@ public class AnimeSaturnService : IAnimeSaturnService
     private bool _disposed;
     private string _currentProxyKey = "(none)";
 
+    // === Cache ricerca: evita di rifare tutto se l'utente ricercha la stessa cosa ===
+    private readonly ConcurrentDictionary<string, (DateTime At, List<AnimeSearchResult> Results)> _searchCache = new();
+    private static readonly TimeSpan SearchCacheTtl = TimeSpan.FromMinutes(5);
+
     public AnimeSaturnService(ILogger<AnimeSaturnService> logger, IProxyProvider proxyProvider, DomainResolver domainResolver)
     {
         _logger = logger;
@@ -39,7 +44,7 @@ public class AnimeSaturnService : IAnimeSaturnService
 
     public async Task InitializeAsync(bool headless = true)
     {
-        var active = _proxyProvider.GetActive();
+        var active = _proxyProvider.GetActive(ProviderKeys.AnimeWorld);
         var proxyKey = active == null
             ? "(none)"
             : $"{active.Protocol}|{active.Host}|{active.Port}|{active.Username}";
@@ -104,11 +109,24 @@ public class AnimeSaturnService : IAnimeSaturnService
     }
 
     // ============================================================
-    //  RICERCA — con paginazione
+    //  RICERCA — con paginazione + cache
     // ============================================================
 
     public async Task<List<AnimeSearchResult>> SearchAsync(string query, CancellationToken ct = default)
     {
+        // === Cache hit? ===
+        var cacheKey = query.Trim().ToLowerInvariant();
+        if (_searchCache.TryGetValue(cacheKey, out var cached) &&
+            DateTime.UtcNow - cached.At < SearchCacheTtl)
+        {
+            _logger.LogInformation("[SATURN] Ricerca '{Query}' da cache ({N} risultati)",
+                query, cached.Results.Count);
+            // Clone per evitare mutazioni dall'UI
+            return cached.Results
+                .Select(r => new AnimeSearchResult { Name = r.Name, Link = r.Link })
+                .ToList();
+        }
+
         var results = new List<AnimeSearchResult>();
         var seenLinks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -130,14 +148,20 @@ public class AnimeSaturnService : IAnimeSaturnService
 
                 _logger.LogInformation("[SATURN] Ricerca pagina {Page}: {Url}", pageNum, searchUrl);
 
-                var navResponse = await page.GotoAsync(searchUrl);
+                // === FIX: DOMContentLoaded invece di NetworkIdle ===
+                var navResponse = await page.GotoAsync(searchUrl, new PageGotoOptions
+                {
+                    WaitUntil = WaitUntilState.DOMContentLoaded,
+                    Timeout = 20000
+                });
+
                 if (navResponse != null && navResponse.Status >= 400)
                 {
                     throw new InvalidOperationException(
                         $"HTTP {navResponse.Status} {navResponse.StatusText}");
                 }
-                await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
+                // Il selettore è già reattivo (WaitForSelectorAsync)
                 try
                 {
                     await page.WaitForSelectorAsync("a.ac",
@@ -149,7 +173,7 @@ public class AnimeSaturnService : IAnimeSaturnService
                     break;
                 }
 
-                await page.WaitForTimeoutAsync(500);
+                // Rimosso WaitForTimeoutAsync(500): non necessario, i dati sono già nel DOM
 
                 var anchors = await page.QuerySelectorAllAsync("a.ac");
                 _logger.LogInformation("[SATURN] Pagina {Page}: trovati {Count} anchor",
@@ -180,8 +204,45 @@ public class AnimeSaturnService : IAnimeSaturnService
 
                         if (string.IsNullOrEmpty(name)) continue;
 
-                        results.Add(new AnimeSearchResult { Name = name, Link = cleanHref });
-                        addedThisPage++;
+                        // === ESTRAZIONE POSTER ===
+                        string? posterUrl = null;
+                        try
+                        {
+                            var img = await a.QuerySelectorAsync("img");
+                            if (img == null)
+                            {
+                                // Cerca nel contenitore padre (a volte il layout ha img fuori dall'anchor)
+                                var parent = await a.EvaluateHandleAsync("el => el.closest('.col-6') || el.closest('.card') || el.parentElement");
+                                if (parent != null)
+                                {
+                                    var parentEl = parent.AsElement();
+                                    if (parentEl != null)
+                                        img = await parentEl.QuerySelectorAsync("img");
+                                }
+                            }
+
+                            if (img != null)
+                            {
+                                posterUrl = await img.GetAttributeAsync("data-src")
+                                        ?? await img.GetAttributeAsync("src");
+
+                                if (!string.IsNullOrEmpty(posterUrl) && posterUrl.StartsWith("/"))
+                                    posterUrl = BaseUrl + posterUrl;
+
+                                if (!string.IsNullOrEmpty(posterUrl) &&
+                                    (posterUrl.StartsWith("data:", StringComparison.OrdinalIgnoreCase) ||
+                                    posterUrl.Contains("placeholder", StringComparison.OrdinalIgnoreCase)))
+                                    posterUrl = null;
+                            }
+                        }
+                        catch { }
+
+                        results.Add(new AnimeSearchResult
+                        {
+                            Name = name,
+                            Link = cleanHref,
+                            PosterUrl = posterUrl
+                        });
                     }
                     catch { }
                 }
@@ -198,11 +259,14 @@ public class AnimeSaturnService : IAnimeSaturnService
             }
 
             _logger.LogInformation("[SATURN] Ricerca completata: {Count} risultati", results.Count);
+
+            // Salva in cache
+            _searchCache[cacheKey] = (DateTime.UtcNow, results);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "[SATURN] Errore ricerca '{Query}'", query);
-            throw;   // ← propaga al chiamante (VM)
+            throw;
         }
         finally
         {
@@ -224,8 +288,13 @@ public class AnimeSaturnService : IAnimeSaturnService
         try
         {
             _logger.LogInformation("[SATURN] Episodi da: {Url}", animeUrl);
-            await page.GotoAsync(animeUrl);
-            await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+
+            // === FIX: DOMContentLoaded invece di NetworkIdle ===
+            await page.GotoAsync(animeUrl, new PageGotoOptions
+            {
+                WaitUntil = WaitUntilState.DOMContentLoaded,
+                Timeout = 20000
+            });
 
             try
             {
@@ -238,7 +307,7 @@ public class AnimeSaturnService : IAnimeSaturnService
                 return episodes;
             }
 
-            await page.WaitForTimeoutAsync(500);
+            // Rimosso WaitForTimeoutAsync(500)
 
             var episodeElements = await page.QuerySelectorAllAsync("a.ep-tile");
             _logger.LogInformation("[SATURN] Trovati {Count} link episodi", episodeElements?.Count ?? 0);
@@ -307,19 +376,85 @@ public class AnimeSaturnService : IAnimeSaturnService
 
     public async Task<string?> GetVideoUrlAsync(string episodePageUrl, CancellationToken ct = default)
     {
+        if (_context == null) throw new InvalidOperationException("Servizio non inizializzato.");
+
+        var playerUrl = episodePageUrl.Replace("/episode/", "/anime/", StringComparison.OrdinalIgnoreCase);
+        _logger.LogInformation("[SATURN] Video da (player): {Url}", playerUrl);
+
+        var page = await _context.NewPageAsync();
+        try
         {
-            if (_context == null) throw new InvalidOperationException("Servizio non inizializzato.");
+            var videoTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-            var playerUrl = episodePageUrl.Replace("/episode/", "/anime/", StringComparison.OrdinalIgnoreCase);
-             _logger.LogInformation("[SATURN] Video da (player): {Url}", playerUrl);
+            void OnResponse(object? _, IResponse response)
+            {
+                try
+                {
+                    var url = response.Url;
+                    var lower = url.ToLowerInvariant();
+                    if (IsTrackerOrAd(lower)) return;
 
-            var page = await _context.NewPageAsync();
+                    var contentType = response.Headers.TryGetValue("content-type", out var ct2) ? ct2 : "";
+                    bool isVideoContentType = contentType.Contains("video/", StringComparison.OrdinalIgnoreCase)
+                        || contentType.Contains("mpegurl", StringComparison.OrdinalIgnoreCase)
+                        || contentType.Contains("dash+xml", StringComparison.OrdinalIgnoreCase);
+
+                    if (IsVideoUrl(lower) || isVideoContentType)
+                    {
+                        if (videoTcs.TrySetResult(url))
+                            _logger.LogInformation("[SATURN] ✅ Video intercettato: {Url}", url);
+                    }
+                }
+                catch { }
+            }
+
+            page.Response += OnResponse;
+
+            await page.GotoAsync(playerUrl, new PageGotoOptions
+            {
+                WaitUntil = WaitUntilState.DOMContentLoaded,
+                Timeout = 15000
+            });
+
+            // 1) <video> già nel DOM?
+            var immediate = await page.EvaluateAsync<string?>(@"
+                () => {
+                    let s = document.querySelector('video[src]');
+                    if (s && s.src) return s.src;
+                    s = document.querySelector('video source[src]');
+                    if (s && s.src) return s.src;
+                    return null;
+                }
+            ");
+
+            if (!string.IsNullOrEmpty(immediate))
+            {
+                page.Response -= OnResponse;
+                _logger.LogInformation("[SATURN] ✅ Video trovato (DOM main): {Url}", immediate);
+                return immediate;
+            }
+
+            // 2) Aspetta iframe in modo reattivo (max 4s)
+            var iframeSrc = await WaitForIframeAsync(page, 4000);
+            if (string.IsNullOrEmpty(iframeSrc))
+            {
+                var raced = await Task.WhenAny(videoTcs.Task, Task.Delay(4000, ct));
+                page.Response -= OnResponse;
+                if (raced == videoTcs.Task && videoTcs.Task.IsCompletedSuccessfully)
+                    return videoTcs.Task.Result;
+                _logger.LogWarning("[SATURN] ❌ Nessun video trovato (no iframe)");
+                return null;
+            }
+
+            _logger.LogInformation("[SATURN] Iframe trovato: {Src}", iframeSrc);
+
+            // 3) Apri iframe e cattura video
+            var iframePage = await _context.NewPageAsync();
             try
             {
-                // Predispongo una TCS che verrà completata appena compare la risposta video
-                var videoTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+                var iframeTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-                void OnResponse(object? _, IResponse response)
+                void OnIframeResponse(object? _, IResponse response)
                 {
                     try
                     {
@@ -327,168 +462,102 @@ public class AnimeSaturnService : IAnimeSaturnService
                         var lower = url.ToLowerInvariant();
                         if (IsTrackerOrAd(lower)) return;
 
-                        var contentType = response.Headers.TryGetValue("content-type", out var ct) ? ct : "";
+                        var contentType = response.Headers.TryGetValue("content-type", out var ct3) ? ct3 : "";
                         bool isVideoContentType = contentType.Contains("video/", StringComparison.OrdinalIgnoreCase)
                             || contentType.Contains("mpegurl", StringComparison.OrdinalIgnoreCase)
                             || contentType.Contains("dash+xml", StringComparison.OrdinalIgnoreCase);
 
                         if (IsVideoUrl(lower) || isVideoContentType)
                         {
-                            if (videoTcs.TrySetResult(url))
-                                _logger.LogInformation("[SATURN] ✅ Video intercettato: {Url}", url);
+                            if (iframeTcs.TrySetResult(url))
+                                _logger.LogInformation("[SATURN] ✅ Video intercettato (iframe): {Url}", url);
                         }
                     }
                     catch { }
                 }
 
-                page.Response += OnResponse;
+                iframePage.Response += OnIframeResponse;
 
-                // 1. Naviga alla pagina player
-                await page.GotoAsync(playerUrl, new PageGotoOptions
+                await iframePage.GotoAsync(iframeSrc, new PageGotoOptions
                 {
-                    WaitUntil = WaitUntilState.DOMContentLoaded,  // ← non NetworkIdle, molto più veloce
+                    WaitUntil = WaitUntilState.DOMContentLoaded,
                     Timeout = 15000
                 });
 
-                // 2. Se la pagina principale ha già un <video>, lo vediamo subito
-                var immediate = await page.EvaluateAsync<string?>(@"
+                // Timeout ridotto: 6s invece di 8s
+                var raced = await Task.WhenAny(iframeTcs.Task, Task.Delay(6000, ct));
+                if (raced == iframeTcs.Task && iframeTcs.Task.IsCompletedSuccessfully
+                    && !string.IsNullOrEmpty(iframeTcs.Task.Result))
+                {
+                    iframePage.Response -= OnIframeResponse;
+                    return iframeTcs.Task.Result;
+                }
+
+                // Fallback: <video> nel DOM
+                var domUrl = await iframePage.EvaluateAsync<string?>(@"
                     () => {
                         let s = document.querySelector('video[src]');
                         if (s && s.src) return s.src;
                         s = document.querySelector('video source[src]');
                         if (s && s.src) return s.src;
+                        s = document.querySelector('source[src*=""mp4""]');
+                        if (s && s.src) return s.src;
+                        s = document.querySelector('source[src*=""m3u8""]');
+                        if (s && s.src) return s.src;
                         return null;
                     }
                 ");
 
-                if (!string.IsNullOrEmpty(immediate))
+                iframePage.Response -= OnIframeResponse;
+                if (!string.IsNullOrEmpty(domUrl))
                 {
-                    page.Response -= OnResponse;
-                    _logger.LogInformation("[SATURN] ✅ Video trovato (DOM main): {Url}", immediate);
-                    return immediate;
+                    _logger.LogInformation("[SATURN] ✅ Video trovato (DOM iframe): {Url}", domUrl);
+                    return domUrl;
                 }
 
-                // 3. Aspetta l'iframe con timeout breve
-                var iframeSrc = await WaitForIframeAsync(page, 5000);
-                if (string.IsNullOrEmpty(iframeSrc))
-                {
-                    // Ultima spiaggia: aspetta la risposta video per max 5s
-                    var raced = await Task.WhenAny(videoTcs.Task, Task.Delay(5000, ct));
-                    page.Response -= OnResponse;
-                    if (raced == videoTcs.Task && videoTcs.Task.IsCompletedSuccessfully)
-                        return videoTcs.Task.Result;
-                    _logger.LogWarning("[SATURN] ❌ Nessun video trovato (no iframe)");
-                    return null;
-                }
-
-                _logger.LogInformation("[SATURN] Iframe trovato: {Src}", iframeSrc);
-
-                // 4. Apriamo UNA SOLA page per l'iframe, riutilizzando lo stesso listener
-                var iframePage = await _context.NewPageAsync();
-                try
-                {
-                    var iframeTcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-                    void OnIframeResponse(object? _, IResponse response)
-                    {
-                        try
-                        {
-                            var url = response.Url;
-                            var lower = url.ToLowerInvariant();
-                            if (IsTrackerOrAd(lower)) return;
-
-                            var contentType = response.Headers.TryGetValue("content-type", out var ct) ? ct : "";
-                            bool isVideoContentType = contentType.Contains("video/", StringComparison.OrdinalIgnoreCase)
-                                || contentType.Contains("mpegurl", StringComparison.OrdinalIgnoreCase)
-                                || contentType.Contains("dash+xml", StringComparison.OrdinalIgnoreCase);
-
-                            if (IsVideoUrl(lower) || isVideoContentType)
-                            {
-                                if (iframeTcs.TrySetResult(url))
-                                    _logger.LogInformation("[SATURN] ✅ Video intercettato (iframe): {Url}", url);
-                            }
-                        }
-                        catch { }
-                    }
-
-                    iframePage.Response += OnIframeResponse;
-
-                    await iframePage.GotoAsync(iframeSrc, new PageGotoOptions
-                    {
-                        WaitUntil = WaitUntilState.DOMContentLoaded,
-                        Timeout = 15000
-                    });
-
-                    // Aspetta il video REATTIVAMENTE (max 8s) — niente più wait fisso di 6s
-                    var raced = await Task.WhenAny(iframeTcs.Task, Task.Delay(8000, ct));
-                    if (raced == iframeTcs.Task && iframeTcs.Task.IsCompletedSuccessfully
-                        && !string.IsNullOrEmpty(iframeTcs.Task.Result))
-                    {
-                        iframePage.Response -= OnIframeResponse;
-                        return iframeTcs.Task.Result;
-                    }
-
-                    // Fallback: cerca <video> nel DOM iframe
-                    var domUrl = await iframePage.EvaluateAsync<string?>(@"
-                        () => {
-                            let s = document.querySelector('video[src]');
-                            if (s && s.src) return s.src;
-                            s = document.querySelector('video source[src]');
-                            if (s && s.src) return s.src;
-                            s = document.querySelector('source[src*=""mp4""]');
-                            if (s && s.src) return s.src;
-                            s = document.querySelector('source[src*=""m3u8""]');
-                            if (s && s.src) return s.src;
-                            return null;
-                        }
-                    ");
-
-                    iframePage.Response -= OnIframeResponse;
-                    if (!string.IsNullOrEmpty(domUrl))
-                    {
-                        _logger.LogInformation("[SATURN] ✅ Video trovato (DOM iframe): {Url}", domUrl);
-                        return domUrl;
-                    }
-
-                    _logger.LogWarning("[SATURN] ❌ Nessun video trovato nell'iframe");
-                    return null;
-                }
-                finally
-                {
-                    page.Response -= OnResponse;
-                    await iframePage.CloseAsync();
-                }
+                _logger.LogWarning("[SATURN] ❌ Nessun video trovato nell'iframe");
+                return null;
             }
             finally
             {
-                await page.CloseAsync();
+                page.Response -= OnResponse;
+                await iframePage.CloseAsync();
             }
         }
-        
+        finally
+        {
+            await page.CloseAsync();
+        }
     }
 
-    /// <summary>Aspetta che compaia l'iframe del player, con timeout breve.</summary>
+    /// <summary>
+    /// Attende l'iframe con WaitForSelectorAsync nativo (reattivo, no polling).
+    /// </summary>
     private static async Task<string?> WaitForIframeAsync(IPage page, int timeoutMs)
     {
-        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
-        while (DateTime.UtcNow < deadline)
+        try
         {
-            var src = await page.EvaluateAsync<string?>(@"
-                () => {
-                    let f = document.querySelector('iframe#watch-iframe');
-                    if (f && f.src) return f.src;
-                    const iframes = document.querySelectorAll('iframe[src]');
-                    for (const fr of iframes) {
-                        if (fr.src && (fr.src.includes('play.saturncdn.net') || fr.src.includes('/embed/')))
-                            return fr.src;
-                    }
-                    return null;
-                }
-            ");
-            if (!string.IsNullOrEmpty(src)) return src;
-            await Task.Delay(250);
+            await page.WaitForSelectorAsync(
+                "iframe#watch-iframe, iframe[src*='play.saturncdn.net'], iframe[src*='/embed/']",
+                new PageWaitForSelectorOptions { Timeout = timeoutMs });
         }
-        return null;
+        catch
+        {
+            return null;
+        }
+
+        return await page.EvaluateAsync<string?>(@"
+            () => {
+                let f = document.querySelector('iframe#watch-iframe');
+                if (f && f.src) return f.src;
+                const iframes = document.querySelectorAll('iframe[src]');
+                for (const fr of iframes) {
+                    if (fr.src && (fr.src.includes('play.saturncdn.net') || fr.src.includes('/embed/')))
+                        return fr.src;
+                }
+                return null;
+            }
+        ");
     }
 
     // ============================================================
@@ -516,11 +585,9 @@ public class AnimeSaturnService : IAnimeSaturnService
 
     private static bool IsVideoUrl(string lowerUrl)
     {
-        // Manifest HLS/DASH
         if (lowerUrl.Contains(".m3u8") || lowerUrl.Contains(".mpd"))
             return true;
 
-        // File video diretti
         if (lowerUrl.Contains(".mp4")
             || lowerUrl.Contains(".webm")
             || lowerUrl.Contains(".mkv")
@@ -528,7 +595,6 @@ public class AnimeSaturnService : IAnimeSaturnService
             || lowerUrl.Contains(".mov"))
             return true;
 
-        // Google Video CDN (usato da molti embed player)
         if (lowerUrl.Contains("videoplayback"))
             return true;
 
@@ -545,10 +611,13 @@ public class AnimeSaturnService : IAnimeSaturnService
         var result = new Dictionary<string, string>();
         if (episodes.Count == 0) return result;
 
-        _logger.LogInformation("[SATURN] Batch: {Count} episodi (paralleli)", episodes.Count);
+        // === FIX: 5 paralleli invece di 3 ===
+        const int parallelism = 5;
 
-        // 3 episodi in parallelo (Chromium gestisce bene 3-4 page)
-        var gate = new SemaphoreSlim(3);
+        _logger.LogInformation("[SATURN] Batch: {Count} episodi ({P} paralleli)",
+            episodes.Count, parallelism);
+
+        var gate = new SemaphoreSlim(parallelism);
         var syncLock = new object();
         int completed = 0;
 
@@ -603,6 +672,9 @@ public class AnimeSaturnService : IAnimeSaturnService
             _browser = null;
             _playwright = null;
             _disposed = false;
+
+            // Invalida cache ricerca (i risultati potrebbero non essere più raggiungibili)
+            _searchCache.Clear();
         }
         finally
         {

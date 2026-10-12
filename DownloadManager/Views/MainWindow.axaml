@@ -36,7 +36,7 @@
                                 CornerRadius="4"
                                 Padding="6,2"
                                 VerticalAlignment="Center">
-                            <TextBlock Text="v1.0.9" FontSize="11" FontWeight="Bold" Foreground="White"/>
+                            <TextBlock Text="v1.1.0" FontSize="11" FontWeight="Bold" Foreground="White"/>
                         </Border>
                     </StackPanel>
                 </StackPanel>
@@ -79,8 +79,8 @@
             <!-- ================================================ -->
             <!--  TAB DOWNLOAD                                     -->
             <!-- ================================================ -->
-            <TabItem Header="🏠  Download">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" DataContext="{Binding Download}">
+            <TabItem Header="🏠  Anime Download">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" DataContext="{Binding AnimeDownload}">
                 <StackPanel Margin="0,10,0,0">
 
                     <!-- Barra ricerca + status (uniti in una sola card) -->
@@ -169,9 +169,6 @@
                                            TextTrimming="CharacterEllipsis"/>
                             </Border>
 
-                            <Button Grid.Row="0" Grid.Column="3" Content="💾 Salva"
-                                    Command="{Binding SaveSettingsCommand}" Margin="0,0,8,0"/>
-
                             <TextBlock Grid.Row="1" Grid.Column="0" Text="Cartella base"
                                        VerticalAlignment="Center" FontWeight="SemiBold"
                                        Margin="0,10,10,0"/>
@@ -221,6 +218,16 @@
                                         CanUserReorderColumns="True"
                                         CanUserSortColumns="False">
                                     <DataGrid.Columns>
+                                        <DataGridTemplateColumn Header="" Width="60" CanUserResize="False">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate x:DataType="models:AnimeSearchResult">
+                                                    <Image Source="{Binding Poster}"
+                                                        Width="40" Height="60"
+                                                        Stretch="UniformToFill"
+                                                        Margin="2"/>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
                                         <DataGridTextColumn Header="Nome" Binding="{Binding Name}" Width="*"/>
                                     </DataGrid.Columns>
                                 </DataGrid>
@@ -280,10 +287,14 @@
 
                                 <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="6" Margin="0,0,0,8">
                                     <Button Content="⬇ Scarica selezionati" Classes="success"
-                                            Command="{Binding DownloadSelectedEpisodesCommand}"/>
-                                    <Button Content="Seleziona tutti" Click="OnSelectAllEpisodesClick"/>
-                                    <Button Content="Deseleziona" Click="OnDeselectAllEpisodesClick"/>
-                                    <Button Content="Inverti" Click="OnInvertEpisodeSelectionClick"/>
+                                            Command="{Binding DownloadSelectedEpisodesCommand}"
+                                            IsEnabled="{Binding CanInteractWithEpisodes}"/>
+                                    <Button Content="Seleziona tutti" Click="OnSelectAllEpisodesClick"
+                                            IsEnabled="{Binding CanInteractWithEpisodes}"/>
+                                    <Button Content="Deseleziona" Click="OnDeselectAllEpisodesClick"
+                                            IsEnabled="{Binding CanInteractWithEpisodes}"/>
+                                    <Button Content="Inverti" Click="OnInvertEpisodeSelectionClick"
+                                            IsEnabled="{Binding CanInteractWithEpisodes}"/>
                                 </StackPanel>
 
                                 <DataGrid Name="EpisodesGrid"
@@ -618,6 +629,668 @@
                     </Border>
                 </StackPanel>
             </ScrollViewer>
+            </TabItem>
+
+            <!-- ================================================ -->
+            <!--  TAB FILM/SERIE DOWNLOAD                          -->
+            <!-- ================================================ -->
+            <TabItem Header="🎬  Film/Serie Download">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" DataContext="{Binding Streaming}">
+                <StackPanel Margin="0,10,0,0">
+                    <Border Classes="cardElevated" Margin="0,0,0,12"
+                            Background="#FEF3C7"
+                            BorderBrush="#F59E0B"
+                            BorderThickness="1">
+                        <Grid ColumnDefinitions="Auto, *">
+                            <TextBlock Grid.Column="0" Text="⚠"
+                                    FontSize="20" FontWeight="Bold"
+                                    Foreground="#B45309"
+                                    VerticalAlignment="Center"
+                                    Margin="0,0,12,0"/>
+                            <TextBlock Grid.Column="1"
+                                    TextWrapping="Wrap"
+                                    Foreground="#78350F">
+                                <Run FontWeight="Bold">Importante:</Run>
+                                <Run>per scaricare da StreamingCommunity è </Run>
+                                <Run FontWeight="Bold">fortemente consigliato</Run>
+                                <Run> usare un Proxy attivo (tab 🌐 Proxy). Senza proxy, Cloudflare potrebbe bloccare i download con errore 403 dopo pochi minuti di attività. Attiva almeno un proxy funzionante per il provider </Run>
+                                <Run FontWeight="Bold">StreamingCommunity</Run>
+                                <Run>.</Run>
+                            </TextBlock>
+                        </Grid>
+                    </Border>
+
+                    <!-- Barra ricerca + status -->
+                    <Border Classes="cardElevated" Margin="0,0,0,12">
+                        <StackPanel Spacing="10">
+                            <Border Background="{DynamicResource AppSurface2Brush}"
+                                    BorderBrush="{DynamicResource AppBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="10,6">
+                                <Grid ColumnDefinitions="Auto, *">
+                                    <TextBlock Grid.Column="0" Text="ℹ"
+                                            FontSize="14" FontWeight="Bold"
+                                            Foreground="{DynamicResource AppAccentBrush}"
+                                            VerticalAlignment="Center"
+                                            Margin="0,0,8,0"/>
+                                    <TextBlock Grid.Column="1"
+                                            Text="{Binding StatusMessage}"
+                                            Foreground="{DynamicResource AppTextBrush}"
+                                            FontStyle="Italic"
+                                            VerticalAlignment="Center"
+                                            TextWrapping="Wrap"/>
+                                </Grid>
+                            </Border>
+
+                            <Grid ColumnDefinitions="*, Auto, Auto">
+                                <ComboBox Grid.Column="0" Name="StreamingSearchComboBox" IsEditable="True"
+                                        ItemsSource="{Binding SearchHistory}"
+                                        PlaceholderText="🔎 Cerca un film o una serie TV..."
+                                        KeyDown="OnStreamingSearchKeyDown"
+                                        HorizontalAlignment="Stretch"
+                                        Margin="0,0,8,0"
+                                        MinHeight="40"/>
+                                <Button Grid.Column="1" Content="Cerca" Classes="accent"
+                                        Click="OnStreamingSearchButtonClick"
+                                        MinWidth="110" Height="40" Margin="0,0,8,0"/>
+                                <Button Grid.Column="2" Content="🗑" Classes="iconCircle"
+                                        ToolTip.Tip="Svuota cronologia"
+                                        Click="OnStreamingClearSearchHistoryClick"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Pattern + cartella base -->
+                    <Border Classes="cardElevated" Margin="0,0,0,12">
+                        <Grid ColumnDefinitions="Auto, *, Auto, Auto, Auto" RowDefinitions="Auto, Auto, Auto, Auto">
+                            <!-- Pattern Film -->
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Pattern Film"
+                                    VerticalAlignment="Center" FontWeight="SemiBold"
+                                    Margin="0,0,10,0"/>
+                            <ComboBox Grid.Row="0" Grid.Column="1" IsEditable="True"
+                                    ItemsSource="{Binding MovieNamingPresets}"
+                                    Text="{Binding MovieNamingPattern, Mode=TwoWay}"
+                                    HorizontalAlignment="Stretch" Margin="0,0,10,0"/>
+                            <Border Grid.Row="0" Grid.Column="2"
+                                    Background="{DynamicResource AppSurface2Brush}"
+                                    BorderBrush="{DynamicResource AppAccentBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="10,4"
+                                    Margin="0,0,10,0"
+                                    MaxWidth="380">
+                                <TextBlock Text="{Binding MoviePatternPreview}"
+                                        FontFamily="Consolas,Menlo,monospace"
+                                        Foreground="{DynamicResource AppAccentBrush}"
+                                        FontWeight="SemiBold"
+                                        FontSize="12"
+                                        VerticalAlignment="Center"
+                                        TextTrimming="CharacterEllipsis"/>
+                            </Border>
+
+                            <!-- Pattern Serie -->
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Pattern Serie"
+                                    VerticalAlignment="Center" FontWeight="SemiBold"
+                                    Margin="0,10,10,0"/>
+                            <ComboBox Grid.Row="1" Grid.Column="1" IsEditable="True"
+                                    ItemsSource="{Binding SeriesNamingPresets}"
+                                    Text="{Binding SeriesNamingPattern, Mode=TwoWay}"
+                                    HorizontalAlignment="Stretch" Margin="0,10,10,0"/>
+                            <Border Grid.Row="1" Grid.Column="2"
+                                    Background="{DynamicResource AppSurface2Brush}"
+                                    BorderBrush="{DynamicResource AppAccentBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="10,4"
+                                    Margin="0,10,10,0"
+                                    MaxWidth="380">
+                                <TextBlock Text="{Binding SeriesPatternPreview}"
+                                        FontFamily="Consolas,Menlo,monospace"
+                                        Foreground="{DynamicResource AppAccentBrush}"
+                                        FontWeight="SemiBold"
+                                        FontSize="12"
+                                        VerticalAlignment="Center"
+                                        TextTrimming="CharacterEllipsis"/>
+                            </Border>
+
+                            <!-- Cartella base -->
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Cartella base"
+                                    VerticalAlignment="Center" FontWeight="SemiBold"
+                                    Margin="0,10,10,0"/>
+                            <TextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2"
+                                    Text="{Binding BaseDownloadFolder, Mode=TwoWay}"
+                                    Margin="0,10,10,0"/>
+                            <Button Grid.Row="2" Grid.Column="3" Content="..." Width="40"
+                                    Click="OnStreamingBrowseBaseFolderClick" Margin="0,10,8,0"
+                                    ToolTip.Tip="Sfoglia"/>
+                            <CheckBox Grid.Row="2" Grid.Column="4"
+                                    Content="Crea sottocartella per serie"
+                                    IsChecked="{Binding CreateSeriesFolder, Mode=TwoWay}"
+                                    VerticalAlignment="Center"
+                                    Margin="0,10,0,0"/>
+
+                            <!-- Sottocartella stagione -->
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Sottocartella stagione"
+                                    VerticalAlignment="Center" FontWeight="SemiBold"
+                                    Margin="0,10,10,0"/>
+                            <TextBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2"
+                                    Text="{Binding SeasonFolderPattern}"
+                                    PlaceholderText="Stagione {number} (vuoto = nessuna)"
+                                    Margin="0,10,10,0"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Risultati + Dettaglio -->
+                    <Grid ColumnDefinitions="2*, 3*" Height="360" Margin="0,0,0,12">
+
+                        <!-- Risultati ricerca -->
+                        <Border Grid.Column="0" Classes="cardElevated" Margin="0,0,6,0">
+                            <DockPanel>
+                                <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto, Auto, *" Margin="0,0,0,8">
+                                    <TextBlock Grid.Column="0" Text="🎬 Risultati ricerca"
+                                            FontWeight="Bold" FontSize="14"
+                                            VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="1"
+                                            Text="{Binding SearchResultsCountText}"
+                                            FontSize="12"
+                                            Foreground="{DynamicResource AppTextMutedBrush}"
+                                            Margin="8,0,0,0"
+                                            VerticalAlignment="Center"/>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"
+                                                HorizontalAlignment="Right"
+                                                IsVisible="{Binding IsLoadingSearchResults}">
+                                        <ProgressBar IsIndeterminate="True" Width="80" Height="4"
+                                                    VerticalAlignment="Center"/>
+                                        <TextBlock Text="Ricerca..." FontSize="11"
+                                                FontStyle="Italic"
+                                                Foreground="{DynamicResource AppTextMutedBrush}"
+                                                VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <DataGrid Name="StreamingSearchResultsGrid"
+                                        ItemsSource="{Binding SearchResults}"
+                                        SelectedItem="{Binding SelectedResult, Mode=TwoWay}"
+                                        AutoGenerateColumns="False" IsReadOnly="True"
+                                        DoubleTapped="OnStreamingSearchResultDoubleTapped"
+                                        CanUserResizeColumns="True"
+                                        CanUserReorderColumns="True"
+                                        CanUserSortColumns="False">
+                                    <DataGrid.Columns>
+                                        <DataGridTemplateColumn Header="" Width="60" CanUserResize="False">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate x:DataType="models:MovieSearchResult">
+                                                    <Image Source="{Binding Poster}"
+                                                            Width="40" Height="60"
+                                                            Stretch="UniformToFill"
+                                                            Margin="2"/>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTextColumn Header="Titolo" Binding="{Binding Title}" Width="*"/>
+                                        <DataGridTextColumn Header="Anno" Binding="{Binding Year}" Width="70"/>
+                                        <DataGridTextColumn Header="Tipo" Binding="{Binding Type}" Width="70"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </DockPanel>
+                        </Border>
+
+                        <!-- Dettaglio -->
+                        <Border Grid.Column="1" Classes="cardElevated" Margin="6,0,0,0">
+                            <DockPanel>
+                                <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto, Auto, *" Margin="0,0,0,8">
+                                    <TextBlock Grid.Column="0" Text="📺 Dettaglio"
+                                            FontWeight="Bold" FontSize="14"
+                                            VerticalAlignment="Center"/>
+
+                                    <TextBlock Grid.Column="1"
+                                            Text="{Binding SelectedResultName}"
+                                            FontSize="14" FontWeight="SemiBold"
+                                            Foreground="{DynamicResource AppAccentBrush}"
+                                            Margin="8,0,0,0"
+                                            VerticalAlignment="Center"
+                                            TextTrimming="CharacterEllipsis"
+                                            MaxWidth="320"
+                                            IsVisible="{Binding HasSelectedResult}"
+                                            ToolTip.Tip="{Binding SelectedResultName}"/>
+
+                                    <!-- Selettore stagione (solo serie) -->
+                                    <ComboBox Grid.Column="2"
+                                            ItemsSource="{Binding Seasons}"
+                                            SelectedItem="{Binding SelectedSeason, Mode=TwoWay}"
+                                            MinWidth="160" Margin="8,0,0,0"
+                                            HorizontalAlignment="Right"
+                                            IsVisible="{Binding IsSelectedResultSeries}"
+                                            ToolTip.Tip="Seleziona stagione">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate x:DataType="models:Season">
+                                                <TextBlock Text="{Binding DisplayName}"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </Grid>
+                                
+                                <!-- Qualità -->
+                                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8"
+                                            Margin="0,0,0,8"
+                                            IsVisible="{Binding HasSelectedResult}">
+                                    <TextBlock Text="Qualità:" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                    <ComboBox ItemsSource="{Binding AvailableQualities}"
+                                            SelectedItem="{Binding SelectedQuality, Mode=TwoWay}"
+                                            MinWidth="160">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate x:DataType="models:VideoQuality">
+                                                <TextBlock Text="{Binding DisplayName}"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </StackPanel>
+
+                                <!-- Azioni serie -->
+                                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="6"
+                                            Margin="0,0,0,8"
+                                            IsVisible="{Binding IsSelectedResultSeries}">
+                                    <Button Content="⬇ Scarica selezionati" Classes="success"
+                                            Command="{Binding DownloadSelectedEpisodesCommand}"
+                                            IsEnabled="{Binding CanInteractWithEpisodes}"/>
+                                    <Button Content="⬇ Scarica stagione" Classes="accent"
+                                            Command="{Binding DownloadCurrentSeasonCommand}"
+                                            IsEnabled="{Binding CanInteractWithEpisodes}"
+                                            ToolTip.Tip="Accoda tutti gli episodi della stagione corrente"/>
+                                    <Button Content="⬇⬇ Scarica tutta la serie" Classes="info"
+                                            Command="{Binding DownloadAllSeasonsCommand}"
+                                            IsEnabled="{Binding CanInteractWithEpisodes}"
+                                            ToolTip.Tip="Accoda tutti gli episodi di tutte le stagioni"/>
+                                    <Button Content="Seleziona tutti" Click="OnStreamingSelectAllEpisodesClick"
+                                            IsEnabled="{Binding CanInteractWithEpisodes}"/>
+                                    <Button Content="Deseleziona" Click="OnStreamingDeselectAllEpisodesClick"
+                                            IsEnabled="{Binding CanInteractWithEpisodes}"/>
+                                    <Button Content="Inverti" Click="OnStreamingInvertEpisodeSelectionClick"
+                                            IsEnabled="{Binding CanInteractWithEpisodes}"/>
+                                    <Button Content="✋ Stop accodamento" Classes="danger"
+                                            Command="{Binding CancelBatchCommand}"
+                                            IsVisible="{Binding IsBatchActive}"/>
+                                </StackPanel>
+
+                                <!-- Azioni film -->
+                                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="6"
+                                            Margin="0,0,0,8"
+                                            IsVisible="{Binding IsSelectedResultMovie}">
+                                    <Button Content="⬇ Scarica film" Classes="success"
+                                            Command="{Binding DownloadMovieCommand}"
+                                            CommandParameter="{Binding SelectedResult}"
+                                            IsEnabled="{Binding !IsQualitiesLoading}"/>
+                                </StackPanel>
+
+                                <!-- Progress caricamento episodi -->
+                                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8"
+                                            Margin="0,0,0,6"
+                                            IsVisible="{Binding IsLoadingEpisodes}">
+                                    <ProgressBar IsIndeterminate="True" Width="100" Height="4"
+                                                VerticalAlignment="Center"/>
+                                    <TextBlock Text="Caricamento..." FontSize="11"
+                                            FontStyle="Italic"
+                                            Foreground="{DynamicResource AppTextMutedBrush}"
+                                            VerticalAlignment="Center"/>
+                                </StackPanel>
+
+                                <!-- Griglia episodi -->
+                                <DataGrid Name="StreamingEpisodesGrid"
+                                        ItemsSource="{Binding Episodes}"
+                                        AutoGenerateColumns="False"
+                                        SelectionMode="Extended"
+                                        IsReadOnly="False"
+                                        IsVisible="{Binding IsSelectedResultSeries}"
+                                        SelectionChanged="OnStreamingEpisodesSelectionChanged"
+                                        CanUserResizeColumns="True"
+                                        CanUserReorderColumns="True"
+                                        CanUserSortColumns="False">
+                                    <DataGrid.Columns>
+                                        <DataGridTemplateColumn Header="" Width="40">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate>
+                                                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                            HorizontalAlignment="Center"
+                                                            VerticalAlignment="Center"/>
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTextColumn Header="N." Binding="{Binding Number}" Width="60"/>
+                                        <DataGridTextColumn Header="Titolo" Binding="{Binding Title}" Width="*"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+
+                                <!-- Placeholder se nessuna selezione -->
+                                <TextBlock Text="Seleziona un risultato e premi doppio click per i dettagli."
+                                        FontStyle="Italic"
+                                        Foreground="{DynamicResource AppTextMutedBrush}"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        IsVisible="{Binding !HasSelectedResult}"/>
+                            </DockPanel>
+                        </Border>
+                    </Grid>
+
+                    <!-- Download per serie (stesso pattern di Anime Download) -->
+                    <Border Classes="cardElevated" Height="550" Margin="0,0,0,12">
+                        <DockPanel>
+                            <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto, *" Margin="0,0,0,8">
+                                <TextBlock Grid.Column="0" Text="📥 Download per serie (Film/Serie)"
+                                        FontWeight="Bold" FontSize="14"
+                                        VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" Text="{Binding SeriesSummaryText}"
+                                        FontSize="12"
+                                        Foreground="{DynamicResource AppTextMutedBrush}"
+                                        Margin="12,0,0,0"
+                                        VerticalAlignment="Center"
+                                        TextTrimming="CharacterEllipsis"/>
+                            </Grid>
+
+                            <Border DockPanel.Dock="Top"
+                                    Background="{DynamicResource AppSurface2Brush}"
+                                    CornerRadius="8" Padding="12" Margin="0,0,0,10">
+                                <StackPanel Spacing="10">
+                                    <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="6">
+                                        <Button Content="▶ Avvia tutti" Classes="success" Command="{Binding StartAllCommand}"/>
+                                        <Button Content="✕ Annulla tutti" Classes="danger" Command="{Binding CancelAllDownloadsCommand}"/>
+                                        <Button Content="🗑 Elimina tutti" Command="{Binding DeleteEverythingCommand}"/>
+
+                                        <Button Content="🧹 Completati" Command="{Binding ClearCompletedCommand}"/>
+                                        <Button Content="🧹 Annullati" Command="{Binding ClearCancelledDownloadsCommand}"/>
+                                        <Button Content="🧹 Failed" Command="{Binding ClearFailedDownloadsCommand}"/>
+                                    </WrapPanel>
+
+                                    <StackPanel Orientation="Horizontal" Spacing="24">
+                                        <TextBlock FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}">
+                                            <Run Text="Totale:" FontWeight="Bold"/>
+                                            <Run Text="{Binding GlobalSizeText}"/>
+                                        </TextBlock>
+                                        <TextBlock FontSize="12" Foreground="{DynamicResource AppSuccessBrush}">
+                                            <Run Text="Velocità:" FontWeight="Bold"/>
+                                            <Run Text="{Binding GlobalSpeedText}"/>
+                                        </TextBlock>
+                                        <TextBlock FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}">
+                                            <Run Text="ETA:" FontWeight="Bold"/>
+                                            <Run Text="{Binding GlobalEtaText}"/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                <ItemsControl ItemsSource="{Binding SeriesGroups}" HorizontalAlignment="Stretch">
+                                    <ItemsControl.Styles>
+                                        <Style Selector="ItemsControl > ContentPresenter">
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                        </Style>
+                                    </ItemsControl.Styles>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="models:SeriesGroup">
+                                            <Expander IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
+                                                    HorizontalAlignment="Stretch"
+                                                    HorizontalContentAlignment="Stretch">
+                                                <Expander.Header>
+                                                    <Grid ColumnDefinitions="2*, 130, 110, 1.5*, 100, Auto">
+                                                        <TextBlock Grid.Column="0" Text="{Binding Header}"
+                                                                FontWeight="SemiBold" VerticalAlignment="Center"
+                                                                TextTrimming="CharacterEllipsis" Margin="0,0,10,0"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding TotalSizeText}"
+                                                                VerticalAlignment="Center" FontSize="11"
+                                                                Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                                        <TextBlock Grid.Column="2" Text="{Binding TotalSpeedText}"
+                                                                VerticalAlignment="Center" FontSize="11"
+                                                                Foreground="{DynamicResource AppSuccessBrush}"/>
+                                                        <Grid Grid.Column="3" ColumnDefinitions="*, Auto" Margin="10,0">
+                                                            <ProgressBar Grid.Column="0" Value="{Binding OverallPercentage}"
+                                                                        Minimum="0" Maximum="100" Height="14"/>
+                                                            <TextBlock Grid.Column="1"
+                                                                    Text="{Binding OverallPercentage, StringFormat={}{0:F1}%}"
+                                                                    Margin="8,0,0,0" VerticalAlignment="Center"
+                                                                    FontSize="11" FontWeight="SemiBold"/>
+                                                        </Grid>
+                                                        <TextBlock Grid.Column="4" Text="{Binding OverallEtaText}"
+                                                                VerticalAlignment="Center" FontSize="11"
+                                                                Foreground="{DynamicResource AppTextMutedBrush}"
+                                                                Margin="10,0"/>
+                                                        <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="4"
+                                                                    VerticalAlignment="Center">
+                                                            <Button Content="▶" Classes="iconCircle success"
+                                                                    Width="30" Height="30" FontSize="12"
+                                                                    ToolTip.Tip="Avvia serie"
+                                                                    Click="OnStreamingResumeGroupClick"/>
+                                                            <Button Content="⚡" Classes="iconCircle"
+                                                                    Width="30" Height="30" FontSize="12"
+                                                                    ToolTip.Tip="Forza priorità serie"
+                                                                    Click="OnStreamingForceGroupClick"/>
+                                                            <Button Content="✖" Classes="iconCircle"
+                                                                    Width="30" Height="30" FontSize="12"
+                                                                    ToolTip.Tip="Rimuovi priorità serie"
+                                                                    Click="OnStreamingUnforceGroupClick"/>
+                                                            <Button Content="✕" Classes="iconCircle danger"
+                                                                    Width="30" Height="30" FontSize="12"
+                                                                    ToolTip.Tip="Annulla serie"
+                                                                    Click="OnStreamingCancelGroupClick"/>
+                                                            <Button Content="🗑" Classes="iconCircle"
+                                                                    Width="30" Height="30" FontSize="12"
+                                                                    ToolTip.Tip="Rimuovi serie"
+                                                                    Click="OnStreamingRemoveGroupClick"/>
+                                                            <Button Content="🔄" Classes="iconCircle"
+                                                                    Width="30" Height="30" FontSize="12"
+                                                                    ToolTip.Tip="Riscarica failed"
+                                                                    IsVisible="{Binding HasFailed}"
+                                                                    Click="OnStreamingRetryFailedGroupClick"/>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Expander.Header>
+
+                                                <ItemsControl ItemsSource="{Binding Items}" HorizontalAlignment="Stretch">
+                                                    <ItemsControl.Styles>
+                                                        <Style Selector="ItemsControl > ContentPresenter">
+                                                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                                        </Style>
+                                                    </ItemsControl.Styles>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate DataType="models:DownloadItem">
+                                                            <Border Padding="10,6"
+                                                                    BorderBrush="{DynamicResource AppBorderBrush}"
+                                                                    BorderThickness="0,0,0,1">
+                                                                <Grid ColumnDefinitions="24, 2*, 50, 110, 2*, 160, 90, 90, Auto">
+                                                                    <TextBlock Grid.Column="0" Text="⚡" FontSize="14"
+                                                                            Foreground="{DynamicResource AppWarningBrush}"
+                                                                            IsVisible="{Binding IsPriority}"
+                                                                            VerticalAlignment="Center"/>
+                                                                    <TextBlock Grid.Column="1" Text="{Binding FileName}"
+                                                                            TextTrimming="CharacterEllipsis"
+                                                                            VerticalAlignment="Center" FontWeight="Medium"/>
+                                                                    <TextBlock Grid.Column="2" Text="{Binding EpisodeNumber}"
+                                                                            VerticalAlignment="Center"/>
+                                                                    <TextBlock Grid.Column="3" Text="{Binding Status}"
+                                                                            VerticalAlignment="Center" FontSize="11"
+                                                                            Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                                                    <Grid Grid.Column="4" ColumnDefinitions="*, Auto">
+                                                                        <ProgressBar Value="{Binding Percentage}"
+                                                                                    Minimum="0" Maximum="100" Height="14"/>
+                                                                        <TextBlock Grid.Column="1"
+                                                                                Text="{Binding Percentage, StringFormat={}{0:F0}%}"
+                                                                                Margin="8,0,0,0" VerticalAlignment="Center"
+                                                                                FontSize="11"/>
+                                                                    </Grid>
+                                                                    <TextBlock Grid.Column="5" Text="{Binding SizeText}"
+                                                                            VerticalAlignment="Center" FontSize="11"
+                                                                            Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                                                    <TextBlock Grid.Column="6" Text="{Binding SpeedText}"
+                                                                            VerticalAlignment="Center" FontSize="11"
+                                                                            Foreground="{DynamicResource AppSuccessBrush}"/>
+                                                                    <TextBlock Grid.Column="7" Text="{Binding EtaText}"
+                                                                            VerticalAlignment="Center" FontSize="11"
+                                                                            Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                                                    <StackPanel Grid.Column="8" Orientation="Horizontal"
+                                                                                Spacing="2" VerticalAlignment="Center"
+                                                                                Margin="8,0,0,0">
+                                                                        <Button Content="▶" Classes="iconCircle success"
+                                                                                Width="26" Height="26" FontSize="10" Padding="0"
+                                                                                ToolTip.Tip="Riprendi"
+                                                                                IsVisible="{Binding CanResume}"
+                                                                                Click="OnStreamingDownloadItemResumeClick"/>
+                                                                        <Button Content="⚡"
+                                                                                Classes="iconCircle"
+                                                                                Width="26" Height="26" FontSize="10" Padding="0"
+                                                                                ToolTip.Tip="Forza priorità"
+                                                                                IsVisible="{Binding CanForce}"
+                                                                                Click="OnStreamingDownloadItemForceClick"/>
+                                                                        <Button Content="✕" Classes="iconCircle danger"
+                                                                                Width="26" Height="26" FontSize="10" Padding="0"
+                                                                                ToolTip.Tip="Annulla"
+                                                                                IsVisible="{Binding CanCancel}"
+                                                                                Click="OnStreamingDownloadItemCancelClick"/>
+                                                                        <Button Content="🔄" Classes="iconCircle"
+                                                                                Width="26" Height="26" FontSize="10" Padding="0"
+                                                                                ToolTip.Tip="Riscarica"
+                                                                                IsVisible="{Binding CanRetry}"
+                                                                                Click="OnStreamingDownloadItemRetryClick"/>
+                                                                        <Button Content="🗑" Classes="iconCircle danger"
+                                                                                Width="26" Height="26" FontSize="10" Padding="0"
+                                                                                ToolTip.Tip="Rimuovi"
+                                                                                Click="OnStreamingDownloadItemRemoveClick"/>
+                                                                    </StackPanel>
+                                                                </Grid>
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </Expander>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </DockPanel>
+                    </Border>
+                </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ================================================ -->
+            <!--  TAB ACCOUNT                          -->
+            <!-- ================================================ -->
+
+            <TabItem>
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="👤  Account" VerticalAlignment="Center"/>
+                        <Border Width="10" Height="10" CornerRadius="5"
+                                Background="#EF4444"
+                                IsVisible="{Binding Account.HasAccountIssue}"
+                                VerticalAlignment="Center"
+                                ToolTip.Tip="Account non connesso"/>
+                        <Border Width="10" Height="10" CornerRadius="5"
+                                Background="#22C55E"
+                                IsVisible="{Binding !Account.HasAccountIssue}"
+                                VerticalAlignment="Center"
+                                ToolTip.Tip="Account connesso"/>
+                    </StackPanel>
+                </TabItem.Header>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" DataContext="{Binding Account}">
+                    <StackPanel Margin="0,10,0,0" Spacing="12">
+
+                        <!-- Badge stato sessione -->
+                        <Border Classes="cardElevated" Padding="16">
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="{Binding SessionBadge}"
+                                        FontWeight="Bold" FontSize="16"/>
+                                <TextBlock Text="{Binding SessionDetails}"
+                                        FontSize="12"
+                                        Foreground="{DynamicResource AppTextMutedBrush}"
+                                        TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Form login -->
+                        <Border Classes="cardElevated" Padding="16">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="StreamingCommunity — Account"
+                                        FontWeight="Bold" FontSize="14"/>
+
+                                <Grid ColumnDefinitions="120, *" RowDefinitions="Auto, Auto">
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Username / Email"
+                                            VerticalAlignment="Center" Margin="0,0,10,8"/>
+                                    <TextBox Grid.Row="0" Grid.Column="1"
+                                            Text="{Binding Username, Mode=TwoWay}"
+                                            Margin="0,0,0,8"/>
+
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Password"
+                                            VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                    <TextBox Grid.Row="1" Grid.Column="1"
+                                            Text="{Binding Password, Mode=TwoWay}"
+                                            PasswordChar="•"/>
+                                </Grid>
+
+                                <WrapPanel Orientation="Horizontal" ItemSpacing="8">
+
+                                    <!-- 🔑 Accedi: visibile SOLO quando NON loggato -->
+                                    <Button Content="🔑 Accedi" Classes="success"
+                                            Command="{Binding LoginCommand}"
+                                            IsEnabled="{Binding !IsBusy}"
+                                            IsVisible="{Binding !IsLoggedIn}"/>
+
+                                    <!-- 🔓 Ricarica credenziali: visibile SOLO quando NON loggato -->
+                                    <Button Content="🔓 Ricarica credenziali"
+                                            Command="{Binding ReloadCredentialsCommand}"
+                                            IsEnabled="{Binding !IsBusy}"
+                                            IsVisible="{Binding !IsLoggedIn}"
+                                            ToolTip.Tip="Ricarica nei campi le credenziali salvate (DPAPI)"/>
+
+                                    <!-- 💾 Salva credenziali: sempre visibile -->
+                                    <Button Content="💾 Salva credenziali"
+                                            Command="{Binding SaveCredentialsCommand}"
+                                            IsEnabled="{Binding !IsBusy}"/>
+
+                                    <!-- 🔍 Testa sessione: sempre visibile -->
+                                    <Button Content="🔍 Testa sessione" Classes="info"
+                                            Command="{Binding TestSessionCommand}"
+                                            IsEnabled="{Binding !IsBusy}"/>
+
+                                    <!-- ⏏ Disconnetti: visibile SOLO quando loggato -->
+                                    <Button Content="⏏ Disconnetti" Classes="warning"
+                                            Command="{Binding LogoutCommand}"
+                                            IsVisible="{Binding IsLoggedIn}"/>
+
+                                    <!-- 🗑 Elimina credenziali: visibile quando c'è qualcosa da eliminare -->
+                                    <Button Content="🗑 Elimina credenziali" Classes="danger"
+                                            Command="{Binding DeleteCredentialsCommand}"
+                                            IsEnabled="{Binding !IsBusy}"
+                                            IsVisible="{Binding HasSavedCredentials}"
+                                            ToolTip.Tip="Rimuove definitivamente username e password dal DPAPI"/>
+
+                                    <!-- ⏹ Stop: visibile solo durante operazioni -->
+                                    <Button Content="⏹ Stop" Classes="danger"
+                                            IsVisible="{Binding IsBusy}"
+                                            IsEnabled="False"/>
+                                </WrapPanel>
+
+                                <TextBlock Text="{Binding StatusMessage}"
+                                        FontStyle="Italic"
+                                        Foreground="{DynamicResource AppTextMutedBrush}"
+                                        TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Nota informativa -->
+                        <Border Classes="cardElevated" Padding="16">
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="ℹ Note" FontWeight="Bold"/>
+                                <TextBlock TextWrapping="Wrap" FontSize="12"
+                                        Foreground="{DynamicResource AppTextMutedBrush}">
+                                    Le credenziali vengono salvate cifrate (DPAPI Windows) nella cartella
+                                    dell'utente. Il login viene eseguito via HTTPS verso StreamingCommunity;
+                                    i cookie di sessione vengono riutilizzati per i download.
+                                    Con account Premium la qualità disponibile sale fino a 1080p.
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+
+                    </StackPanel>
+                </ScrollViewer>
             </TabItem>
 
             <!-- ================================================ -->
@@ -1743,73 +2416,116 @@
             <TabItem Header="🌐  Proxy">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" DataContext="{Binding Proxy}">
                 <DockPanel Margin="0,10,0,0">
+                    <Border DockPanel.Dock="Top" Classes="cardElevated" Margin="0,0,0,12">
+                    <StackPanel Spacing="8">
+                        <TextBlock Text="🌐 Interruttore proxy per provider"
+                                FontWeight="Bold" FontSize="14"/>
+                        <TextBlock TextWrapping="Wrap" FontSize="11"
+                                Foreground="{DynamicResource AppTextMutedBrush}">
+                            Ogni checkbox attiva/disattiva l'uso del proxy per quel provider.
+                            Se disattivato, il provider ignora qualsiasi proxy e va in connessione
+                            diretta (utile se un provider non tollera i proxy). Ogni provider può
+                            avere un proxy diverso: usa il pulsante <Run FontWeight="Bold">⚡ Attiva per provider</Run>
+                            più sotto, dopo aver scelto il provider nella ComboBox della toolbar.
+                        </TextBlock>
+                        <WrapPanel Orientation="Horizontal" ItemSpacing="20" Margin="0,4,0,0">
+                            <CheckBox Content="🏠 AnimeWorld" IsChecked="{Binding UseProxyAnimeWorld, Mode=TwoWay}"/>
+                            <CheckBox Content="🌸 AnimeSaturn" IsChecked="{Binding UseProxyAnimeSaturn, Mode=TwoWay}"/>
+                            <CheckBox Content="🎬 StreamingCommunity" IsChecked="{Binding UseProxyStreamingCommunity, Mode=TwoWay}"/>
+                            <CheckBox Content="⬇ Download diretti" IsChecked="{Binding UseProxyDownloads, Mode=TwoWay}"/>
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
 
                     <!-- Toolbar azioni -->
                     <Border DockPanel.Dock="Top" Classes="cardElevated" Margin="0,0,0,12">
-                        <StackPanel Spacing="8">
-                            <!-- Riga 1: gestione singola -->
-                            <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="6">
-                                <Button Content="+ Nuovo" Classes="accent"
-                                        Command="{Binding ProxyNewCommand}"/>
-                                <Button Content="📁 Importa"
-                                        Click="OnProxyImportFileClick"
-                                        ToolTip.Tip="Importa da file .txt o .csv"/>
-                                <Button Content="💾 Salva"
-                                        Command="{Binding ProxySaveCommand}"
-                                        IsEnabled="{Binding !IsProxyBusy}"/>
-                                <Button Content="⚡ Attiva selezionato"
-                                        Classes="success"
-                                        Command="{Binding ProxyToggleCommand}"
-                                        IsVisible="{Binding SelectedProxy.IsEnabled, Converter={x:Static BoolConverters.Not}, FallbackValue=False}"
-                                        IsEnabled="{Binding SelectedProxy, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-                                <Button Content="⏹ Disattiva selezionato"
-                                        Classes="danger"
-                                        Command="{Binding ProxyToggleCommand}"
-                                        IsVisible="{Binding SelectedProxy.IsEnabled, FallbackValue=False}"
-                                        IsEnabled="{Binding SelectedProxy, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-                            </WrapPanel>
+                        <StackPanel Spacing="6">
 
-                            <!-- Riga 2: gestione multipla -->
-                            <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="6">
-                                <TextBlock Text="Selezione:"
-                                        VerticalAlignment="Center"
-                                        Foreground="{DynamicResource AppTextMutedBrush}"
-                                        FontSize="12"/>
-                                <Button Content="☑ Tutti"
-                                        Command="{Binding ProxySelectAllCommand}"/>
-                                <Button Content="☐ Nessuno"
-                                        Command="{Binding ProxyDeselectAllCommand}"/>
-                                <TextBlock Text="Bot:" VerticalAlignment="Center"
-                                        Foreground="{DynamicResource AppTextMutedBrush}" FontSize="12"/>
-                                <Slider Value="{Binding ProxyTestConcurrency}"
-                                        Minimum="1" Maximum="20" Width="100"
-                                        TickFrequency="1" IsSnapToTickEnabled="True"
-                                        VerticalAlignment="Center"/>
-                                <TextBlock Text="{Binding ProxyTestConcurrency}" Width="20"
-                                        VerticalAlignment="Center" FontWeight="Bold"
-                                        Foreground="{DynamicResource AppAccentBrush}"/>
-                                <Button Content="🔌 Test selezionati"
-                                        Classes="info"
-                                        Command="{Binding ProxyTestSelectedCommand}"
-                                        IsEnabled="{Binding !IsProxyBusy}"/>
-                                <Button Content="🔌 Test tutti"
-                                        Classes="info"
-                                        Command="{Binding ProxyTestAllCommand}"
-                                        IsEnabled="{Binding !IsProxyBusy}"/>
-                                <Button Content="⏹ Stop test" Classes="danger"
-                                        Command="{Binding ProxyStopTestCommand}"
-                                        IsEnabled="{Binding IsProxyBusy}"/>
-                                <Button Content="🗑 Elimina selezionati"
-                                        Classes="danger"
-                                        Command="{Binding ProxyDeleteSelectedCommand}"/>
-                                <Button Content="🗑 Elimina falliti"
-                                        Classes="danger"
-                                        Command="{Binding ProxyDeleteFailedCommand}"/>
-                                <Button Content="🗑 Elimina tutti"
-                                        Classes="danger"
-                                        Command="{Binding ProxyDeleteAllCommand}"/>
-                            </WrapPanel>
-                        </StackPanel>
+                        <!-- RIGA 1: gestione base -->
+                        <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="6">
+                            <Button Content="+ Nuovo" Classes="accent" Command="{Binding ProxyNewCommand}"/>
+                            <Button Content="📁 Importa" Click="OnProxyImportFileClick"
+                                    ToolTip.Tip="Importa da file .txt o .csv"/>
+                            <Button Content="💾 Salva" Command="{Binding ProxySaveCommand}"
+                                    IsEnabled="{Binding !IsProxyBusy}"/>
+
+                            <Button Content="⚡ Attiva per provider" Classes="success"
+                                    Command="{Binding ProxyActivateCommand}"
+                                    IsEnabled="{Binding CanActivateForProvider}"/>
+                            <Button Content="⏹ Disattiva per provider" Classes="danger"
+                                    Command="{Binding ProxyDeactivateCommand}"
+                                    IsEnabled="{Binding CanDeactivateForProvider}"/>
+                            <Button Content="🔀 Ruota al prossimo" Classes="accent"
+                                    Command="{Binding ProxyRotateNextCommand}"
+                                    IsEnabled="{Binding CanRotateForProvider}"/>
+                        </WrapPanel>
+
+                        <!-- RIGA 2: selezione + test -->
+                        <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="6">
+                            <TextBlock Text="Selezione:" VerticalAlignment="Center"
+                                    Foreground="{DynamicResource AppTextMutedBrush}" FontSize="12"/>
+                            <Button Content="☑ Tutti" Command="{Binding ProxySelectAllCommand}"/>
+                            <Button Content="☐ Nessuno" Command="{Binding ProxyDeselectAllCommand}"/>
+
+                            <TextBlock Text="Provider:" VerticalAlignment="Center"
+                                    Foreground="{DynamicResource AppTextMutedBrush}" FontSize="12"/>
+                            <ComboBox ItemsSource="{Binding TestProviders}"
+                                    SelectedItem="{Binding SelectedTestProvider, Mode=TwoWay}"
+                                    MinWidth="180" VerticalAlignment="Center"/>
+
+                            <TextBlock Text="Bot:" VerticalAlignment="Center"
+                                    Foreground="{DynamicResource AppTextMutedBrush}" FontSize="12"/>
+                            <Slider Value="{Binding ProxyTestConcurrency}"
+                                    Minimum="1" Maximum="20" Width="100"
+                                    TickFrequency="1" IsSnapToTickEnabled="True"
+                                    VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding ProxyTestConcurrency}" Width="20"
+                                    VerticalAlignment="Center" FontWeight="Bold"
+                                    Foreground="{DynamicResource AppAccentBrush}"/>
+
+                            <Button Content="🔌 Test selezionati" Classes="info"
+                                    Command="{Binding ProxyTestSelectedCommand}"
+                                    IsEnabled="{Binding !IsProxyBusy}"/>
+                            <Button Content="🔌 Test tutti" Classes="info"
+                                    Command="{Binding ProxyTestAllCommand}"
+                                    IsEnabled="{Binding !IsProxyBusy}"/>
+                            <Button Content="⏹ Stop test" Classes="danger"
+                                    Command="{Binding ProxyStopTestCommand}"
+                                    IsEnabled="{Binding IsProxyBusy}"/>
+                        </WrapPanel>
+
+                        <!-- RIGA 3: rimuovi solo dalla lista corrente -->
+                        <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="6">
+                            <TextBlock Text="➖ Rimuovi solo dalla lista corrente:"
+                                    VerticalAlignment="Center"
+                                    FontSize="11" FontWeight="SemiBold"
+                                    Foreground="{DynamicResource AppTextMutedBrush}"/>
+                            <Button Content="➖ Rimuovi selezionati"
+                                    Command="{Binding ProxyRemoveFromCurrentListCommand}"
+                                    ToolTip.Tip="Rimuove il proxy solo dalla lista del provider corrente"/>
+                            <Button Content="➖ Rimuovi falliti"
+                                    Command="{Binding ProxyClearFailedFromCurrentListCommand}"
+                                    ToolTip.Tip="Rimuove i proxy con ❌ solo dalla lista del provider corrente"/>
+                            <Button Content="♻ Reset filtri" Classes="warning"
+                                    Command="{Binding ProxyResetFiltersCommand}"
+                                    ToolTip.Tip="Ri-mostra tutti i proxy nascosti in tutte le liste"/>
+                        </WrapPanel>
+
+                        <!-- RIGA 4: elimina dal database (rimuove da tutte le liste) -->
+                        <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="6">
+                            <TextBlock Text="🗑 Elimina da tutte le liste:"
+                                    VerticalAlignment="Center"
+                                    FontSize="11" FontWeight="SemiBold"
+                                    Foreground="{DynamicResource AppTextMutedBrush}"/>
+                            <Button Content="🗑 Elimina selezionati" Classes="danger"
+                                    Command="{Binding ProxyDeleteSelectedCommand}"/>
+                            <Button Content="🗑 Elimina falliti" Classes="danger"
+                                    Command="{Binding ProxyDeleteFailedCommand}"/>
+                            <Button Content="🗑 Elimina tutti" Classes="danger"
+                                    Command="{Binding ProxyDeleteAllCommand}"/>
+                        </WrapPanel>
+
+                    </StackPanel>
                     </Border>
 
                     <!-- Status -->
@@ -1820,34 +2536,42 @@
                     </Border>
 
                     <!-- Contenuto: lista a sinistra, dettaglio a destra -->
+                    
                     <Grid ColumnDefinitions="2*, 3*">
 
                         <!-- Lista proxy -->
                         <Border Grid.Column="0" Classes="cardElevated" Margin="0,0,6,0">
-                            <DockPanel>
-                                <TextBlock DockPanel.Dock="Top" Text="Lista proxy"
-                                           FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
-                                <ListBox ItemsSource="{Binding Proxies}"
-                                    SelectedItem="{Binding SelectedProxy, Mode=TwoWay}"
-                                    SelectionMode="Multiple"
-                                    SelectionChanged="OnProxyListSelectionChanged">
-                                <ListBox.Styles>
-                                    <Style Selector="ListBoxItem">
-                                        <Setter Property="BorderThickness" Value="2"/>
-                                        <Setter Property="BorderBrush" Value="Transparent"/>
-                                        <Setter Property="Margin" Value="2"/>
-                                        <Setter Property="Padding" Value="6,4"/>
-                                    </Style>
-                                    <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
-                                        <Setter Property="Background" Value="{DynamicResource AppSurface2Brush}"/>
-                                    </Style>
-                                </ListBox.Styles>
-                                <ListBox.ItemTemplate>
-                                        <DataTemplate DataType="models:ProxyConfig">
-                                            <Border CornerRadius="6" Padding="8,6"
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+                                <TextBlock Text="Lista proxy"
+                                        FontWeight="Bold" FontSize="14"
+                                        VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding VisibleCountText}"
+                                        FontSize="12"
+                                        Foreground="{DynamicResource AppTextMutedBrush}"
+                                        VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <ScrollViewer MaxHeight="600" VerticalScrollBarVisibility="Auto">
+                                    <ListBox ItemsSource="{Binding VisibleProxies}"
+                                            SelectedItem="{Binding SelectedProxy, Mode=TwoWay}"
+                                            SelectionMode="Multiple"
+                                            SelectionChanged="OnProxyListSelectionChanged">
+                                    <ListBox.Styles>
+                                        <Style Selector="ListBoxItem">
+                                            <Setter Property="BorderThickness" Value="2"/>
+                                            <Setter Property="BorderBrush" Value="Transparent"/>
+                                            <Setter Property="Margin" Value="2"/>
+                                            <Setter Property="Padding" Value="6,4"/>
+                                        </Style>
+                                        <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+                                            <Setter Property="Background" Value="{DynamicResource AppSurface2Brush}"/>
+                                        </Style>
+                                    </ListBox.Styles>
+                                    <ListBox.ItemTemplate>
+                                            <DataTemplate DataType="models:ProxyConfig">
+                                                <Border CornerRadius="6" Padding="8,6"
                                                     BorderThickness="2"
-                                                    BorderBrush="{Binding IsEnabled, Converter={x:Static vm:EnabledProxyToBrushConverter.Default}}"
-                                                    Background="{Binding IsEnabled, Converter={x:Static vm:EnabledProxyToBackgroundConverter.Default}}">
+                                                    BorderBrush="Transparent">
                                                 <Grid ColumnDefinitions="Auto, Auto, *, Auto, Auto">
                                                     <CheckBox Grid.Column="0"
                                                             IsChecked="{Binding IsSelected, Mode=TwoWay}"
@@ -1857,7 +2581,7 @@
                                                     <Ellipse Grid.Column="1" Width="12" Height="12"
                                                             Margin="0,0,8,0"
                                                             VerticalAlignment="Center"
-                                                            Fill="{Binding IsEnabled, Converter={x:Static vm:EnabledProxyToBrushConverter.Default}}"/>
+                                                            Fill="{Binding IsActiveForSelectedProvider, Converter={x:Static vm:EnabledProxyToBrushConverter.Default}}"/>
 
                                                     <StackPanel Grid.Column="2">
                                                         <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
@@ -1870,11 +2594,21 @@
                                                             TextTrimming="CharacterEllipsis"
                                                             VerticalAlignment="Center"
                                                             Margin="8,0"/>
+
+                                                    <TextBlock Grid.Column="4"
+                                                            Text="{Binding ActiveProvidersText}"
+                                                            FontSize="10"
+                                                            FontWeight="SemiBold"
+                                                            Foreground="{DynamicResource AppAccentBrush}"
+                                                            VerticalAlignment="Center"
+                                                            Margin="8,0,0,0"
+                                                            ToolTip.Tip="Provider per cui è attivo (AW=AnimeWorld, AS=AnimeSaturn, SC=StreamingCommunity, DL=Download diretti)"/>
                                                 </Grid>
                                             </Border>
-                                        </DataTemplate>
-                                    </ListBox.ItemTemplate>
-                                </ListBox>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </ScrollViewer>
                             </DockPanel>
                         </Border>
 
@@ -1923,9 +2657,12 @@
                                         <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding Username}" Margin="0,0,0,4"/>
 
                                         <TextBlock Grid.Row="6" Grid.Column="0" Text="Password:"
-                                                   VerticalAlignment="Center" Margin="0,0,10,4"/>
-                                        <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding Password}"
-                                                 PasswordChar="•" Margin="0,0,0,4"/>
+                                                VerticalAlignment="Center" Margin="0,0,10,4"/>
+                                        <TextBox Grid.Row="6" Grid.Column="1"
+                                                Text="{Binding Password, Mode=TwoWay}"
+                                                PasswordChar="•"
+                                                HorizontalAlignment="Stretch"
+                                                Margin="0,0,0,4"/>
                                     </Grid>
 
                                     <Border Background="{DynamicResource AppSurface2Brush}"
@@ -1935,8 +2672,13 @@
                                                        FontFamily="Consolas,Menlo,monospace"
                                                        TextWrapping="Wrap"/>
                                             <TextBlock Text="{Binding LastTested, StringFormat='Ultimo test: {0:dd/MM/yyyy HH:mm:ss}'}"
-                                                       FontSize="11"
-                                                       Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                                    FontSize="11"
+                                                    Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                            <TextBlock Text="{Binding ProviderResultsText, StringFormat='Provider: {0}'}"
+                                                    FontSize="11"
+                                                    Foreground="{DynamicResource AppAccentBrush}"
+                                                    TextWrapping="Wrap"
+                                                    Margin="0,4,0,0"/>
                                         </StackPanel>
                                     </Border>
                                 </StackPanel>
@@ -1959,9 +2701,13 @@
                                 IsVisible="{Binding HasDomainIssues}"
                                 VerticalAlignment="Center"
                                 ToolTip.Tip="Almeno un dominio non è raggiungibile"/>
+                        <Border Width="10" Height="10" CornerRadius="5"
+                                Background="#22C55E"
+                                IsVisible="{Binding !HasDomainIssues}"
+                                VerticalAlignment="Center"
+                                ToolTip.Tip="Tutti i domini sono OK"/>
                     </StackPanel>
                 </TabItem.Header>
-
                 <ScrollViewer VerticalScrollBarVisibility="Auto"
                             DataContext="{Binding Domains}">
                     <DockPanel Margin="0,10,0,0">
@@ -2092,43 +2838,72 @@
                         Margin="0,0,0,0"
                         ClipToBounds="True">
                     <DockPanel Margin="16,4,16,4">
-                        <Grid DockPanel.Dock="Top" ColumnDefinitions="*, Auto, Auto" Margin="0,0,0,2">
+                        <Grid DockPanel.Dock="Top" ColumnDefinitions="*, Auto, Auto, Auto, Auto" Margin="0,0,0,2">
                             <TextBlock Grid.Column="0" Text="📋 Log globale"
                                     FontWeight="Bold" FontSize="12"
                                     VerticalAlignment="Center"/>
-                            <Button Grid.Column="1" Content="🗑 Pulisci"
+
+                            <Button Grid.Column="1" Content="📋 Copia tutto"
+                                    FontSize="11" Padding="8,2"
+                                    Command="{Binding CopyLogsCommand}"
+                                    Margin="0,0,6,0"
+                                    ToolTip.Tip="Copia tutti i log negli appunti"/>
+
+                            <Button Grid.Column="2" Content="💾 Esporta"
+                                    FontSize="11" Padding="8,2"
+                                    Command="{Binding ExportLogsCommand}"
+                                    Margin="0,0,6,0"
+                                    ToolTip.Tip="Salva il log su file nel Desktop"/>
+
+                            <Button Grid.Column="3" Content="🗑 Pulisci"
                                     FontSize="11" Padding="8,2"
                                     Command="{Binding ClearLogsCommand}"
                                     Margin="0,0,6,0"/>
-                            <Button Grid.Column="2" x:Name="ToggleLogButton"
+
+                            <Button Grid.Column="4" x:Name="ToggleLogButton"
                                     Content="▼" FontSize="11" Padding="6,2"
                                     Click="OnToggleLogClick"
                                     ToolTip.Tip="Comprimi / espandi log"/>
                         </Grid>
-                <ScrollViewer x:Name="LogScrollViewer">
+                <ScrollViewer x:Name="LogScrollViewer"
+                            HorizontalScrollBarVisibility="Disabled"
+                            VerticalScrollBarVisibility="Auto">
                     <ItemsControl ItemsSource="{Binding Logs}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,1">
-                                    <TextBlock Text="{Binding TimestampText}"
-                                               FontFamily="Consolas,Menlo,monospace"
-                                               FontSize="11"
-                                               Foreground="{DynamicResource AppTextMutedBrush}"/>
-                                    <TextBlock Text="{Binding LevelIcon}" FontSize="11"/>
-                                    <Border Background="{DynamicResource AppSurface2Brush}"
+                                <Grid ColumnDefinitions="Auto, Auto, Auto, *" Margin="0,1">
+                                    <!-- Timestamp selezionabile -->
+                                    <SelectableTextBlock Grid.Column="0"
+                                            Text="{Binding TimestampText}"
+                                            FontFamily="Consolas,Menlo,monospace"
+                                            FontSize="11"
+                                            Foreground="{DynamicResource AppTextMutedBrush}"/>
+
+                                    <!-- Icona livello -->
+                                    <TextBlock Grid.Column="1" Text="{Binding LevelIcon}"
+                                            FontSize="11" Margin="8,0,0,0"/>
+
+                                    <!-- Badge categoria -->
+                                    <Border Grid.Column="2"
+                                            Background="{DynamicResource AppSurface2Brush}"
                                             CornerRadius="3"
                                             Padding="6,1"
-                                            MinWidth="70">
+                                            MinWidth="70"
+                                            Margin="8,0,8,0"
+                                            VerticalAlignment="Top">
                                         <TextBlock Text="{Binding Category}"
-                                                   FontSize="10"
-                                                   FontWeight="SemiBold"
-                                                   Foreground="{DynamicResource AppAccentBrush}"
-                                                   HorizontalAlignment="Center"/>
+                                                FontSize="10"
+                                                FontWeight="SemiBold"
+                                                Foreground="{DynamicResource AppAccentBrush}"
+                                                HorizontalAlignment="Center"/>
                                     </Border>
-                                    <TextBlock Text="{Binding Message}"
-                                               FontSize="11"
-                                               TextWrapping="NoWrap"/>
-                                </StackPanel>
+
+                                    <!-- Messaggio selezionabile e wrappabile -->
+                                    <SelectableTextBlock Grid.Column="3"
+                                            Text="{Binding Message}"
+                                            FontSize="11"
+                                            TextWrapping="Wrap"/>
+                                </Grid>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>

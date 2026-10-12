@@ -1,4 +1,4 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -40,14 +40,14 @@ public partial class MainWindow : Window
             LogPanel.Height = 40;
             LogPanel.MaxHeight = 40;
             if (LogScrollViewer != null) LogScrollViewer.IsVisible = false;
-            if (ToggleLogButton != null) ToggleLogButton.Content = "▲";
+            if (ToggleLogButton != null) ToggleLogButton.Content = "\u25B2";
         }
         else
         {
             LogPanel.MaxHeight = 400;
             LogPanel.Height = _logHeightBeforeCollapse;
             if (LogScrollViewer != null) LogScrollViewer.IsVisible = true;
-            if (ToggleLogButton != null) ToggleLogButton.Content = "▼";
+            if (ToggleLogButton != null) ToggleLogButton.Content = "\u25BC";
         }
     }
     private bool _sftpConfigCollapsed;
@@ -61,15 +61,13 @@ public partial class MainWindow : Window
             SftpConfigBody.IsVisible = !_sftpConfigCollapsed;
 
         if (ToggleSftpConfigButton != null)
-            ToggleSftpConfigButton.Content = _sftpConfigCollapsed ? "▼" : "▲";
+            ToggleSftpConfigButton.Content = _sftpConfigCollapsed ? "\u25BC" : "\u25B2";
     }
 
     public MainWindow(MainWindowViewModel viewModel, ISftpService sftpService)
     {
         InitializeComponent();
 
-        // Adatta la finestra alla dimensione dello schermo.
-        // Se lo schermo è più piccolo di 1500x950 DIP, riduci o massimizza.
         Opened += (s, e) =>
         {
             try
@@ -81,14 +79,12 @@ public partial class MainWindow : Window
                 double screenWidthDip = workingArea.Width / screen.Scaling;
                 double screenHeightDip = workingArea.Height / screen.Scaling;
 
-                // Se lo schermo è più piccolo della finestra di default, massimizza
                 if (screenWidthDip < 1500 || screenHeightDip < 950)
                 {
                     WindowState = WindowState.Maximized;
                 }
                 else
                 {
-                    // Altrimenti, posiziona la finestra al centro con le dimensioni di default
                     Width = Math.Min(1500, screenWidthDip - 40);
                     Height = Math.Min(950, screenHeightDip - 40);
                 }
@@ -102,8 +98,6 @@ public partial class MainWindow : Window
         DataContext = viewModel;
         _sftpService = sftpService;
 
-        // DataGridRow gestisce internamente PointerPressed: registriamo con
-        // handledEventsToo=true, altrimenti i nostri handler non partono.
         LocalFilesGrid.AddHandler(
             PointerPressedEvent, OnLocalGridPointerPressed,
             RoutingStrategies.Bubble, handledEventsToo: true);
@@ -185,9 +179,9 @@ public partial class MainWindow : Window
 
         var text = combo.Text?.Trim() ?? string.Empty;
         if (string.IsNullOrEmpty(text) && combo.SelectedItem is string selected) text = selected.Trim();
-        if (string.IsNullOrEmpty(text)) { Vm.Download.StatusMessage = "Inserisci un termine."; return; }
+        if (string.IsNullOrEmpty(text)) { Vm.AnimeDownload.StatusMessage = "Inserisci un termine."; return; }
 
-        _ = Vm.Download.SearchWithTermAsync(text);
+        _ = Vm.AnimeDownload.SearchWithTermAsync(text);
     }
 
     private void OnSearchKeyDown(object? sender, KeyEventArgs e)
@@ -195,7 +189,7 @@ public partial class MainWindow : Window
         if (e.Key == Key.Enter) { OnSearchButtonClick(sender, new RoutedEventArgs()); e.Handled = true; }
     }
 
-    private void OnClearSearchHistoryClick(object? sender, RoutedEventArgs e) => Vm?.Download.ClearSearchHistoryCommand.Execute(null);
+    private void OnClearSearchHistoryClick(object? sender, RoutedEventArgs e) => Vm?.AnimeDownload.ClearSearchHistoryCommand.Execute(null);
 
     // ============================================================
     //  SELEZIONE EPISODI
@@ -204,7 +198,7 @@ public partial class MainWindow : Window
     private void OnEpisodesSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (Vm == null) return;
-        if (_syncingEpisodeSelection) return;  // ← evita loop durante operazioni batch
+        if (_syncingEpisodeSelection) return;
         if (sender is not DataGrid grid) return;
 
         var selected = new HashSet<Episode>();
@@ -212,7 +206,7 @@ public partial class MainWindow : Window
             foreach (var item in grid.SelectedItems)
                 if (item is Episode ep) selected.Add(ep);
 
-        foreach (var ep in Vm.Download.Episodes)
+        foreach (var ep in Vm.AnimeDownload.Episodes)
         {
             bool shouldBeSelected = selected.Contains(ep);
             if (ep.IsSelected != shouldBeSelected) ep.IsSelected = shouldBeSelected;
@@ -222,60 +216,43 @@ public partial class MainWindow : Window
     private void OnSelectAllEpisodesClick(object? sender, RoutedEventArgs e)
     {
         if (Vm == null) return;
-        Vm.Download.SelectAllEpisodesCommand.Execute(null);
+        Vm.AnimeDownload.SelectAllEpisodesCommand.Execute(null);
 
         if (this.FindControl<DataGrid>("EpisodesGrid") is not DataGrid grid) return;
 
         _syncingEpisodeSelection = true;
-        try
-        {
-            grid.SelectAll();
-        }
-        finally
-        {
-            _syncingEpisodeSelection = false;
-        }
+        try { grid.SelectAll(); }
+        finally { _syncingEpisodeSelection = false; }
     }
 
     private void OnDeselectAllEpisodesClick(object? sender, RoutedEventArgs e)
     {
         if (Vm == null) return;
-        Vm.Download.DeselectAllEpisodesCommand.Execute(null);
+        Vm.AnimeDownload.DeselectAllEpisodesCommand.Execute(null);
 
         if (this.FindControl<DataGrid>("EpisodesGrid") is not DataGrid grid) return;
 
         _syncingEpisodeSelection = true;
-        try
-        {
-            grid.SelectedItems?.Clear();
-        }
-        finally
-        {
-            _syncingEpisodeSelection = false;
-        }
+        try { grid.SelectedItems?.Clear(); }
+        finally { _syncingEpisodeSelection = false; }
     }
 
     private void OnInvertEpisodeSelectionClick(object? sender, RoutedEventArgs e)
     {
         if (Vm == null) return;
 
-        // 1. Inverti la selezione nel VM (lancia anche il binding del checkbox)
-        Vm.Download.InvertEpisodeSelectionCommand.Execute(null);
+        Vm.AnimeDownload.InvertEpisodeSelectionCommand.Execute(null);
 
         if (this.FindControl<DataGrid>("EpisodesGrid") is not DataGrid grid) return;
 
-        // 2. Aggiorna SelectedItems della DataGrid SENZA far scatenare OnEpisodesSelectionChanged
         _syncingEpisodeSelection = true;
         try
         {
             grid.SelectedItems?.Clear();
-            foreach (var ep in Vm.Download.Episodes)
+            foreach (var ep in Vm.AnimeDownload.Episodes)
                 if (ep.IsSelected) grid.SelectedItems?.Add(ep);
         }
-        finally
-        {
-            _syncingEpisodeSelection = false;
-        }
+        finally { _syncingEpisodeSelection = false; }
     }
 
     // ============================================================
@@ -285,7 +262,7 @@ public partial class MainWindow : Window
     private async void OnBrowseBaseFolderClick(object? sender, RoutedEventArgs e)
     {
         var folder = await PickFolderAsync("Seleziona cartella base download");
-        if (!string.IsNullOrEmpty(folder)) Vm?.Download.SetBaseDownloadFolder(folder);
+        if (!string.IsNullOrEmpty(folder)) Vm?.AnimeDownload.SetBaseDownloadFolder(folder);
     }
 
     private async void OnBrowseOrganizeFolderClick(object? sender, RoutedEventArgs e)
@@ -526,7 +503,7 @@ public partial class MainWindow : Window
             : $"Eliminare {entries.Count} elementi?";
         if (entries.Any(x => x.IsDirectory))
             msg += "\n\nLe cartelle verranno eliminate con tutto il contenuto.";
-        msg += "\n\nQuesta azione non può essere annullata.";
+        msg += "\n\nQuesta azione non puÃ² essere annullata.";
 
         var ok = await ConfirmDialog.ShowAsync(this, msg, "Conferma eliminazione");
         if (sender is DataGrid g) g.Focus();
@@ -552,7 +529,7 @@ public partial class MainWindow : Window
             : $"Eliminare {entries.Count} elementi dal server?";
         if (entries.Any(x => x.IsDirectory))
             msg += "\n\nLe cartelle verranno eliminate con tutto il contenuto.";
-        msg += "\n\nQuesta azione non può essere annullata.";
+        msg += "\n\nQuesta azione non puÃ² essere annullata.";
 
         var ok = await ConfirmDialog.ShowAsync(this, msg, "Conferma eliminazione");
         if (sender is DataGrid g) g.Focus();
@@ -600,7 +577,7 @@ public partial class MainWindow : Window
 
         var tipo = entry.IsDirectory ? "cartella" : "file";
         var extra = entry.IsDirectory ? " e tutto il suo contenuto" : "";
-        var msg = $"Eliminare la {tipo} '{entry.Name}'{extra}?\n\nQuesta azione non può essere annullata.";
+        var msg = $"Eliminare la {tipo} '{entry.Name}'{extra}?\n\nQuesta azione non puÃ² essere annullata.";
 
         var ok = await ConfirmDialog.ShowAsync(this, msg, "Conferma eliminazione");
         if (!ok) return;
@@ -647,7 +624,7 @@ public partial class MainWindow : Window
 
         var tipo = entry.IsDirectory ? "cartella" : "file";
         var extra = entry.IsDirectory ? " e tutto il suo contenuto sul server" : "";
-        var msg = $"Eliminare la {tipo} remota '{entry.Name}'{extra}?\n\nQuesta azione non può essere annullata.";
+        var msg = $"Eliminare la {tipo} remota '{entry.Name}'{extra}?\n\nQuesta azione non puÃ² essere annullata.";
 
         var ok = await ConfirmDialog.ShowAsync(this, msg, "Conferma eliminazione");
         if (!ok) return;
@@ -702,8 +679,6 @@ public partial class MainWindow : Window
         if (Vm == null || _syncingProxySelection) return;
         if (sender is not ListBox lb) return;
 
-        // Sincronizza: gli item aggiunti alla selezione ListBox → IsSelected = true
-        // quelli rimossi → IsSelected = false
         _syncingProxySelection = true;
         try
         {
@@ -744,7 +719,7 @@ public partial class MainWindow : Window
         if (sender is not DataGrid grid) return;
         if (grid.SelectedItem is not AnimeSearchResult anime) return;
         if (Vm == null) return;
-        await Vm.Download.LoadEpisodesCommand.ExecuteAsync(anime);
+        await Vm.AnimeDownload.LoadEpisodesCommand.ExecuteAsync(anime);
     }
 
     private async void OnEpisodeDoubleTapped(object? sender, TappedEventArgs e)
@@ -752,105 +727,102 @@ public partial class MainWindow : Window
         if (sender is not DataGrid grid) return;
         if (grid.SelectedItem is not Episode episode) return;
         if (Vm == null) return;
-        await Vm.Download.DownloadEpisodeCommand.ExecuteAsync(episode);
+        await Vm.AnimeDownload.DownloadEpisodeCommand.ExecuteAsync(episode);
     }
 
     // ============================================================
-    //  CONTEXT MENU DOWNLOAD
+    //  CONTEXT MENU DOWNLOAD (ANIME)
     // ============================================================
 
-    private void OnResumeDownloadClick(object? sender, RoutedEventArgs e) { var i = ResolveItem<DownloadItem>(sender); if (i != null) Vm?.Download.ResumeItemPublic(i); }
-    private void OnForceDownloadClick(object? sender, RoutedEventArgs e) { var i = ResolveItem<DownloadItem>(sender); if (i != null) Vm?.Download.ForceItemPublic(i); }
-    private void OnUnforceDownloadClick(object? sender, RoutedEventArgs e) { var i = ResolveItem<DownloadItem>(sender); if (i != null) Vm?.Download.UnforceItemPublic(i); }
-    private void OnPauseDownloadClick(object? sender, RoutedEventArgs e) { var i = ResolveItem<DownloadItem>(sender); if (i != null) Vm?.Download.PauseItemPublic(i); }
-    private void OnCancelDownloadClick(object? sender, RoutedEventArgs e) { var i = ResolveItem<DownloadItem>(sender); if (i != null) Vm?.Download.CancelItemPublic(i); }
-    
+    private void OnResumeDownloadClick(object? sender, RoutedEventArgs e) { var i = ResolveItem<DownloadItem>(sender); if (i != null) Vm?.AnimeDownload.ResumeItemPublic(i); }
+    private void OnForceDownloadClick(object? sender, RoutedEventArgs e) { var i = ResolveItem<DownloadItem>(sender); if (i != null) Vm?.AnimeDownload.ForceItemPublic(i); }
+    private void OnUnforceDownloadClick(object? sender, RoutedEventArgs e) { var i = ResolveItem<DownloadItem>(sender); if (i != null) Vm?.AnimeDownload.UnforceItemPublic(i); }
+    private void OnPauseDownloadClick(object? sender, RoutedEventArgs e) { var i = ResolveItem<DownloadItem>(sender); if (i != null) Vm?.AnimeDownload.PauseItemPublic(i); }
+    private void OnCancelDownloadClick(object? sender, RoutedEventArgs e) { var i = ResolveItem<DownloadItem>(sender); if (i != null) Vm?.AnimeDownload.CancelItemPublic(i); }
+
     // ============================================================
-    //  PULSANTI ITEM (colonna a fianco)
+    //  PULSANTI ITEM (ANIME)
     // ============================================================
 
     private void OnDownloadItemResumeClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button b && b.DataContext is DownloadItem item)
-            Vm?.Download.ResumeItemPublic(item);
+            Vm?.AnimeDownload.ResumeItemPublic(item);
     }
 
     private void OnDownloadItemForceClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button b && b.DataContext is DownloadItem item)
-            Vm?.Download.ForceItemPublic(item);
+            Vm?.AnimeDownload.ForceItemPublic(item);
     }
 
     private void OnDownloadItemPauseClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button b && b.DataContext is DownloadItem item)
-            Vm?.Download.PauseItemPublic(item);
+            Vm?.AnimeDownload.PauseItemPublic(item);
     }
 
     private void OnDownloadItemCancelClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button b && b.DataContext is DownloadItem item)
-            Vm?.Download.CancelItemPublic(item);
+            Vm?.AnimeDownload.CancelItemPublic(item);
     }
 
     private async void OnDownloadItemRetryClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button b && b.DataContext is DownloadItem item && Vm != null)
-            await Vm.Download.RetryItemPublicAsync(item);
+            await Vm.AnimeDownload.RetryItemPublicAsync(item);
     }
 
     private async void OnDownloadItemRemoveClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button b && b.DataContext is DownloadItem item && Vm != null)
-            await Vm.Download.RemoveItemPublicAsync(item);
+            await Vm.AnimeDownload.RemoveItemPublicAsync(item);
     }
 
     // ============================================================
-    //  PULSANTI SERIE (retry)
+    //  PULSANTI SERIE (ANIME)
     // ============================================================
 
     private async void OnRetryFailedGroupClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button b && b.DataContext is SeriesGroup g && Vm != null)
-            await Vm.Download.RetryFailedGroupPublicAsync(g);
+            await Vm.AnimeDownload.RetryFailedGroupPublicAsync(g);
     }
 
     private async void OnRetryCancelledGroupClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button b && b.DataContext is SeriesGroup g && Vm != null)
-            await Vm.Download.RetryCancelledGroupPublicAsync(g);
+            await Vm.AnimeDownload.RetryCancelledGroupPublicAsync(g);
     }
 
     private async void OnRemoveDownloadClick(object? sender, RoutedEventArgs e)
     {
         var i = ResolveItem<DownloadItem>(sender);
-        if (i != null && Vm != null) await Vm.Download.RemoveItemPublicAsync(i);
+        if (i != null && Vm != null) await Vm.AnimeDownload.RemoveItemPublicAsync(i);
     }
 
     // ============================================================
-    //  PULSANTI GRUPPO
+    //  PULSANTI GRUPPO (ANIME)
     // ============================================================
 
-    private void OnResumeGroupClick(object? sender, RoutedEventArgs e) { if (sender is Button b && b.DataContext is SeriesGroup g) Vm?.Download.ResumeGroupPublic(g); }
-    private void OnForceGroupClick(object? sender, RoutedEventArgs e) { if (sender is Button b && b.DataContext is SeriesGroup g) Vm?.Download.ForceGroupPublic(g); }
-    private void OnUnforceGroupClick(object? sender, RoutedEventArgs e) { if (sender is Button b && b.DataContext is SeriesGroup g) Vm?.Download.UnforceGroupPublic(g); }
-    private void OnPauseGroupClick(object? sender, RoutedEventArgs e) { if (sender is Button b && b.DataContext is SeriesGroup g) Vm?.Download.PauseGroupPublic(g); }
-    private void OnCancelGroupClick(object? sender, RoutedEventArgs e) { if (sender is Button b && b.DataContext is SeriesGroup g) Vm?.Download.CancelGroupPublic(g); }
+    private void OnResumeGroupClick(object? sender, RoutedEventArgs e) { if (sender is Button b && b.DataContext is SeriesGroup g) Vm?.AnimeDownload.ResumeGroupPublic(g); }
+    private void OnForceGroupClick(object? sender, RoutedEventArgs e) { if (sender is Button b && b.DataContext is SeriesGroup g) Vm?.AnimeDownload.ForceGroupPublic(g); }
+    private void OnUnforceGroupClick(object? sender, RoutedEventArgs e) { if (sender is Button b && b.DataContext is SeriesGroup g) Vm?.AnimeDownload.UnforceGroupPublic(g); }
+    private void OnPauseGroupClick(object? sender, RoutedEventArgs e) { if (sender is Button b && b.DataContext is SeriesGroup g) Vm?.AnimeDownload.PauseGroupPublic(g); }
+    private void OnCancelGroupClick(object? sender, RoutedEventArgs e) { if (sender is Button b && b.DataContext is SeriesGroup g) Vm?.AnimeDownload.CancelGroupPublic(g); }
 
     private async void OnRemoveGroupClick(object? sender, RoutedEventArgs e)
     {
         if (sender is not Button b) return;
         if (b.DataContext is not SeriesGroup g) return;
         if (Vm == null) return;
-        await Vm.Download.RemoveGroupPublicAsync(g);
+        await Vm.AnimeDownload.RemoveGroupPublicAsync(g);
     }
 
     // ============================================================
-    //  DRAG & DROP — RILEVAMENTO (PointerMoved, non PointerPressed)
+    //  DRAG & DROP — RILEVAMENTO
     // ============================================================
-    //
-    // Il drag parte da PointerMoved con soglia 5px, così la DataGrid ha già
-    // applicato la selezione multipla (Ctrl/Shift) prima che leggiamo SelectedItems.
 
     private void OnLocalGridPointerPressed(object? sender, PointerPressedEventArgs e)
     {
@@ -888,8 +860,6 @@ public partial class MainWindow : Window
 
         var items = grid.SelectedItems.OfType<LocalFileEntry>().ToList();
         if (items.Count == 0) return;
-
-        System.Diagnostics.Debug.WriteLine($"[DRAG-START-LOCAL] {items.Count} elemento/i");
 
         _draggedLocalEntries = items;
         _draggedRemoteEntries = null;
@@ -943,16 +913,11 @@ public partial class MainWindow : Window
         var items = grid.SelectedItems.OfType<SftpRemoteEntry>().ToList();
         if (items.Count == 0) return;
 
-        System.Diagnostics.Debug.WriteLine($"[DRAG-START-REMOTE] {items.Count} elemento/i");
-
         _draggedRemoteEntries = items;
         _draggedLocalEntries = null;
 
         try
         {
-            // Solo testo: il drag interno (Remote → Local) usa i path remoti.
-            // Il drag outbound verso Explorer è rimosso perché troppo costoso
-            // (avrebbe dovuto pre-scaricare tutto in temp prima di poter partire).
             var dataTransfer = new DataTransfer();
             foreach (var it in items)
                 dataTransfer.Add(DataTransferItem.CreateText(it.FullPath));
@@ -964,7 +929,7 @@ public partial class MainWindow : Window
     }
 
     // ============================================================
-    //  DRAG & DROP — TARGET (DragOver / Drop)
+    //  DRAG & DROP — TARGET
     // ============================================================
 
     private void OnRemoteGridDragOver(object? sender, DragEventArgs e)
@@ -986,7 +951,6 @@ public partial class MainWindow : Window
     {
         if (Vm == null) return;
 
-        // Caso A: drag interno LocalGrid → RemoteGrid
         if (_draggedLocalEntries is { Count: > 0 })
         {
             var entries = _draggedLocalEntries;
@@ -1000,7 +964,6 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Caso B: drag dal Sistema Operativo (Esplora File)
         if (!e.DataTransfer.Contains(DataFormat.File)) return;
 
         var files = e.DataTransfer.TryGetFiles();
@@ -1015,7 +978,6 @@ public partial class MainWindow : Window
 
         if (paths.Count == 0) return;
 
-        System.Diagnostics.Debug.WriteLine($"[DRAG-OS-DROP] {paths.Count} elemento/i");
         await Vm.Sftp.EnqueueUploadsFromPathsAsync(paths, Vm.Sftp.SftpCurrentRemotePath);
     }
 
@@ -1042,5 +1004,186 @@ public partial class MainWindow : Window
             Vm.Sftp.SelectedRemoteEntries.Add(it);
 
         await Vm.Sftp.SftpDownloadSelectedCommand.ExecuteAsync(null);
+    }
+
+    // ============================================================
+    //  TAB FILM/SERIE — RICERCA
+    // ============================================================
+
+    private void OnStreamingSearchButtonClick(object? sender, RoutedEventArgs e)
+    {
+        if (Vm == null) return;
+        var combo = this.FindControl<ComboBox>("StreamingSearchComboBox");
+        if (combo == null) return;
+
+        var text = combo.Text?.Trim() ?? string.Empty;
+        if (string.IsNullOrEmpty(text) && combo.SelectedItem is string selected) text = selected.Trim();
+        if (string.IsNullOrEmpty(text)) { Vm.Streaming.StatusMessage = "Inserisci un termine."; return; }
+
+        _ = Vm.Streaming.SearchWithTermAsync(text);
+    }
+
+    private void OnStreamingSearchKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter) { OnStreamingSearchButtonClick(sender, new RoutedEventArgs()); e.Handled = true; }
+    }
+
+    private void OnStreamingClearSearchHistoryClick(object? sender, RoutedEventArgs e)
+        => Vm?.Streaming.ClearSearchHistoryCommand.Execute(null);
+
+    // ============================================================
+    //  TAB FILM/SERIE — DOPPIO CLICK RISULTATO
+    // ============================================================
+
+    private async void OnStreamingSearchResultDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is not DataGrid grid) return;
+        if (grid.SelectedItem is not MovieSearchResult result) return;
+        if (Vm == null) return;
+
+        await Vm.Streaming.LoadSeasonsCommand.ExecuteAsync(result);
+    }
+
+    // ============================================================
+    //  TAB FILM/SERIE — SELEZIONE EPISODI
+    // ============================================================
+
+    private bool _syncingStreamingEpisodeSelection;
+
+    private void OnStreamingEpisodesSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (Vm == null) return;
+        if (_syncingStreamingEpisodeSelection) return;
+        if (sender is not DataGrid grid) return;
+
+        var selected = new HashSet<StreamingEpisode>();
+        if (grid.SelectedItems != null)
+            foreach (var item in grid.SelectedItems)
+                if (item is StreamingEpisode ep) selected.Add(ep);
+
+        foreach (var ep in Vm.Streaming.Episodes)
+        {
+            bool shouldBeSelected = selected.Contains(ep);
+            if (ep.IsSelected != shouldBeSelected) ep.IsSelected = shouldBeSelected;
+        }
+    }
+
+    private void OnStreamingSelectAllEpisodesClick(object? sender, RoutedEventArgs e)
+    {
+        if (Vm == null) return;
+        Vm.Streaming.SelectAllEpisodesCommand.Execute(null);
+
+        if (this.FindControl<DataGrid>("StreamingEpisodesGrid") is not DataGrid grid) return;
+        _syncingStreamingEpisodeSelection = true;
+        try { grid.SelectAll(); }
+        finally { _syncingStreamingEpisodeSelection = false; }
+    }
+
+    private void OnStreamingDeselectAllEpisodesClick(object? sender, RoutedEventArgs e)
+    {
+        if (Vm == null) return;
+        Vm.Streaming.DeselectAllEpisodesCommand.Execute(null);
+
+        if (this.FindControl<DataGrid>("StreamingEpisodesGrid") is not DataGrid grid) return;
+        _syncingStreamingEpisodeSelection = true;
+        try { grid.SelectedItems?.Clear(); }
+        finally { _syncingStreamingEpisodeSelection = false; }
+    }
+
+    private void OnStreamingInvertEpisodeSelectionClick(object? sender, RoutedEventArgs e)
+    {
+        if (Vm == null) return;
+
+        Vm.Streaming.InvertEpisodeSelectionCommand.Execute(null);
+
+        if (this.FindControl<DataGrid>("StreamingEpisodesGrid") is not DataGrid grid) return;
+        _syncingStreamingEpisodeSelection = true;
+        try
+        {
+            grid.SelectedItems?.Clear();
+            foreach (var ep in Vm.Streaming.Episodes)
+                if (ep.IsSelected) grid.SelectedItems?.Add(ep);
+        }
+        finally { _syncingStreamingEpisodeSelection = false; }
+    }
+
+    // ============================================================
+    //  TAB FILM/SERIE — BROWSER CARTELLA
+    // ============================================================
+
+    private async void OnStreamingBrowseBaseFolderClick(object? sender, RoutedEventArgs e)
+    {
+        var folder = await PickFolderAsync("Seleziona cartella base download streaming");
+        if (!string.IsNullOrEmpty(folder)) Vm?.Streaming.SetBaseDownloadFolder(folder);
+    }
+
+    // ============================================================
+    //  FILM/SERIE — PULSANTI CODA
+    // ============================================================
+
+    private void OnStreamingResumeGroupClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button b && b.DataContext is SeriesGroup g)
+            Vm?.Streaming.ResumeGroupPublic(g);
+    }
+
+    private void OnStreamingForceGroupClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button b && b.DataContext is SeriesGroup g)
+            Vm?.Streaming.ForceGroupPublic(g);
+    }
+
+    private void OnStreamingUnforceGroupClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button b && b.DataContext is SeriesGroup g)
+            Vm?.Streaming.UnforceGroupPublic(g);
+    }
+
+    private void OnStreamingCancelGroupClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button b && b.DataContext is SeriesGroup g)
+            Vm?.Streaming.CancelGroupPublic(g);
+    }
+
+    private async void OnStreamingRemoveGroupClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button b && b.DataContext is SeriesGroup g && Vm != null)
+            await Vm.Streaming.RemoveGroupPublicAsync(g);
+    }
+
+    private async void OnStreamingRetryFailedGroupClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button b && b.DataContext is SeriesGroup g && Vm != null)
+            await Vm.Streaming.RetryFailedGroupPublicAsync(g);
+    }
+
+    private void OnStreamingDownloadItemResumeClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button b && b.DataContext is DownloadItem it)
+            Vm?.Streaming.ResumeItemPublic(it);
+    }
+
+    private void OnStreamingDownloadItemForceClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button b && b.DataContext is DownloadItem it)
+            Vm?.Streaming.ForceItemPublic(it);
+    }
+
+    private void OnStreamingDownloadItemCancelClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button b && b.DataContext is DownloadItem it)
+            Vm?.Streaming.CancelItemPublic(it);
+    }
+
+    private async void OnStreamingDownloadItemRetryClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button b && b.DataContext is DownloadItem it && Vm != null)
+            await Vm.Streaming.RetryItemPublicAsync(it);
+    }
+
+    private async void OnStreamingDownloadItemRemoveClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button b && b.DataContext is DownloadItem it && Vm != null)
+            await Vm.Streaming.RemoveItemPublicAsync(it);
     }
 }

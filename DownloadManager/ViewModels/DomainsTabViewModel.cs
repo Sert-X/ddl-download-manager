@@ -6,13 +6,14 @@ using DownloadManager.Models;
 using DownloadManager.Services.Domains;
 using DownloadManager.Services.Anime.AnimeWorld;
 using DownloadManager.Services.Anime.AnimeSaturn;
+using DownloadManager.Services.Streaming.StreamingCommunity;
 using Microsoft.Extensions.Logging;
 
 namespace DownloadManager.ViewModels;
 
 /// <summary>
 /// Sub-ViewModel per il tab "Domini". Permette di modificare l'URL base
-/// dei provider anime, testare la raggiungibilità e resettare ai default.
+/// dei provider (anime + streaming), testare la raggiungibilità e resettare ai default.
 /// </summary>
 public partial class DomainsTabViewModel : ViewModelBase
 {
@@ -22,6 +23,7 @@ public partial class DomainsTabViewModel : ViewModelBase
     private readonly SharedState _shared;
     private readonly IAnimeWorldService _animeWorldService;
     private readonly IAnimeSaturnService _animeSaturnService;
+    private readonly IStreamingCommunityService _streamingCommunityService;
 
     public ObservableCollection<DomainConfig> Domains { get; } = new();
 
@@ -35,17 +37,23 @@ public partial class DomainsTabViewModel : ViewModelBase
         DomainTester tester,
         IAnimeWorldService animeWorldService,
         IAnimeSaturnService animeSaturnService,
+        IStreamingCommunityService streamingCommunityService,
         ILogger<DomainsTabViewModel> logger,
         SharedState shared)
     {
         _resolver = resolver;
         _tester = tester;
-         _animeWorldService = animeWorldService;
-         _animeSaturnService = animeSaturnService;
+        _animeWorldService = animeWorldService;
+        _animeSaturnService = animeSaturnService;
+        _streamingCommunityService = streamingCommunityService;
         _logger = logger;
         _shared = shared;
 
+        // I provider sono già registrati nel DomainResolver via dizionario _defaults.
+        // Nessun EnsureProvider necessario.
+
         LoadDomains();
+
         // Test automatico all'avvio (fire-and-forget, non blocca)
         _ = Task.Run(async () =>
         {
@@ -59,7 +67,6 @@ public partial class DomainsTabViewModel : ViewModelBase
             }
         });
 
-        // Notifica al VM principale quando lo stato "issues" cambia
         UpdateHasIssues();
     }
 
@@ -193,7 +200,8 @@ public partial class DomainsTabViewModel : ViewModelBase
         cfg.Url = _resolver.GetBaseUrl(cfg.ProviderName);
 
         StatusMessage = $"{cfg.ProviderName}: URL salvato ({cfg.Url})";
-        // Re-init del provider per applicare subito il nuovo dominio
+
+        // Notifica il provider per applicare subito il nuovo dominio
         _ = Task.Run(async () =>
         {
             try
@@ -202,9 +210,15 @@ public partial class DomainsTabViewModel : ViewModelBase
                     await _animeWorldService.NotifyProxyChangedAsync();
                 else if (string.Equals(cfg.ProviderName, "AnimeSaturn", StringComparison.OrdinalIgnoreCase))
                     await _animeSaturnService.NotifyProxyChangedAsync();
+                else if (string.Equals(cfg.ProviderName, "StreamingCommunity", StringComparison.OrdinalIgnoreCase))
+                    await _streamingCommunityService.NotifyProxyChangedAsync();
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[DOMAIN] Errore notifica cambio dominio per {Provider}", cfg.ProviderName);
+            }
         });
+
         _logger.LogInformation("[DOMAIN] {Provider}: salvato {Url}", cfg.ProviderName, cfg.Url);
     }
 
@@ -225,13 +239,9 @@ public partial class DomainsTabViewModel : ViewModelBase
     //  TEST AUTOMATICO ALL'AVVIO
     // ============================================================
 
-    /// <summary>
-    /// Chiamato da App.axaml.cs all'avvio. Esegue un test di tutti i domini
-    /// in background senza bloccare la UI.
-    /// </summary>
     public async Task TestAllOnStartupAsync()
     {
-        await Task.Delay(2500);   // lascia respirare l'avvio
+        await Task.Delay(2500);
 
         if (Domains.Count == 0) return;
 

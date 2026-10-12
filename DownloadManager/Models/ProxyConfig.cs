@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace DownloadManager.Models;
@@ -6,7 +8,6 @@ public enum ProxyProtocol { Http, Socks5 }
 public enum ProxyAuthType { None, UserPassword }
 
 public partial class ProxyConfig : ObservableObject
-
 {
     public int Id { get; set; }
 
@@ -18,16 +19,55 @@ public partial class ProxyConfig : ObservableObject
     [ObservableProperty] private string _username = string.Empty;
     [ObservableProperty] private string _password = string.Empty;
 
-    [ObservableProperty] private bool _isEnabled;
     [ObservableProperty] private bool _isTesting;
     [ObservableProperty] private string _testResult = string.Empty;
     [ObservableProperty] private DateTime _lastTested;
     [ObservableProperty] private bool _isSelected;
 
+    // === Provider enablement (per-proxy) ===
+    [ObservableProperty] private bool _isEnabledForAnimeWorld;
+    [ObservableProperty] private bool _isEnabledForAnimeSaturn;
+    [ObservableProperty] private bool _isEnabledForStreamingCommunity;
+    [ObservableProperty] private bool _isEnabledForDownloads;
+    /// <summary>Attivo per il provider attualmente selezionato nella UI (aggiornato dal VM).</summary>
+    [ObservableProperty] private bool _isActiveForSelectedProvider;
+
+    // Flag interni: "l'utente ha disattivato manualmente questo provider"
+    public bool ManuallyDisabledForAnimeWorld { get; set; }
+    public bool ManuallyDisabledForAnimeSaturn { get; set; }
+    public bool ManuallyDisabledForStreamingCommunity { get; set; }
+    public bool ManuallyDisabledForDownloads { get; set; }
+
+    // Helper: ritorna true se il proxy è attivo per almeno un provider
+    public bool IsEnabled =>
+        IsEnabledForAnimeWorld ||
+        IsEnabledForAnimeSaturn ||
+        IsEnabledForStreamingCommunity ||
+        IsEnabledForDownloads;
+
+    partial void OnIsEnabledForAnimeWorldChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsEnabled));
+        OnPropertyChanged(nameof(ActiveProvidersText));
+    }
+    partial void OnIsEnabledForAnimeSaturnChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsEnabled));
+        OnPropertyChanged(nameof(ActiveProvidersText));
+    }
+    partial void OnIsEnabledForStreamingCommunityChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsEnabled));
+        OnPropertyChanged(nameof(ActiveProvidersText));
+    }
+    partial void OnIsEnabledForDownloadsChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsEnabled));
+        OnPropertyChanged(nameof(ActiveProvidersText));
+    }
+
     public string ProtocolText => Protocol == ProxyProtocol.Http ? "HTTP" : "SOCKS5";
-
     public string DisplayText => $"{ProtocolText.ToLower()}://{Host}:{Port}";
-
     public string AuthText => Auth == ProxyAuthType.None
         ? "senza auth"
         : $"auth: {Username}";
@@ -36,12 +76,8 @@ public partial class ProxyConfig : ObservableObject
 
     partial void OnTestResultChanged(string value) => OnPropertyChanged(nameof(IsFailed));
 
-    /// <summary>
-    /// Formato accettato da Playwright: "http://host:port" o "socks5://host:port".
-    /// </summary>
     public string PlaywrightServer => $"{ProtocolText.ToLower()}://{Host}:{Port}";
 
-    // Helper per le ComboBox in XAML (SelectedIndex è int, gli enum non lo sono)
     public int ProtocolIndex
     {
         get => (int)Protocol;
@@ -53,8 +89,6 @@ public partial class ProxyConfig : ObservableObject
         get => (int)Auth;
         set => Auth = (ProxyAuthType)value;
     }
-
-    // ==== Notifiche cambio proprietà (una sola dichiarazione per ciascuna!) ====
 
     partial void OnProtocolChanged(ProxyProtocol value)
     {
@@ -76,14 +110,71 @@ public partial class ProxyConfig : ObservableObject
         OnPropertyChanged(nameof(PlaywrightServer));
     }
 
-    partial void OnUsernameChanged(string value)
-    {
-        OnPropertyChanged(nameof(AuthText));
-    }
+    partial void OnUsernameChanged(string value) => OnPropertyChanged(nameof(AuthText));
 
     partial void OnAuthChanged(ProxyAuthType value)
     {
         OnPropertyChanged(nameof(AuthText));
         OnPropertyChanged(nameof(AuthIndex));
     }
+
+    // === Rotazione ===
+    public DateTime? LastFailedUtc { get; set; }
+    public int ConsecutiveFailures { get; set; }
+
+    // === Risultati test per provider ===
+    private Dictionary<string, string> _providerResults = new();
+
+    public Dictionary<string, string> ProviderResults
+    {
+        get => _providerResults;
+        set
+        {
+            _providerResults = value ?? new();
+            OnPropertyChanged(nameof(ProviderResults));
+            OnPropertyChanged(nameof(ProviderResultsText));
+        }
+    }
+
+    public string ProviderResultsText
+    {
+        get
+        {
+            if (_providerResults.Count == 0) return "(nessun test provider)";
+            return string.Join(" | ", _providerResults
+                .OrderBy(kv => kv.Key)
+                .Select(kv => $"{kv.Key}: {kv.Value}"));
+        }
+    }
+
+    public void SetProviderResult(string provider, string result)
+    {
+        _providerResults[provider] = result;
+        OnPropertyChanged(nameof(ProviderResults));
+        OnPropertyChanged(nameof(ProviderResultsText));
+    }
+
+    public string ActiveProvidersText
+    {
+        get
+        {
+            var list = new List<string>();
+            if (IsEnabledForAnimeWorld) list.Add("AW");
+            if (IsEnabledForAnimeSaturn) list.Add("AS");
+            if (IsEnabledForStreamingCommunity) list.Add("SC");
+            if (IsEnabledForDownloads) list.Add("DL");
+            return list.Count == 0 ? "" : "[" + string.Join(" ", list) + "]";
+        }
+    }
+
+    /// <summary>Ritorna true se il proxy ha test ✅ per il provider specificato.</summary>
+    public bool HasTestOkFor(string providerKey)
+        => ProviderResults.TryGetValue(providerKey, out var r)
+           && r.StartsWith("✅");
+
+    /// <summary>
+    /// Provider da cui questo proxy è stato "rimosso dalla lista corrente".
+    /// Il proxy resta in DB ma non appare nella vista di quel provider.
+    /// </summary>
+    public HashSet<string> RemovedFromProviders { get; set; } = new();
 }

@@ -30,3 +30,5 @@ Desktop.ini
 *.rar
 # Binari FFmpeg (scaricati da CI in release, localmente non committare)
 DownloadManager/Assets/ffmpeg/
+# Binari nm3u8dl (scaricati da CI in release, localmente non committare)
+DownloadManager/Assets/nm3u8dl/

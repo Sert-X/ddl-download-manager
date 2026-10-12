@@ -2,11 +2,15 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using System.IO;
+using System.Linq;
 using DownloadManager.Persistence;
 using DownloadManager.Services.Anime;
 using DownloadManager.Services.Anime.AnimeWorld;
 using DownloadManager.Services.Anime.AnimeSaturn;
+using DownloadManager.Services.Streaming;
+using DownloadManager.Services.Streaming.StreamingCommunity;
 using DownloadManager.Services.Download;
 using DownloadManager.Services.FileOrganizer;
 using DownloadManager.Services.Logging;
@@ -17,7 +21,6 @@ using DownloadManager.Services.Domains;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using DownloadManager.Services.Proxy;
-using System.Linq;
 
 namespace DownloadManager;
 
@@ -32,49 +35,12 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
-        #if DEBUG
-        // ==== DUMP TEMPORANEO ====
-        try
-        {
-            var asm = System.Reflection.Assembly.Load("ManagedCode.Playwright.Stealth");
-            Console.WriteLine("========= STEALTH DUMP =========");
-            foreach (var t in asm.GetExportedTypes())
-            {
-                Console.WriteLine($"=== {t.FullName} ===");
-                foreach (var m in t.GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Instance))
-                {
-                    var ps = string.Join(", ", m.GetParameters().Select(p => $"{p.ParameterType.FullName} {p.Name}"));
-                    Console.WriteLine($"  METHOD: {m.ReturnType.FullName} {m.Name}({ps})");
-                }
-                foreach (var p in t.GetProperties())
-                {
-                    Console.WriteLine($"  PROP:   {p.PropertyType.FullName} {p.Name}");
-                }
-                foreach (var c in t.GetConstructors())
-                {
-                    var ps = string.Join(", ", c.GetParameters().Select(p => $"{p.ParameterType.FullName} {p.Name}"));
-                    Console.WriteLine($"  CTOR:   ({ps})");
-                }
-            }
+        // ============================================================
+        //  1. SERVIZI
+        // ============================================================
 
-            var pwAsm = System.Reflection.Assembly.Load("Microsoft.Playwright");
-            Console.WriteLine("========= PLAYWRIGHT PROXY TYPES =========");
-            foreach (var t in pwAsm.GetExportedTypes())
-            {
-                if (t.Name.Contains("Proxy", StringComparison.OrdinalIgnoreCase))
-                    Console.WriteLine($"  TYPE: {t.FullName}");
-            }
-            Console.WriteLine("========= END DUMP =========");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[DUMP FAIL] {ex}");
-        }
-        #endif
-        // ==== FINE DUMP ====
         var services = new ServiceCollection();
 
-        // Crea LogService prima del logging provider, così il provider lo vede subito.
         var logService = new LogService();
         services.AddSingleton(logService);
 
@@ -90,8 +56,15 @@ public partial class App : Application
         services.AddSingleton<IAnimeSaturnService, AnimeSaturnService>();
         services.AddSingleton<IAnimeProvider>(sp => sp.GetRequiredService<IAnimeSaturnService>());
         services.AddSingleton<AnimeProviderRegistry>();
+        services.AddSingleton<IStreamingProvider>(sp =>
+            sp.GetRequiredService<IStreamingCommunityService>());
+        services.AddSingleton<DownloadManager.Persistence.AccountRepository>();
+        services.AddSingleton<DownloadManager.Services.Streaming.StreamingCommunity.StreamingCommunityAuthService>();
+        services.AddSingleton<DownloadManager.ViewModels.AccountTabViewModel>();
+        services.AddSingleton<IStreamingCommunityService, StreamingCommunityService>();
+        services.AddSingleton<StreamingProviderRegistry>();
         services.AddSingleton<FfmpegLocator>();
-        services.AddSingleton<IDownloadService, DownloadService>();
+        services.AddSingleton<DownloadManager.Services.Download.YtDlpLocator>();
 
         services.AddSingleton<SftpSessionLimiter>(_ => new SftpSessionLimiter(maxSessions: 8));
         services.AddSingleton<SftpConfigRepository>();
@@ -118,7 +91,11 @@ public partial class App : Application
         services.AddTransient<MainWindow>();
 
         Services = services.BuildServiceProvider();
-        // Copia ffmpeg.exe dal bundle a %LOCALAPPDATA% (se non esiste o se aggiornato)
+
+        // ============================================================
+        //  2. BOOTSTRAP FFMPEG (copia in %LOCALAPPDATA%)
+        // ============================================================
+
         try
         {
             var ffmpegLogger = Services.GetRequiredService<ILogger<App>>();
@@ -126,10 +103,13 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[FFMPEG-BOOTSTRAP] {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[FFMPEG-BOOTSTRAP] {ex.Message}");
         }
 
-        // Init DB su thread pool (evita deadlock sul thread UI di Avalonia).
+        // ============================================================
+        //  3. INIT DATABASE
+        // ============================================================
+
         Task.Run(async () =>
         {
             var repo = Services!.GetRequiredService<DownloadRepository>();
@@ -145,136 +125,232 @@ public partial class App : Application
             await proxyRepo.InitializeAsync();
         }).GetAwaiter().GetResult();
 
-        // Applica il tema salvato.
+        // ============================================================
+        //  4. TEMA
+        // ============================================================
+
         var settings = Services.GetRequiredService<SettingsService>();
         ApplyTheme(settings.Current.ThemeVariant);
 
-        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        // ============================================================
+        //  5. AVVIO UI
+        // ============================================================
+
+        if (ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var dragTemp = Path.Combine(Path.GetTempPath(), "DDLDownloadManager", "drag");
-            if (Directory.Exists(dragTemp))
+            base.OnFrameworkInitializationCompleted();
+            return;
+        }
+
+        // Cleanup temp drag
+        var dragTemp = Path.Combine(Path.GetTempPath(), "DDLDownloadManager", "drag");
+        if (Directory.Exists(dragTemp))
+        {
+            try { Directory.Delete(dragTemp, true); }
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"[TEMP-CLEANUP] {ex.Message}");
+            }
+        }
+
+        // Verifica se serve il bootstrap Playwright
+        bool needsBootstrap = !ArePlaywrightBrowsersInstalled();
+
+        if (needsBootstrap)
+        {
+            // === PRIMO AVVIO: mostra BootstrapDialog, poi MainWindow ===
+            var bootstrapDialog = new BootstrapDialog();
+            desktop.MainWindow = bootstrapDialog;
+            bootstrapDialog.Show();
+
+            _ = Task.Run(async () =>
+            {
+                bool success = await bootstrapDialog.RunBootstrapAsync();
+
+                // Aspetta un attimo per far leggere il messaggio finale all'utente
+                await Task.Delay(1500);
+
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    try
+                    {
+                        var mainWindow = Services.GetRequiredService<MainWindow>();
+                        desktop.MainWindow = mainWindow;
+                        mainWindow.Show();
+
+                        try { bootstrapDialog.Close(); } catch { }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[BOOTSTRAP] Errore apertura MainWindow: {ex}");
+                    }
+                });
+
+                // Ripristina coda download
                 try
                 {
-                    Directory.Delete(dragTemp, true);
+                    var queue = Services!.GetRequiredService<DownloadQueueService>();
+                    await queue.RestoreFromDatabaseAsync();
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[TEMP-CLEANUP] {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"[RESTORE] Errore: {ex}");
                 }
-            }
 
+                // Check aggiornamenti
+                await CheckUpdatesAsync(desktop);
+            });
+        }
+        else
+        {
+            // === AVVII SUCCESSIVI: MainWindow diretta ===
             desktop.MainWindow = Services.GetRequiredService<MainWindow>();
 
-            // Ripristina i download non completati in modo asincrono, DOPO che la finestra
-            // è stata creata. NON bloccare il thread UI con .GetAwaiter().GetResult(),
-            // altrimenti si crea un deadlock con Dispatcher.UIThread.InvokeAsync.
             _ = Task.Run(async () =>
             {
                 try
                 {
                     var queue = Services!.GetRequiredService<DownloadQueueService>();
                     await queue.RestoreFromDatabaseAsync();
-
                     System.Diagnostics.Debug.WriteLine("[RESTORE] Ripristino completato");
                 }
                 catch (Exception ex)
                 {
                     System.Diagnostics.Debug.WriteLine($"[RESTORE] Errore: {ex}");
                 }
+
+                await CheckUpdatesAsync(desktop);
             });
-
-           // Check aggiornamenti in background (non blocca l'avvio)
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    System.Diagnostics.Debug.WriteLine("[UPDATE] Avvio check aggiornamenti...");
-
-                    // Attendi che la MainWindow sia effettivamente visibile
-                    await Task.Delay(3000);
-
-                    var mgr = new Velopack.UpdateManager(
-                        new Velopack.Sources.GithubSource(
-                            "https://github.com/Sert-X/ddl-download-manager",
-                            accessToken: null,
-                            prerelease: false));
-
-                    var update = await mgr.CheckForUpdatesAsync();
-
-                    if (update == null)
-                    {
-                        System.Diagnostics.Debug.WriteLine("[UPDATE] Nessun aggiornamento.");
-                        return;
-                    }
-
-                    System.Diagnostics.Debug.WriteLine($"[UPDATE] Trovata versione {update.TargetFullRelease.Version}");
-
-                    var newVersion = update.TargetFullRelease.Version.ToString();
-                    var packageSize = update.TargetFullRelease.Size;
-
-                    var changelog = await DownloadManager.Services.Update.GitHubReleaseFetcher.FetchChangelogAsync(
-                        "Sert-X", "ddl-download-manager", "v" + newVersion);
-
-                    var choice = await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
-                    {
-                        var win = desktop.MainWindow;
-                        if (win == null) return UpdateChoice.Cancel;
-
-                        return await Views.UpdateDialog.ShowAsync(
-                            win,
-                            newVersion,
-                            packageSize,
-                            changelog,
-                            async progress =>
-                            {
-                                await mgr.DownloadUpdatesAsync(update, p => progress(p));
-                            });
-                    });
-
-                    switch (choice)
-                    {
-                        case UpdateChoice.InstallNow:
-                            mgr.ApplyUpdatesAndRestart(update);
-                            break;
-
-                        case UpdateChoice.InstallLater:
-                            mgr.WaitExitThenApplyUpdates(update);
-                            break;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[UPDATE] ECCEZIONE: {ex}");
-                }
-            });
-
-            desktop.ShutdownRequested += (s, e) =>
-            {
-                try
-                {
-                    // Ferma il FileSystemWatcher del browser locale SFTP
-                    if (desktop.MainWindow?.DataContext is MainWindowViewModel vm)
-                    {
-                        try { vm.Sftp.Dispose(); } catch { }
-                    }
-                    var queue = Services!.GetRequiredService<DownloadQueueService>();
-                    queue.CancelAll();
-
-                    var sftpService = Services!.GetRequiredService<ISftpService>();
-                    var t1 = sftpService.DisconnectAsync();
-                    Task.WaitAny(t1, Task.Delay(3000));
-
-                    var anime = Services!.GetRequiredService<IAnimeWorldService>();
-                    var t2 = anime.DisposeAsync();
-                    Task.WaitAny(t2, Task.Delay(3000));
-                }
-                catch { }
-            };
         }
+
+        desktop.ShutdownRequested += OnShutdownRequested;
 
         base.OnFrameworkInitializationCompleted();
     }
+
+    // ============================================================
+    //  PLAYWRIGHT BOOTSTRAP
+    // ============================================================
+
+    private static bool ArePlaywrightBrowsersInstalled()
+    {
+        try
+        {
+            var browsersPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "ms-playwright");
+
+            return Directory.Exists(browsersPath) &&
+                Directory.EnumerateDirectories(browsersPath, "chromium*").Any();
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    // ============================================================
+    //  UPDATE CHECK
+    // ============================================================
+
+    private static async Task CheckUpdatesAsync(IClassicDesktopStyleApplicationLifetime desktop)
+    {
+        try
+        {
+            System.Diagnostics.Debug.WriteLine("[UPDATE] Avvio check aggiornamenti...");
+
+            // Attendi che la MainWindow sia visibile
+            await Task.Delay(3000);
+
+            var mgr = new Velopack.UpdateManager(
+                new Velopack.Sources.GithubSource(
+                    "https://github.com/Sert-X/ddl-download-manager",
+                    accessToken: null,
+                    prerelease: false));
+
+            var update = await mgr.CheckForUpdatesAsync();
+
+            if (update == null)
+            {
+                System.Diagnostics.Debug.WriteLine("[UPDATE] Nessun aggiornamento.");
+                return;
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[UPDATE] Trovata versione {update.TargetFullRelease.Version}");
+
+            var newVersion = update.TargetFullRelease.Version.ToString();
+            var packageSize = update.TargetFullRelease.Size;
+
+            var changelog = await DownloadManager.Services.Update.GitHubReleaseFetcher.FetchChangelogAsync(
+                "Sert-X", "ddl-download-manager", "v" + newVersion);
+
+            var choice = await Dispatcher.UIThread.InvokeAsync(async () =>
+            {
+                var win = desktop.MainWindow;
+                if (win == null) return UpdateChoice.Cancel;
+
+                return await Views.UpdateDialog.ShowAsync(
+                    win,
+                    newVersion,
+                    packageSize,
+                    changelog,
+                    async progress =>
+                    {
+                        await mgr.DownloadUpdatesAsync(update, p => progress(p));
+                    });
+            });
+
+            switch (choice)
+            {
+                case UpdateChoice.InstallNow:
+                    mgr.ApplyUpdatesAndRestart(update);
+                    break;
+
+                case UpdateChoice.InstallLater:
+                    mgr.WaitExitThenApplyUpdates(update);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[UPDATE] ECCEZIONE: {ex}");
+        }
+    }
+
+    // ============================================================
+    //  SHUTDOWN
+    // ============================================================
+
+    private static void OnShutdownRequested(object? sender, ShutdownRequestedEventArgs e)
+    {
+        try
+        {
+            if (Application.Current?.ApplicationLifetime
+                is IClassicDesktopStyleApplicationLifetime desktop)
+            {
+                if (desktop.MainWindow?.DataContext is MainWindowViewModel vm)
+                {
+                    try { vm.Sftp.Dispose(); } catch { }
+                }
+
+                var queue = Services!.GetRequiredService<DownloadQueueService>();
+                queue.CancelAll();
+
+                var sftpService = Services!.GetRequiredService<ISftpService>();
+                var t1 = sftpService.DisconnectAsync();
+                Task.WaitAny(t1, Task.Delay(3000));
+
+                var anime = Services!.GetRequiredService<IAnimeWorldService>();
+                var t2 = anime.DisposeAsync();
+                Task.WaitAny(t2, Task.Delay(3000));
+            }
+        }
+        catch { }
+    }
+
+    // ============================================================
+    //  TEMA
+    // ============================================================
 
     public static void ApplyTheme(string themeVariant)
     {

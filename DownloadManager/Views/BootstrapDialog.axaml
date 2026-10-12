@@ -1,0 +1,74 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="DownloadManager.Views.BootstrapDialog"
+        Title="DDL Download Manager — Preparazione"
+        Width="520" Height="320"
+        WindowStartupLocation="CenterScreen"
+        CanResize="False"
+        ShowInTaskbar="True">
+
+    <Border Background="{DynamicResource AppSurfaceBrush}"
+            BorderBrush="{DynamicResource AppBorderBrush}"
+            BorderThickness="1"
+            Padding="24">
+        <Grid RowDefinitions="Auto, Auto, Auto, *, Auto">
+
+            <!-- Intestazione -->
+            <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="12" Margin="0,0,0,16">
+                <TextBlock Text="⚙" FontSize="28" VerticalAlignment="Center"
+                           Foreground="{DynamicResource AppAccentBrush}"/>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="Preparazione dell'applicazione"
+                               FontSize="16" FontWeight="Bold"/>
+                    <TextBlock Text="Primo avvio — attendere prego"
+                               FontSize="11"
+                               Foreground="{DynamicResource AppTextMutedBrush}"/>
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Messaggio corrente -->
+            <TextBlock Grid.Row="1"
+                       x:Name="StatusText"
+                       Text="Inizializzazione..."
+                       FontSize="13"
+                       TextWrapping="Wrap"
+                       Margin="0,0,0,12"/>
+
+            <!-- Barra di progresso -->
+            <StackPanel Grid.Row="2" Spacing="6" Margin="0,0,0,16">
+                <ProgressBar x:Name="ProgressBar"
+                             IsIndeterminate="True"
+                             Height="8"/>
+                <TextBlock x:Name="ProgressDetailText"
+                           Text=""
+                           FontSize="11"
+                           Foreground="{DynamicResource AppTextMutedBrush}"/>
+            </StackPanel>
+
+            <!-- Log scrollabile -->
+            <Border Grid.Row="3"
+                    Background="{DynamicResource AppSurface2Brush}"
+                    BorderBrush="{DynamicResource AppBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Margin="0,0,0,16">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              Padding="10">
+                    <TextBlock x:Name="LogText"
+                               Text=""
+                               FontFamily="Consolas,Menlo,monospace"
+                               FontSize="11"
+                               TextWrapping="Wrap"/>
+                </ScrollViewer>
+            </Border>
+
+            <!-- Nota informativa -->
+            <TextBlock Grid.Row="4"
+                       Text="Il primo avvio può richiedere 1-2 minuti per scaricare i componenti necessari (browser Chromium ~150 MB)."
+                       FontSize="11"
+                       FontStyle="Italic"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource AppTextMutedBrush}"/>
+        </Grid>
+    </Border>
+</Window>

@@ -3,6 +3,7 @@ using System.Collections.Specialized;
 using Avalonia.Threading;
 using DownloadManager.Models;
 using DownloadManager.Persistence;
+using DownloadManager.Services.Streaming.StreamingCommunity;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -68,9 +69,75 @@ public class DownloadQueueService
 
         foreach (var item in unfinished)
         {
+            // === RICOSTRUISCE I DELEGATI per i download StreamingCommunity ===
+            RewireStreamingExtractors(item);
+
             item.Status = DownloadStatus.Pending;
             await AddToListAsync(item);
         }
+    }
+
+    /// <summary>
+    /// Ricostruisce UrlExtractor / AudioExtractor / CookieExtractor per un item
+    /// StreamingCommunity ripristinato dal DB. Necessario perché i delegati
+    /// non sono serializzabili e al riavvio dell'app vanno ricreati.
+    /// </summary>
+    private void RewireStreamingExtractors(DownloadItem item)
+    {
+        if (item.ProviderKey != "StreamingCommunity") return;
+        if (string.IsNullOrEmpty(item.ContentLink)) return;
+        if (item.UrlExtractor != null) return;   // già wired
+
+        var sc = _serviceProvider.GetService<IStreamingCommunityService>();
+        if (sc == null)
+        {
+            _logger.LogWarning("[REWIRE] IStreamingCommunityService non disponibile");
+            return;
+        }
+
+        var capturedLink = item.ContentLink;
+        var capturedIsSeries = item.IsSeries;
+        var capturedSeason = item.SeasonNumber;
+        var capturedEp = item.EpisodeNumber;
+        var capturedEpId = item.EpisodeId > 0 ? (int?)item.EpisodeId : null;
+        var capturedQuality = item.QualityName ?? "";
+
+        item.UrlExtractor = async t =>
+        {
+            var master = await sc.GetVideoUrlAsync(
+                capturedLink, isSeries: capturedIsSeries,
+                seasonNumber: capturedSeason,
+                episodeNumber: capturedEp,
+                episodeId: capturedEpId);
+
+            if (string.IsNullOrEmpty(master)) return null;
+            if (string.IsNullOrEmpty(capturedQuality)) return master;
+
+            var (v, _) = await sc.ResolveQualityAsync(master, capturedQuality, t);
+            return v;
+        };
+
+        item.CookieExtractor = async _ => await sc.GetSessionCookiesNetscapeAsync();
+
+        if (!string.IsNullOrEmpty(capturedQuality))
+        {
+            item.AudioExtractor = async t =>
+            {
+                var master = await sc.GetVideoUrlAsync(
+                    capturedLink, isSeries: capturedIsSeries,
+                    seasonNumber: capturedSeason,
+                    episodeNumber: capturedEp,
+                    episodeId: capturedEpId);
+
+                if (string.IsNullOrEmpty(master)) return null;
+                var (_, a) = await sc.ResolveQualityAsync(master, capturedQuality, t);
+                return a;
+            };
+        }
+
+        _logger.LogInformation(
+            "[REWIRE] Item #{Id} (S{Season}E{Ep}) → extractor ricostruiti",
+            item.Id, capturedSeason, capturedEp);
     }
 
     public async Task EnqueueAsync(DownloadItem item)
@@ -266,7 +333,6 @@ public class DownloadQueueService
         QueueChanged?.Invoke();
     }
 
-    // Cancella TUTTI: attivi, pending, paused, failed → Cancelled
     public void CancelAll()
     {
         List<int> activeIds;
@@ -499,19 +565,14 @@ public class DownloadQueueService
     }
 
     // ============================================================
-    //  PER SINGOLI ITEM
+    //  RETRY
     // ============================================================
 
-    /// <summary>
-    /// Ritenta un download Failed/Cancelled: cancella .part, resetta il progresso
-    /// e rimette in coda. Non tocca l'URL (se è scaduto fallirà di nuovo).
-    /// </summary>
     public async Task RetryItemAsync(DownloadItem item)
     {
         if (item.Status != DownloadStatus.Failed && item.Status != DownloadStatus.Cancelled)
             return;
 
-        // Elimina eventuale file .part
         try
         {
             var partPath = item.DestinationPath + ".part";
@@ -526,8 +587,6 @@ public class DownloadQueueService
             _logger.LogWarning(ex, "Impossibile eliminare .part per retry: {Path}", item.DestinationPath);
         }
 
-        // Reset stato — SINCRONO sul thread UI, così quando torniamo
-        // il dispatcher vede già lo status aggiornato
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
             item.DownloadedBytes = 0;
@@ -538,12 +597,8 @@ public class DownloadQueueService
             item.IsPriority = false;
         });
 
-        // Pulisci i chunk salvati (resume DB)
         try { await _repository.ClearChunksAsync(item.Id); } catch { }
 
-        // Aspetta che l'item esca da _active (se ancora presente).
-        // Uso InvokeAsync sopra garantisce che il Post di Failed/Cancelled
-        // sia già stato processato, ma _active.Remove() può essere in ritardo.
         for (int i = 0; i < 20; i++)
         {
             lock (_queueLock)
@@ -554,7 +609,6 @@ public class DownloadQueueService
             await Task.Delay(50);
         }
 
-        // Metti in coda
         lock (_queueLock)
         {
             _pending.RemoveAll(i => i.Id == item.Id);
@@ -603,6 +657,190 @@ public class DownloadQueueService
 
         foreach (var item in cancelledItems)
             await RetryItemAsync(item);
+    }
+
+    // ============================================================
+    //  VARIANTI PER CATEGORY
+    // ============================================================
+
+    public void StartAll(string category)
+    {
+        _isPaused = false;
+        _autoStartOnFirstEnqueue = false;
+
+        lock (_queueLock)
+        {
+            foreach (var item in AllItems.Where(i => i.Category == category))
+            {
+                if (item.Status == DownloadStatus.Paused ||
+                    item.Status == DownloadStatus.Pending ||
+                    item.Status == DownloadStatus.Failed)
+                {
+                    item.Status = DownloadStatus.Pending;
+                    item.ErrorMessage = string.Empty;
+
+                    if (!_active.ContainsKey(item.Id) && _pendingIds.Add(item.Id))
+                        _pending.Add(item);
+                }
+            }
+        }
+
+        QueueChanged?.Invoke();
+        TryDispatch();
+    }
+
+    public void PauseAll(string category)
+    {
+        List<DownloadItem> toPause;
+        lock (_queueLock)
+        {
+            toPause = _active.Keys
+                .Select(id => AllItems.FirstOrDefault(i => i.Id == id))
+                .Where(i => i != null && i.Category == category)
+                .Cast<DownloadItem>()
+                .ToList();
+
+            _pending.RemoveAll(i => i.Category == category);
+
+            foreach (var item in AllItems.Where(i =>
+                i.Category == category && i.Status == DownloadStatus.Pending))
+            {
+                item.Status = DownloadStatus.Paused;
+            }
+        }
+
+        foreach (var item in toPause)
+        {
+            item.PauseRequested = true;
+            if (_active.TryGetValue(item.Id, out var cts))
+                cts.Cancel();
+        }
+
+        QueueChanged?.Invoke();
+    }
+
+    public void CancelAll(string category)
+    {
+        List<int> activeIds;
+        List<DownloadItem> toCancel;
+
+        lock (_queueLock)
+        {
+            activeIds = _active.Keys
+                .Select(id => AllItems.FirstOrDefault(i => i.Id == id))
+                .Where(i => i != null && i.Category == category)
+                .Select(i => i!.Id)
+                .ToList();
+
+            toCancel = AllItems
+                .Where(i => i.Category == category &&
+                        (i.Status == DownloadStatus.Pending ||
+                            i.Status == DownloadStatus.Paused ||
+                            i.Status == DownloadStatus.Failed))
+                .ToList();
+
+            _pending.RemoveAll(i => i.Category == category);
+        }
+
+        foreach (var item in toCancel)
+        {
+            item.PauseRequested = false;
+            item.Status = DownloadStatus.Cancelled;
+        }
+
+        foreach (var id in activeIds)
+        {
+            if (_active.TryGetValue(id, out var cts))
+            {
+                try { cts.Cancel(); } catch { }
+            }
+        }
+
+        QueueChanged?.Invoke();
+    }
+
+    public void ClearCompleted(string category)
+    {
+        var toRemove = AllItems
+            .Where(i => i.Category == category && i.Status == DownloadStatus.Completed)
+            .ToList();
+        Dispatcher.UIThread.Post(() =>
+        {
+            foreach (var item in toRemove) AllItems.Remove(item);
+        });
+        QueueChanged?.Invoke();
+    }
+
+    public void ClearCancelled(string category)
+    {
+        List<DownloadItem> toRemove;
+        lock (_queueLock)
+        {
+            toRemove = AllItems
+                .Where(i => i.Category == category && i.Status == DownloadStatus.Cancelled)
+                .ToList();
+            foreach (var item in toRemove)
+            {
+                _pending.RemoveAll(p => p.Id == item.Id);
+                _pendingIds.Remove(item.Id);
+            }
+        }
+        Dispatcher.UIThread.Post(() =>
+        {
+            foreach (var item in toRemove) AllItems.Remove(item);
+        });
+        QueueChanged?.Invoke();
+    }
+
+    public void ClearFailed(string category)
+    {
+        var toRemove = AllItems
+            .Where(i => i.Category == category && i.Status == DownloadStatus.Failed)
+            .ToList();
+        Dispatcher.UIThread.Post(() =>
+        {
+            foreach (var item in toRemove) AllItems.Remove(item);
+        });
+        QueueChanged?.Invoke();
+    }
+
+    public async Task DeleteEverythingAsync(string category)
+    {
+        CancelAll(category);
+        await Task.Delay(300);
+
+        List<DownloadItem> snapshot;
+        lock (_queueLock)
+        {
+            snapshot = AllItems.Where(i => i.Category == category).ToList();
+            _pending.RemoveAll(i => i.Category == category);
+            _pendingIds.RemoveWhere(id => snapshot.Any(s => s.Id == id));
+        }
+
+        foreach (var item in snapshot)
+        {
+            if (item.Id > 0)
+            {
+                try { await _repository.DeleteAsync(item.Id); } catch { }
+            }
+        }
+
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            foreach (var item in snapshot) AllItems.Remove(item);
+        });
+
+        QueueChanged?.Invoke();
+    }
+
+    public bool ContainsEpisode(string category, string seriesName, int episodeNumber)
+    {
+        if (string.IsNullOrEmpty(seriesName) && episodeNumber == 0) return false;
+
+        return AllItems.Any(i =>
+            i.Category == category &&
+            string.Equals(i.SeriesName, seriesName, StringComparison.OrdinalIgnoreCase) &&
+            i.EpisodeNumber == episodeNumber);
     }
 
     // ============================================================

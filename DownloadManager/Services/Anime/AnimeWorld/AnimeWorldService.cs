@@ -39,7 +39,7 @@ public class AnimeWorldService : IAnimeWorldService
 
     public async Task InitializeAsync(bool headless = true)
     {
-        var active = _proxyProvider.GetActive();
+        var active = _proxyProvider.GetActive(ProviderKeys.AnimeWorld);
         var proxyKey = active == null
             ? "(none)"
             : $"{active.Protocol}|{active.Host}|{active.Port}|{active.Username}";
@@ -138,105 +138,40 @@ public class AnimeWorldService : IAnimeWorldService
             var page = await _context.NewPageAsync();
             try
             {
-                _logger.LogInformation("Ricerca per '{Query}'", query);
-
-                var navResponse = await page.GotoAsync(BaseUrl);
-                if (navResponse != null && navResponse.Status >= 400)
-                {
-                    throw new InvalidOperationException(
-                        $"HTTP {navResponse.Status} {navResponse.StatusText}");
-                }
-                await page.WaitForTimeoutAsync(1000);
-
-                // ============================================================
-                //  TENTATIVO 1: API interna (di solito restituisce pochi risultati)
-                // ============================================================
-                var keyword = Uri.EscapeDataString(query);
-                var apiUrl = $"/api/search/v2?keyword={keyword}";
-
-                var resultJson = await page.EvaluateAsync<string>(@"
-                    async (apiUrl) => {
-                        try {
-                            const csrfMeta = document.querySelector('meta[name=""csrf-token""]');
-                            const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
-
-                            const r = await fetch(apiUrl, {
-                                method: 'POST',
-                                credentials: 'include',
-                                headers: {
-                                    'x-requested-with': 'XMLHttpRequest',
-                                    'csrf-token': csrfToken,
-                                    'accept': 'application/json, text/javascript, */*; q=0.01'
-                                }
-                            });
-                            const body = await r.text();
-                            return JSON.stringify({ status: r.status, body: body });
-                        } catch (e) {
-                            return JSON.stringify({ status: -1, body: e.toString() });
-                        }
-                    }
-                ", apiUrl);
-
-                _logger.LogInformation("Risposta grezza API: {Raw}",
-                    resultJson?.Length > 500 ? resultJson.Substring(0, 500) : resultJson);
-
-                if (!string.IsNullOrEmpty(resultJson))
-                {
-                    try
-                    {
-                        using var wrapper = System.Text.Json.JsonDocument.Parse(resultJson);
-                        var status = wrapper.RootElement.GetProperty("status").GetInt32();
-                        var body = wrapper.RootElement.GetProperty("body").GetString() ?? "";
-
-                        if (status == 200)
-                        {
-                            using var doc = System.Text.Json.JsonDocument.Parse(body);
-
-                            if (doc.RootElement.TryGetProperty("animes", out var animesEl) &&
-                                animesEl.ValueKind == System.Text.Json.JsonValueKind.Array)
-                            {
-                                foreach (var anime in animesEl.EnumerateArray())
-                                {
-                                    var name = anime.TryGetProperty("name", out var n) ? n.GetString() : "";
-                                    var link = anime.TryGetProperty("link", out var l) ? l.GetString() : "";
-                                    var identifier = anime.TryGetProperty("identifier", out var i) ? i.GetString() : "";
-
-                                    if (string.IsNullOrEmpty(link)) continue;
-
-                                    var fullLink = $"{BaseUrl}/play/{link}.{identifier}";
-                                    var key = fullLink.ToLowerInvariant();
-                                    if (!seenLinks.Add(key)) continue;
-
-                                    results.Add(new AnimeSearchResult { Name = name ?? "", Link = fullLink });
-                                }
-
-                                _logger.LogInformation("API: {Count} risultati", results.Count);
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Errore parsing risposta API.");
-                    }
-                }
-
-                // ============================================================
-                //  TENTATIVO 2: HTML search — SEMPRE, per aggiungere altri risultati
-                // ============================================================
-                _logger.LogInformation("Cerco anche nell'HTML per completare i risultati...");
+                _logger.LogInformation("[AW] Ricerca HTML per '{Query}'", query);
 
                 var searchUrl = $"{BaseUrl}/search?keyword={Uri.EscapeDataString(query)}";
-                await page.GotoAsync(searchUrl);
-                await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-                await page.WaitForTimeoutAsync(500);
 
-                // Prova più selettori: il sito può cambiare struttura.
-                // Prima quello "storico", poi uno più generico.
+                var navResponse = await page.GotoAsync(searchUrl, new PageGotoOptions
+                {
+                    WaitUntil = WaitUntilState.DOMContentLoaded,
+                    Timeout = 30000
+                });
+
+                if (navResponse != null && navResponse.Status >= 400)
+                    throw new InvalidOperationException(
+                        $"HTTP {navResponse.Status} {navResponse.StatusText}");
+
+                // Attende che compaiano i risultati
+                try
+                {
+                    await page.WaitForSelectorAsync("div.item, a.name",
+                        new PageWaitForSelectorOptions { Timeout = 10000 });
+                }
+                catch
+                {
+                    _logger.LogWarning("[AW] Nessun risultato trovato per '{Query}'", query);
+                    return results;
+                }
+
+                // Cerca le tile (più generico possibile)
                 var anchors = await page.QuerySelectorAllAsync("div.item > div.inner > a.name");
                 if (anchors == null || anchors.Count == 0)
                     anchors = await page.QuerySelectorAllAsync("a.name");
+                if (anchors == null || anchors.Count == 0)
+                    anchors = await page.QuerySelectorAllAsync("div.item a");
 
-                _logger.LogInformation("HTML: trovati {Count} anchor", anchors?.Count ?? 0);
+                _logger.LogInformation("[AW] Trovati {N} anchor", anchors?.Count ?? 0);
 
                 if (anchors != null)
                 {
@@ -250,7 +185,6 @@ public class AnimeWorldService : IAnimeWorldService
                             if (string.IsNullOrEmpty(href)) continue;
                             if (href.StartsWith("/")) href = BaseUrl + href;
 
-                            // Scarta link che non sono pagine anime (menu, login, ecc.)
                             if (!href.Contains("/play/", StringComparison.OrdinalIgnoreCase) &&
                                 !href.Contains("/anime/", StringComparison.OrdinalIgnoreCase))
                                 continue;
@@ -258,23 +192,67 @@ public class AnimeWorldService : IAnimeWorldService
                             var key = href.Split('?')[0].ToLowerInvariant();
                             if (!seenLinks.Add(key)) continue;
 
-                            results.Add(new AnimeSearchResult { Name = name, Link = href });
+                            // === ESTRAZIONE POSTER ===
+                            string? posterUrl = null;
+                            try
+                            {
+                                var img = await a.QuerySelectorAsync("img");
+                                if (img == null)
+                                {
+                                    // Cerca nel contenitore padre
+                                    var parent = await a.EvaluateHandleAsync(
+                                        "el => el.closest('.item') || el.parentElement");
+                                    if (parent != null)
+                                    {
+                                        var parentEl = parent.AsElement();
+                                        if (parentEl != null)
+                                            img = await parentEl.QuerySelectorAsync("img");
+                                    }
+                                }
+
+                                if (img != null)
+                                {
+                                    posterUrl = await img.GetAttributeAsync("data-src")
+                                            ?? await img.GetAttributeAsync("src");
+
+                                    if (!string.IsNullOrEmpty(posterUrl) && posterUrl.StartsWith("/"))
+                                        posterUrl = BaseUrl + posterUrl;
+
+                                    if (!string.IsNullOrEmpty(posterUrl) &&
+                                        (posterUrl.StartsWith("data:", StringComparison.OrdinalIgnoreCase) ||
+                                        posterUrl.Contains("placeholder", StringComparison.OrdinalIgnoreCase)))
+                                        posterUrl = null;
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogDebug(ex, "[AW] Errore poster per {Href}", href);
+                            }
+
+                            results.Add(new AnimeSearchResult
+                            {
+                                Name = name,
+                                Link = href,
+                                PosterUrl = posterUrl
+                            });
                         }
                         catch { }
                     }
                 }
 
-                _logger.LogInformation("Totale risultati combinati: {Count}", results.Count);
+                _logger.LogInformation("[AW] Trovati {N} risultati per '{Query}'",
+                    results.Count, query);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Errore durante la ricerca di '{Query}'", query);
+                _logger.LogError(ex, "[AW] Errore ricerca '{Query}'", query);
                 throw;
             }
             finally
             {
                 try { await page.CloseAsync(); } catch { }
             }
+
             return results;
         }
         finally
