@@ -37,8 +37,8 @@ public partial class MainWindow : Window
         if (_logCollapsed)
         {
             _logHeightBeforeCollapse = LogPanel.Height;
-            LogPanel.Height = 40;
-            LogPanel.MaxHeight = 40;
+            LogPanel.Height = 36;
+            LogPanel.MaxHeight = 36;
             if (LogScrollViewer != null) LogScrollViewer.IsVisible = false;
             if (ToggleLogButton != null) ToggleLogButton.Content = "\u25B2";
         }
@@ -716,8 +716,13 @@ public partial class MainWindow : Window
 
     private async void OnSearchResultDoubleTapped(object? sender, TappedEventArgs e)
     {
-        if (sender is not DataGrid grid) return;
-        if (grid.SelectedItem is not AnimeSearchResult anime) return;
+        var selected = sender switch
+        {
+            DataGrid g => g.SelectedItem,
+            ListBox l => l.SelectedItem,
+            _ => null
+        };
+        if (selected is not AnimeSearchResult anime) return;
         if (Vm == null) return;
         await Vm.AnimeDownload.LoadEpisodesCommand.ExecuteAsync(anime);
     }
@@ -1037,8 +1042,13 @@ public partial class MainWindow : Window
 
     private async void OnStreamingSearchResultDoubleTapped(object? sender, TappedEventArgs e)
     {
-        if (sender is not DataGrid grid) return;
-        if (grid.SelectedItem is not MovieSearchResult result) return;
+        var selected = sender switch
+        {
+            DataGrid g => g.SelectedItem,
+            ListBox l => l.SelectedItem,
+            _ => null
+        };
+        if (selected is not MovieSearchResult result) return;
         if (Vm == null) return;
 
         await Vm.Streaming.LoadSeasonsCommand.ExecuteAsync(result);
@@ -1185,5 +1195,17 @@ public partial class MainWindow : Window
     {
         if (sender is Button b && b.DataContext is DownloadItem it && Vm != null)
             await Vm.Streaming.RemoveItemPublicAsync(it);
+    }
+
+    private void OnRemotePreviewClick(object? sender, RoutedEventArgs e)
+    {
+        var entry = ResolveItem<SftpRemoteEntry>(sender);
+        if (entry == null || Vm == null) return;
+        if (entry.IsDirectory)
+        {
+            Vm.Sftp.SftpStatusMessage = "Le cartelle non si possono riprodurre.";
+            return;
+        }
+        Vm.Sftp.PlayRemoteFile(entry);
     }
 }

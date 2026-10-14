@@ -94,17 +94,29 @@ public partial class StreamingTabViewModel : ViewModelBase
     public bool IsSelectedResultSeries => SelectedResult?.IsSeries == true;
     public bool IsSelectedResultMovie => SelectedResult != null && !SelectedResult.IsSeries;
     public bool HasSeasons => Seasons.Count > 0;
-    /// <summary>
-    /// True se ci sono download streaming in corso, pending, in pausa o failed.
-    /// Usata per il pallino giallo/verde nell'header del tab.
-    /// </summary>
+    public bool HasFailedStreamingItems =>
+        _queueService.AllItems.Any(i =>
+            i.Category == CategoryName &&
+            i.Status == DownloadStatus.Failed);
+
     public bool HasActiveStreamingItems =>
         _queueService.AllItems.Any(i =>
             i.Category == CategoryName &&
             (i.Status == DownloadStatus.Downloading ||
             i.Status == DownloadStatus.Pending ||
-            i.Status == DownloadStatus.Paused ||
-            i.Status == DownloadStatus.Failed));
+            i.Status == DownloadStatus.Paused));
+
+    public bool ShowStreamingRed => HasFailedStreamingItems;
+
+    public bool ShowStreamingYellow => HasActiveStreamingItems && !HasFailedStreamingItems;
+
+    public bool ShowStreamingGreen => !HasActiveStreamingItems && !HasFailedStreamingItems;
+    /// <summary>
+    /// True solo quando l'analisi qualità è finita CON SUCCESSO
+    /// (almeno un elemento in AvailableQualities). Blocca il pulsante
+    /// "Scarica film" sia durante il caricamento sia in caso di errore.
+    /// </summary>
+    public bool CanDownloadMovie => !IsQualitiesLoading && AvailableQualities.Count > 0;
 
     // === Cartella base: usa settings streaming separati ===
     public string BaseDownloadFolder
@@ -288,6 +300,10 @@ public partial class StreamingTabViewModel : ViewModelBase
                 foreach (StreamingEpisode ep in e.OldItems)
                     ep.PropertyChanged -= OnEpisodePropertyChanged;
         };
+        AvailableQualities.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(CanDownloadMovie));
+        };
 
         // Sync con SharedState SOLO per il badge globale — non per la cartella
         _shared.PropertyChanged += (_, e) =>
@@ -312,7 +328,11 @@ public partial class StreamingTabViewModel : ViewModelBase
             OnPropertyChanged(nameof(GlobalSizeText));
             OnPropertyChanged(nameof(GlobalEtaText));
             OnPropertyChanged(nameof(SeriesSummaryText));
+            OnPropertyChanged(nameof(HasFailedStreamingItems));
             OnPropertyChanged(nameof(HasActiveStreamingItems));
+            OnPropertyChanged(nameof(ShowStreamingRed));
+            OnPropertyChanged(nameof(ShowStreamingYellow));
+            OnPropertyChanged(nameof(ShowStreamingGreen));
         };
         statsTimer.Start();
 
@@ -569,6 +589,7 @@ public partial class StreamingTabViewModel : ViewModelBase
     partial void OnIsQualitiesLoadingChanged(bool value)
     {
         OnPropertyChanged(nameof(CanInteractWithEpisodes));
+        OnPropertyChanged(nameof(CanDownloadMovie));
     }
 
     [RelayCommand]
@@ -674,6 +695,7 @@ public partial class StreamingTabViewModel : ViewModelBase
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "[STREAMING-TAB] Errore caricamento qualità");
+            StatusMessage = $"⚠ Errore analisi qualità: {ex.Message}";
         }
         finally
         {

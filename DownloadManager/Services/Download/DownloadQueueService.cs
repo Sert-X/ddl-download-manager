@@ -69,24 +69,17 @@ public class DownloadQueueService
 
         foreach (var item in unfinished)
         {
-            // === RICOSTRUISCE I DELEGATI per i download StreamingCommunity ===
             RewireStreamingExtractors(item);
-
             item.Status = DownloadStatus.Pending;
             await AddToListAsync(item);
         }
     }
 
-    /// <summary>
-    /// Ricostruisce UrlExtractor / AudioExtractor / CookieExtractor per un item
-    /// StreamingCommunity ripristinato dal DB. Necessario perché i delegati
-    /// non sono serializzabili e al riavvio dell'app vanno ricreati.
-    /// </summary>
     private void RewireStreamingExtractors(DownloadItem item)
     {
         if (item.ProviderKey != "StreamingCommunity") return;
         if (string.IsNullOrEmpty(item.ContentLink)) return;
-        if (item.UrlExtractor != null) return;   // già wired
+        if (item.UrlExtractor != null) return;
 
         var sc = _serviceProvider.GetService<IStreamingCommunityService>();
         if (sc == null)
@@ -134,11 +127,11 @@ public class DownloadQueueService
                 return a;
             };
         }
-
-        _logger.LogInformation(
-            "[REWIRE] Item #{Id} (S{Season}E{Ep}) → extractor ricostruiti",
-            item.Id, capturedSeason, capturedEp);
     }
+
+    // ============================================================
+    //  ENQUEUE singolo
+    // ============================================================
 
     public async Task EnqueueAsync(DownloadItem item)
     {
@@ -165,6 +158,71 @@ public class DownloadQueueService
         TryDispatch();
     }
 
+    // ============================================================
+    //  ENQUEUE multiplo — 1 transazione SQLite, 1 notifica UI
+    //  (usare questo per accodare decine di episodi)
+    // ============================================================
+
+    public async Task EnqueueManyAsync(IReadOnlyList<DownloadItem> items)
+    {
+        if (items == null || items.Count == 0) return;
+
+        // 1. INSERT in blocco (una sola transazione SQLite)
+        var toInsert = new List<DownloadItem>(items.Count);
+        foreach (var item in items)
+        {
+            if (item.Id == 0) toInsert.Add(item);
+        }
+
+        if (toInsert.Count > 0)
+            await _repository.InsertManyAsync(toInsert);
+
+        // 2. Prepara gli item (già creati da chiamante, quindi modifiche in-memory)
+        foreach (var item in items)
+            item.Status = DownloadStatus.Pending;
+
+        // 3. Aggiungi TUTTI ad AllItems con UNA SOLA InvokeAsync
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            foreach (var item in items)
+            {
+                if (!AllItems.Contains(item)) AllItems.Add(item);
+            }
+        }
+        else
+        {
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                foreach (var item in items)
+                {
+                    if (!AllItems.Contains(item)) AllItems.Add(item);
+                }
+            });
+        }
+
+        // 4. Aggiungi TUTTI alla pending con UN SOLO lock
+        lock (_queueLock)
+        {
+            foreach (var item in items)
+            {
+                if (_pendingIds.Add(item.Id))
+                    _pending.Add(item);
+            }
+        }
+
+        if (_autoStartOnFirstEnqueue)
+        {
+            _autoStartOnFirstEnqueue = false;
+            _isPaused = false;
+        }
+
+        // 5. UNA SOLA notifica + UN SOLO dispatch
+        QueueChanged?.Invoke();
+        TryDispatch();
+
+        _logger.LogInformation("[QUEUE] EnqueueMany: {Count} item accodati in blocco", items.Count);
+    }
+
     private async Task AddToListAsync(DownloadItem item)
     {
         if (Dispatcher.UIThread.CheckAccess())
@@ -188,6 +246,37 @@ public class DownloadQueueService
         return AllItems.Any(i =>
             string.Equals(i.SeriesName, seriesName, StringComparison.OrdinalIgnoreCase) &&
             i.EpisodeNumber == episodeNumber);
+    }
+
+    public bool ContainsEpisode(string category, string seriesName, int episodeNumber)
+    {
+        if (string.IsNullOrEmpty(seriesName) && episodeNumber == 0) return false;
+
+        return AllItems.Any(i =>
+            i.Category == category &&
+            string.Equals(i.SeriesName, seriesName, StringComparison.OrdinalIgnoreCase) &&
+            i.EpisodeNumber == episodeNumber);
+    }
+
+    /// <summary>
+    /// Snapshot veloce dei numeri di episodio già presenti in coda per una serie
+    /// e una category. Sostituisce N chiamate a ContainsEpisode (che scansiona
+    /// la collection ogni volta) con UNA sola scansione.
+    /// </summary>
+    public HashSet<int> SnapshotExistingEpisodeKeys(string category, string seriesName)
+    {
+        var result = new HashSet<int>();
+        if (string.IsNullOrEmpty(seriesName)) return result;
+
+        foreach (var i in AllItems)
+        {
+            if (i.Category == category &&
+                string.Equals(i.SeriesName, seriesName, StringComparison.OrdinalIgnoreCase))
+            {
+                result.Add(i.EpisodeNumber);
+            }
+        }
+        return result;
     }
 
     // ============================================================
@@ -831,16 +920,6 @@ public class DownloadQueueService
         });
 
         QueueChanged?.Invoke();
-    }
-
-    public bool ContainsEpisode(string category, string seriesName, int episodeNumber)
-    {
-        if (string.IsNullOrEmpty(seriesName) && episodeNumber == 0) return false;
-
-        return AllItems.Any(i =>
-            i.Category == category &&
-            string.Equals(i.SeriesName, seriesName, StringComparison.OrdinalIgnoreCase) &&
-            i.EpisodeNumber == episodeNumber);
     }
 
     // ============================================================

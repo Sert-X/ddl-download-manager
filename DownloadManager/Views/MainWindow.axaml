@@ -9,8 +9,8 @@
         x:Class="DownloadManager.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="DDL Download Manager"
-        Width="600" Height="600"
-        MinWidth="900" MinHeight="500">
+        Width="1400" Height="860"
+        MinWidth="1150" MinHeight="600">
 
     <Grid RowDefinitions="Auto, *, Auto, Auto, Auto" Margin="0">
 
@@ -18,7 +18,7 @@
         <!--  TOP BAR — brand + selettore tema globale            -->
         <!-- ==================================================== -->
         <Border Grid.Row="0"
-                Background="{DynamicResource AppSurfaceBrush}"
+                Background="{DynamicResource AppHeaderBrush}"
                 BorderBrush="{DynamicResource AppBorderBrush}"
                 BorderThickness="0,0,0,1"
                 Padding="20,14">
@@ -30,13 +30,14 @@
                         RenderOptions.BitmapInterpolationMode="HighQuality"/>
                     <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                         <TextBlock Text="DDL Download Manager"
-                                FontSize="18" FontWeight="Bold"
-                                VerticalAlignment="Center"/>
-                        <Border Background="{DynamicResource AppAccentBrush}"
-                                CornerRadius="4"
-                                Padding="6,2"
+                                    FontSize="20" FontWeight="ExtraBold"
+                                    Foreground="{DynamicResource AppAccentGradientBrush}"
+                                    VerticalAlignment="Center"/>
+                        <Border Background="{DynamicResource AppAccentGradientBrush}"
+                                CornerRadius="999"
+                                Padding="8,2"
                                 VerticalAlignment="Center">
-                            <TextBlock Text="v1.1.1" FontSize="11" FontWeight="Bold" Foreground="White"/>
+                            <TextBlock Text="v1.1.2" FontSize="11" FontWeight="Bold" Foreground="White"/>
                         </Border>
                     </StackPanel>
                 </StackPanel>
@@ -74,7 +75,7 @@
         <!-- ==================================================== -->
         <!--  CONTENUTO PRINCIPALE                                -->
         <!-- ==================================================== -->
-        <TabControl Grid.Row="1" Margin="16,12,16,0">
+        <TabControl Grid.Row="1" Classes="nav" TabStripPlacement="Left" Margin="0,8,0,0">
 
             <!-- ================================================ -->
             <!--  TAB DOWNLOAD                                     -->
@@ -82,15 +83,20 @@
             <TabItem>
                 <TabItem.Header>
                     <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBlock Text="🏠  Anime Download" VerticalAlignment="Center"/>
+                        <TextBlock Text="⛩️  Anime Download" VerticalAlignment="Center"/>
+                        <Border Width="10" Height="10" CornerRadius="5"
+                                Background="#EF4444"
+                                IsVisible="{Binding AnimeDownload.ShowAnimeRed}"
+                                VerticalAlignment="Center"
+                                ToolTip.Tip="Ci sono download falliti"/>
                         <Border Width="10" Height="10" CornerRadius="5"
                                 Background="#FBBF24"
-                                IsVisible="{Binding AnimeDownload.HasActiveAnimeItems}"
+                                IsVisible="{Binding AnimeDownload.ShowAnimeYellow}"
                                 VerticalAlignment="Center"
                                 ToolTip.Tip="Download in corso"/>
                         <Border Width="10" Height="10" CornerRadius="5"
                                 Background="#22C55E"
-                                IsVisible="{Binding !AnimeDownload.HasActiveAnimeItems}"
+                                IsVisible="{Binding AnimeDownload.ShowAnimeGreen}"
                                 VerticalAlignment="Center"
                                 ToolTip.Tip="Nessuna attività"/>
                     </StackPanel>
@@ -202,7 +208,7 @@
                     </Border>
 
                     <!-- Risultati + Episodi -->
-                    <Grid ColumnDefinitions="2*, 3*" Height="280" Margin="0,0,0,12">
+                    <Grid ColumnDefinitions="1*, 1*" Height="480" Margin="0,0,0,12">
                         <Border Grid.Column="0" Classes="cardElevated" Margin="0,0,6,0">
                             <DockPanel>
                                 <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto, Auto, *" Margin="0,0,0,8">
@@ -226,26 +232,30 @@
                                                 VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Grid>
-                                <DataGrid ItemsSource="{Binding SearchResults}"
-                                        AutoGenerateColumns="False" IsReadOnly="True"
+                                <ListBox Classes="posterGrid"
+                                        ItemsSource="{Binding SearchResults}"
                                         DoubleTapped="OnSearchResultDoubleTapped"
-                                        CanUserResizeColumns="True"
-                                        CanUserReorderColumns="True"
-                                        CanUserSortColumns="False">
-                                    <DataGrid.Columns>
-                                        <DataGridTemplateColumn Header="" Width="60" CanUserResize="False">
-                                            <DataGridTemplateColumn.CellTemplate>
-                                                <DataTemplate x:DataType="models:AnimeSearchResult">
-                                                    <Image Source="{Binding Poster}"
-                                                        Width="40" Height="60"
-                                                        Stretch="UniformToFill"
-                                                        Margin="2"/>
-                                                </DataTemplate>
-                                            </DataGridTemplateColumn.CellTemplate>
-                                        </DataGridTemplateColumn>
-                                        <DataGridTextColumn Header="Nome" Binding="{Binding Name}" Width="*"/>
-                                    </DataGrid.Columns>
-                                </DataGrid>
+                                        ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                    <ListBox.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel Orientation="Horizontal"/>
+                                        </ItemsPanelTemplate>
+                                    </ListBox.ItemsPanel>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate x:DataType="models:AnimeSearchResult">
+                                            <StackPanel Width="140" Spacing="8">
+                                                <Border Classes="poster" Width="140" Height="200">
+                                                    <Image Source="{Binding Poster}" Stretch="UniformToFill"/>
+                                                </Border>
+                                                <TextBlock Text="{Binding Name}"
+                                                        FontSize="12" FontWeight="SemiBold"
+                                                        TextWrapping="Wrap" MaxLines="2"
+                                                        TextTrimming="CharacterEllipsis"
+                                                        TextAlignment="Center"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
                             </DockPanel>
                         </Border>
 
@@ -654,13 +664,18 @@
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <TextBlock Text="🎬  Film/Serie Download" VerticalAlignment="Center"/>
                         <Border Width="10" Height="10" CornerRadius="5"
+                                Background="#EF4444"
+                                IsVisible="{Binding Streaming.ShowStreamingRed}"
+                                VerticalAlignment="Center"
+                                ToolTip.Tip="Ci sono download falliti"/>
+                        <Border Width="10" Height="10" CornerRadius="5"
                                 Background="#FBBF24"
-                                IsVisible="{Binding Streaming.HasActiveStreamingItems}"
+                                IsVisible="{Binding Streaming.ShowStreamingYellow}"
                                 VerticalAlignment="Center"
                                 ToolTip.Tip="Download in corso"/>
                         <Border Width="10" Height="10" CornerRadius="5"
                                 Background="#22C55E"
-                                IsVisible="{Binding !Streaming.HasActiveStreamingItems}"
+                                IsVisible="{Binding Streaming.ShowStreamingGreen}"
                                 VerticalAlignment="Center"
                                 ToolTip.Tip="Nessuna attività"/>
                     </StackPanel>
@@ -668,18 +683,18 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto" DataContext="{Binding Streaming}">
                 <StackPanel Margin="0,10,0,0">
                     <Border Classes="cardElevated" Margin="0,0,0,12"
-                            Background="#FEF3C7"
-                            BorderBrush="#F59E0B"
+                            Background="{DynamicResource AppWarningSoftBrush}"
+                            BorderBrush="{DynamicResource AppWarningBrush}"
                             BorderThickness="1">
                         <Grid ColumnDefinitions="Auto, *">
                             <TextBlock Grid.Column="0" Text="⚠"
                                     FontSize="20" FontWeight="Bold"
-                                    Foreground="#B45309"
+                                    Foreground="{DynamicResource AppWarningBrush}"
                                     VerticalAlignment="Center"
                                     Margin="0,0,12,0"/>
                             <TextBlock Grid.Column="1"
                                     TextWrapping="Wrap"
-                                    Foreground="#78350F">
+                                    Foreground="{DynamicResource AppTextBrush}">
                                 <Run FontWeight="Bold">Importante:</Run>
                                 <Run>per scaricare da StreamingCommunity è </Run>
                                 <Run FontWeight="Bold">fortemente consigliato</Run>
@@ -812,7 +827,7 @@
                     </Border>
 
                     <!-- Risultati + Dettaglio -->
-                    <Grid ColumnDefinitions="2*, 3*" Height="360" Margin="0,0,0,12">
+                    <Grid ColumnDefinitions="1*, 1*" Height="500" Margin="0,0,0,12">
 
                         <!-- Risultati ricerca -->
                         <Border Grid.Column="0" Classes="cardElevated" Margin="0,0,6,0">
@@ -839,30 +854,37 @@
                                     </StackPanel>
                                 </Grid>
 
-                                <DataGrid Name="StreamingSearchResultsGrid"
+                                <ListBox Name="StreamingSearchResultsGrid" Classes="posterGrid"
                                         ItemsSource="{Binding SearchResults}"
                                         SelectedItem="{Binding SelectedResult, Mode=TwoWay}"
-                                        AutoGenerateColumns="False" IsReadOnly="True"
                                         DoubleTapped="OnStreamingSearchResultDoubleTapped"
-                                        CanUserResizeColumns="True"
-                                        CanUserReorderColumns="True"
-                                        CanUserSortColumns="False">
-                                    <DataGrid.Columns>
-                                        <DataGridTemplateColumn Header="" Width="60" CanUserResize="False">
-                                            <DataGridTemplateColumn.CellTemplate>
-                                                <DataTemplate x:DataType="models:MovieSearchResult">
-                                                    <Image Source="{Binding Poster}"
-                                                            Width="40" Height="60"
-                                                            Stretch="UniformToFill"
-                                                            Margin="2"/>
-                                                </DataTemplate>
-                                            </DataGridTemplateColumn.CellTemplate>
-                                        </DataGridTemplateColumn>
-                                        <DataGridTextColumn Header="Titolo" Binding="{Binding Title}" Width="*"/>
-                                        <DataGridTextColumn Header="Anno" Binding="{Binding Year}" Width="70"/>
-                                        <DataGridTextColumn Header="Tipo" Binding="{Binding Type}" Width="70"/>
-                                    </DataGrid.Columns>
-                                </DataGrid>
+                                        ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                    <ListBox.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel Orientation="Horizontal"/>
+                                        </ItemsPanelTemplate>
+                                    </ListBox.ItemsPanel>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate x:DataType="models:MovieSearchResult">
+                                            <StackPanel Width="140" Spacing="4">
+                                                <Border Classes="poster" Width="140" Height="200">
+                                                    <Image Source="{Binding Poster}" Stretch="UniformToFill"/>
+                                                </Border>
+                                                <TextBlock Text="{Binding Title}"
+                                                        FontSize="12" FontWeight="SemiBold"
+                                                        TextWrapping="Wrap" MaxLines="2"
+                                                        TextTrimming="CharacterEllipsis"
+                                                        TextAlignment="Center"/>
+                                                <TextBlock FontSize="11" TextAlignment="Center"
+                                                        Foreground="{DynamicResource AppTextMutedBrush}">
+                                                    <Run Text="{Binding Year}"/>
+                                                    <Run Text=" · "/>
+                                                    <Run Text="{Binding Type}"/>
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
                             </DockPanel>
                         </Border>
 
@@ -885,20 +907,39 @@
                                             IsVisible="{Binding HasSelectedResult}"
                                             ToolTip.Tip="{Binding SelectedResultName}"/>
 
-                                    <!-- Selettore stagione (solo serie) -->
-                                    <ComboBox Grid.Column="2"
-                                            ItemsSource="{Binding Seasons}"
-                                            SelectedItem="{Binding SelectedSeason, Mode=TwoWay}"
-                                            MinWidth="160" Margin="8,0,0,0"
-                                            HorizontalAlignment="Right"
-                                            IsVisible="{Binding IsSelectedResultSeries}"
-                                            ToolTip.Tip="Seleziona stagione">
-                                        <ComboBox.ItemTemplate>
-                                            <DataTemplate x:DataType="models:Season">
-                                                <TextBlock Text="{Binding DisplayName}"/>
-                                            </DataTemplate>
-                                        </ComboBox.ItemTemplate>
-                                    </ComboBox>
+                                    <!-- Contenitore a destra: caricamento + selettore stagione -->
+                                    <StackPanel Grid.Column="2"
+                                                Orientation="Horizontal"
+                                                Spacing="12"
+                                                HorizontalAlignment="Right"
+                                                VerticalAlignment="Center">
+
+                                        <!-- Caricamento (a destra) -->
+                                        <StackPanel Orientation="Horizontal"
+                                                    Spacing="8"
+                                                    VerticalAlignment="Center"
+                                                    IsVisible="{Binding IsLoadingEpisodes}">
+                                            <ProgressBar IsIndeterminate="True" Width="80" Height="4"
+                                                        VerticalAlignment="Center"/>
+                                            <TextBlock Text="Caricamento..." FontSize="11"
+                                                    FontStyle="Italic"
+                                                    Foreground="{DynamicResource AppTextMutedBrush}"
+                                                    VerticalAlignment="Center"/>
+                                        </StackPanel>
+
+                                        <!-- Selettore stagione (solo serie) -->
+                                        <ComboBox ItemsSource="{Binding Seasons}"
+                                                SelectedItem="{Binding SelectedSeason, Mode=TwoWay}"
+                                                MinWidth="160"
+                                                IsVisible="{Binding IsSelectedResultSeries}"
+                                                ToolTip.Tip="Seleziona stagione">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="models:Season">
+                                                    <TextBlock Text="{Binding DisplayName}"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </StackPanel>
                                 </Grid>
                                 
                                 <!-- Qualità -->
@@ -950,19 +991,7 @@
                                     <Button Content="⬇ Scarica film" Classes="success"
                                             Command="{Binding DownloadMovieCommand}"
                                             CommandParameter="{Binding SelectedResult}"
-                                            IsEnabled="{Binding !IsQualitiesLoading}"/>
-                                </StackPanel>
-
-                                <!-- Progress caricamento episodi -->
-                                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8"
-                                            Margin="0,0,0,6"
-                                            IsVisible="{Binding IsLoadingEpisodes}">
-                                    <ProgressBar IsIndeterminate="True" Width="100" Height="4"
-                                                VerticalAlignment="Center"/>
-                                    <TextBlock Text="Caricamento..." FontSize="11"
-                                            FontStyle="Italic"
-                                            Foreground="{DynamicResource AppTextMutedBrush}"
-                                            VerticalAlignment="Center"/>
+                                            IsEnabled="{Binding CanDownloadMovie}"/>
                                 </StackPanel>
 
                                 <!-- Griglia episodi -->
@@ -1873,13 +1902,18 @@
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <TextBlock Text="☁  SFTP" VerticalAlignment="Center"/>
                         <Border Width="10" Height="10" CornerRadius="5"
+                                Background="#EF4444"
+                                IsVisible="{Binding Sftp.ShowSftpRed}"
+                                VerticalAlignment="Center"
+                                ToolTip.Tip="Ci sono trasferimenti falliti"/>
+                        <Border Width="10" Height="10" CornerRadius="5"
                                 Background="#FBBF24"
-                                IsVisible="{Binding Sftp.HasActiveSftpItems}"
+                                IsVisible="{Binding Sftp.ShowSftpYellow}"
                                 VerticalAlignment="Center"
                                 ToolTip.Tip="Trasferimento in corso"/>
                         <Border Width="10" Height="10" CornerRadius="5"
                                 Background="#22C55E"
-                                IsVisible="{Binding !Sftp.HasActiveSftpItems}"
+                                IsVisible="{Binding Sftp.ShowSftpGreen}"
                                 VerticalAlignment="Center"
                                 ToolTip.Tip="Nessuna attività"/>
                     </StackPanel>
@@ -2095,7 +2129,7 @@
 
                                 <!-- PULSANTI CENTRALI -->
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="12"
-                                            Width="110" Margin="10,0">
+                                            Width="130" Margin="10,0">
                                     <Button Content="⬆ Upload" Classes="success"
                                             Command="{Binding SftpUploadSelectedCommand}"
                                             Height="46"
@@ -2216,6 +2250,8 @@
                                                     <Setter Property="ContextMenu">
                                                         <ContextMenu>
                                                             <MenuItem Header="📂 Apri" Click="OnRemoteOpenClick"/>
+                                                            <MenuItem Header="▶ Anteprima video" Click="OnRemotePreviewClick"/>
+                                                            <Separator/>
                                                             <MenuItem Header="✏ Rinomina" Click="OnRemoteRenameClick"/>
                                                             <MenuItem Header="🗑 Elimina" Click="OnRemoteDeleteClick"/>
                                                         </ContextMenu>
@@ -2865,24 +2901,18 @@
             </TabItem>    
         </TabControl>
 
-                <GridSplitter Grid.Row="2"
-                            Height="5"
-                            Background="Transparent"
-                            ResizeDirection="Rows"
-                            HorizontalAlignment="Stretch"
-                            Cursor="SizeNorthSouth"/>
-
                 <Border Grid.Row="3"
                         x:Name="LogPanel"
                         Background="{DynamicResource AppSurfaceBrush}"
                         BorderBrush="{DynamicResource AppBorderBrush}"
                         BorderThickness="0,1,0,0"
-                        MinHeight="40"
+                        CornerRadius="14,14,0,0"
+                        MinHeight="36"
                         MaxHeight="400"
                         Height="150"
                         Margin="0,0,0,0"
                         ClipToBounds="True">
-                    <DockPanel Margin="16,4,16,4">
+                    <DockPanel Margin="16,2,16,2">
                         <Grid DockPanel.Dock="Top" ColumnDefinitions="*, Auto, Auto, Auto, Auto" Margin="0,0,0,2">
                             <TextBlock Grid.Column="0" Text="📋 Log globale"
                                     FontWeight="Bold" FontSize="12"
@@ -2916,39 +2946,53 @@
                     <ItemsControl ItemsSource="{Binding Logs}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Grid ColumnDefinitions="Auto, Auto, Auto, *" Margin="0,1">
-                                    <!-- Timestamp selezionabile -->
-                                    <SelectableTextBlock Grid.Column="0"
-                                            Text="{Binding TimestampText}"
-                                            FontFamily="Consolas,Menlo,monospace"
-                                            FontSize="11"
-                                            Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                <!-- Riga del log: bordo sinistro colorato + badge categoria + messaggio -->
+                                <Border BorderBrush="{DynamicResource AppBorderBrush}"
+                                        BorderThickness="0,0,0,1"
+                                        Padding="10,4">
+                                    <Grid ColumnDefinitions="Auto, Auto, Auto, *">
 
-                                    <!-- Icona livello -->
-                                    <TextBlock Grid.Column="1" Text="{Binding LevelIcon}"
-                                            FontSize="11" Margin="8,0,0,0"/>
+                                        <!-- Timestamp -->
+                                        <SelectableTextBlock Grid.Column="0"
+                                                Text="{Binding TimestampText}"
+                                                FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
+                                                FontSize="11"
+                                                Foreground="{DynamicResource AppTextMutedBrush}"
+                                                VerticalAlignment="Center"
+                                                Margin="0,0,12,0"/>
 
-                                    <!-- Badge categoria -->
-                                    <Border Grid.Column="2"
-                                            Background="{DynamicResource AppSurface2Brush}"
-                                            CornerRadius="3"
-                                            Padding="6,1"
-                                            MinWidth="70"
-                                            Margin="8,0,8,0"
-                                            VerticalAlignment="Top">
-                                        <TextBlock Text="{Binding Category}"
-                                                FontSize="10"
-                                                FontWeight="SemiBold"
-                                                Foreground="{DynamicResource AppAccentBrush}"
-                                                HorizontalAlignment="Center"/>
-                                    </Border>
+                                        <!-- Icona livello -->
+                                        <TextBlock Grid.Column="1"
+                                                Text="{Binding LevelIcon}"
+                                                FontSize="12"
+                                                VerticalAlignment="Center"
+                                                Margin="0,0,8,0"/>
 
-                                    <!-- Messaggio selezionabile e wrappabile -->
-                                    <SelectableTextBlock Grid.Column="3"
-                                            Text="{Binding Message}"
-                                            FontSize="11"
-                                            TextWrapping="Wrap"/>
-                                </Grid>
+                                        <!-- Badge categoria -->
+                                        <Border Grid.Column="2"
+                                                Background="{DynamicResource AppAccentSoftBrush}"
+                                                CornerRadius="4"
+                                                Padding="7,2"
+                                                MinWidth="64"
+                                                Margin="0,0,12,0"
+                                                VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Category}"
+                                                    FontSize="10"
+                                                    FontWeight="SemiBold"
+                                                    Foreground="{DynamicResource AppAccentBrush}"
+                                                    HorizontalAlignment="Center"
+                                                    TextTrimming="CharacterEllipsis"/>
+                                        </Border>
+
+                                        <!-- Messaggio -->
+                                        <SelectableTextBlock Grid.Column="3"
+                                                Text="{Binding Message}"
+                                                FontSize="12"
+                                                Foreground="{DynamicResource AppTextBrush}"
+                                                VerticalAlignment="Center"
+                                                TextWrapping="Wrap"/>
+                                    </Grid>
+                                </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>

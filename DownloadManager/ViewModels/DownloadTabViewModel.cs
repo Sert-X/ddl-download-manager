@@ -220,17 +220,28 @@ public partial class DownloadTabViewModel : ViewModelBase
     /// </summary>
     public bool CanInteractWithEpisodes => Episodes.Count > 0 && !IsLoadingEpisodes;
 
-    /// <summary>
-    /// True se ci sono download anime in corso, pending, in pausa o failed.
-    /// Usata per il pallino giallo/verde nell'header del tab.
-    /// </summary>
+   /// <summary>True se ci sono download anime FALLITI.</summary>
+    public bool HasFailedAnimeItems =>
+        _queueService.AllItems.Any(i =>
+            i.Category == "anime" &&
+            i.Status == DownloadStatus.Failed);
+
+    /// <summary>True se ci sono download anime ATTIVI (downloading/pending/paused).</summary>
     public bool HasActiveAnimeItems =>
         _queueService.AllItems.Any(i =>
             i.Category == "anime" &&
             (i.Status == DownloadStatus.Downloading ||
             i.Status == DownloadStatus.Pending ||
-            i.Status == DownloadStatus.Paused ||
-            i.Status == DownloadStatus.Failed));
+            i.Status == DownloadStatus.Paused));
+
+    /// <summary>Pallino rosso.</summary>
+    public bool ShowAnimeRed => HasFailedAnimeItems;
+
+    /// <summary>Pallino giallo (attivo, ma nessun fallito).</summary>
+    public bool ShowAnimeYellow => HasActiveAnimeItems && !HasFailedAnimeItems;
+
+    /// <summary>Pallino verde (niente di attivo, niente di fallito).</summary>
+    public bool ShowAnimeGreen => !HasActiveAnimeItems && !HasFailedAnimeItems;
 
     // ============================================================
     //  COSTRUTTORE
@@ -357,7 +368,11 @@ public partial class DownloadTabViewModel : ViewModelBase
             OnPropertyChanged(nameof(GlobalSpeedText));
             OnPropertyChanged(nameof(GlobalSizeText));
             OnPropertyChanged(nameof(SeriesSummaryText));
+            OnPropertyChanged(nameof(HasFailedAnimeItems));
             OnPropertyChanged(nameof(HasActiveAnimeItems));
+            OnPropertyChanged(nameof(ShowAnimeRed));
+            OnPropertyChanged(nameof(ShowAnimeYellow));
+            OnPropertyChanged(nameof(ShowAnimeGreen));
         };
         _statsTimer.Start();
 
@@ -633,17 +648,20 @@ public partial class DownloadTabViewModel : ViewModelBase
         var token = _batchCts.Token;
         IsBatchActive = true;
 
-        int queued = 0, skipped = 0, errors = 0;
+        int skipped = 0, errors = 0;
 
         try
         {
             var seriesName = SelectedAnime?.Name ?? "";
-            var toDownload = new List<Episode>();
 
+            // === OTTIMIZZAZIONE: UNA sola scansione della coda invece di N ===
+            var existingKeys = _queueService.SnapshotExistingEpisodeKeys("anime", seriesName);
+
+            var toDownload = new List<Episode>();
             foreach (var ep in selected)
             {
                 var epNum = int.TryParse(ep.Number, out var n) ? n : 0;
-                if (_queueService.ContainsEpisode("anime", seriesName, epNum)) { skipped++; continue; }
+                if (existingKeys.Contains(epNum)) { skipped++; continue; }
                 toDownload.Add(ep);
             }
 
@@ -656,6 +674,8 @@ public partial class DownloadTabViewModel : ViewModelBase
             StatusMessage = $"Recupero URL di {toDownload.Count} episodi...";
             var urls = await SelectedProvider!.GetVideoUrlsBatchAsync(toDownload, token);
 
+            // === OTTIMIZZAZIONE: costruisci TUTTI gli item in memoria (nessuna I/O) ===
+            var items = new List<DownloadItem>(toDownload.Count);
             foreach (var episode in toDownload)
             {
                 token.ThrowIfCancellationRequested();
@@ -664,17 +684,25 @@ public partial class DownloadTabViewModel : ViewModelBase
                 { errors++; continue; }
 
                 var item = BuildDownloadItem(episode, videoUrl, seriesName);
-                await _queueService.EnqueueAsync(item);
-                queued++;
-                StatusMessage = $"Accodati: {queued}/{toDownload.Count}";
+                items.Add(item);
             }
 
-            var msg = $"{queued} episodi accodati";
+            if (items.Count == 0)
+            {
+                StatusMessage = $"Nessun episodio da accodare ({errors} errori).";
+                return;
+            }
+
+            // === OTTIMIZZAZIONE: UN SOLO INSERT SQLite + UNA notifica UI ===
+            StatusMessage = $"Accodamento di {items.Count} episodi...";
+            await _queueService.EnqueueManyAsync(items);
+
+            var msg = $"{items.Count} episodi accodati";
             if (skipped > 0) msg += $", {skipped} già in coda";
             if (errors > 0) msg += $", {errors} falliti";
             StatusMessage = msg + ".";
         }
-        catch (OperationCanceledException) { StatusMessage = $"Accodamento annullato ({queued})."; }
+        catch (OperationCanceledException) { StatusMessage = "Accodamento annullato."; }
         catch (Exception ex) { StatusMessage = $"Errore: {ex.Message}"; }
         finally
         {

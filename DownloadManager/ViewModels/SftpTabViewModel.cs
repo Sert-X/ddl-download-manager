@@ -117,11 +117,21 @@ public partial class SftpTabViewModel : ViewModelBase
         }
     }
 
-    /// <summary>
-    /// True se ci sono upload o download SFTP attivi o in attesa.
-    /// Usata per il pallino giallo/verde nell'header del tab.
-    /// </summary>
-    public bool HasActiveSftpItems => HasActiveUploads || HasActiveDownloads;
+    public bool HasFailedSftpItems =>
+        _sftpUploadQueue.AllJobs.Any(j => j.Status == SftpJobStatus.Failed) ||
+        _sftpDownloadQueue.AllJobs.Any(j => j.Status == SftpJobStatus.Failed);
+
+    public bool HasActiveSftpItems =>
+        _sftpUploadQueue.AllJobs.Any(j =>
+            j.Status == SftpJobStatus.Uploading || j.Status == SftpJobStatus.Pending) ||
+        _sftpDownloadQueue.AllJobs.Any(j =>
+            j.Status == SftpJobStatus.Downloading || j.Status == SftpJobStatus.Pending);
+
+    public bool ShowSftpRed => HasFailedSftpItems;
+
+    public bool ShowSftpYellow => HasActiveSftpItems && !HasFailedSftpItems;
+
+    public bool ShowSftpGreen => !HasActiveSftpItems && !HasFailedSftpItems;
 
     public string RemoteStatusText
     {
@@ -248,12 +258,20 @@ public partial class SftpTabViewModel : ViewModelBase
 
     partial void OnHasActiveUploadsChanged(bool value)
     {
+        OnPropertyChanged(nameof(HasFailedSftpItems));
         OnPropertyChanged(nameof(HasActiveSftpItems));
+        OnPropertyChanged(nameof(ShowSftpRed));
+        OnPropertyChanged(nameof(ShowSftpYellow));
+        OnPropertyChanged(nameof(ShowSftpGreen));
     }
 
     partial void OnHasActiveDownloadsChanged(bool value)
     {
+        OnPropertyChanged(nameof(HasFailedSftpItems));
         OnPropertyChanged(nameof(HasActiveSftpItems));
+        OnPropertyChanged(nameof(ShowSftpRed));
+        OnPropertyChanged(nameof(ShowSftpYellow));
+        OnPropertyChanged(nameof(ShowSftpGreen));
     }
 
     private void SetupLocalWatcher(string path)
@@ -1293,6 +1311,48 @@ public partial class SftpTabViewModel : ViewModelBase
                 };
                 await _sftpDownloadQueue.EnqueueJobAsync(job);
             }
+        }
+    }
+
+    public void PlayRemoteFile(SftpRemoteEntry entry)
+    {
+        if (entry == null || entry.IsDirectory) return;
+        if (!IsSftpConnected) { SftpStatusMessage = "Non connesso."; return; }
+
+        var ext = Path.GetExtension(entry.Name).ToLowerInvariant();
+        var playable = new HashSet<string>
+        {
+            ".mp4", ".mkv", ".avi", ".mov", ".webm", ".flv", ".wmv", ".m4v", ".ts", ".m2ts",
+            ".mp3", ".flac", ".aac", ".m4a", ".ogg", ".opus", ".wav", ".wma"
+        };
+
+        if (!playable.Contains(ext))
+        {
+            SftpStatusMessage = "Formato non supportato per l'anteprima.";
+            return;
+        }
+
+        try
+        {
+            var cfg = BuildCurrentSftpConfig();
+
+            // URL senza credenziali (le passiamo come opzioni Media a LibVLC)
+            var segments = entry.FullPath.TrimStart('/').Split('/');
+            var encodedPath = string.Join("/", Array.ConvertAll(segments, Uri.EscapeDataString));
+
+            var url = $"sftp://{cfg.Host}:{cfg.Port}/{encodedPath}";
+
+            var playerWindow = new Views.SftpVideoPlayerWindow();
+            playerWindow.PlayUrl(url, entry.Name, cfg.Username, cfg.Password);
+            playerWindow.Show();
+
+            SftpStatusMessage = $"Anteprima: {entry.Name}";
+            _logger.LogInformation("[SFTP] Anteprima LibVLC: {Path}", entry.FullPath);
+        }
+        catch (Exception ex)
+        {
+            SftpStatusMessage = $"Errore anteprima: {ex.Message}";
+            _logger.LogWarning(ex, "[SFTP] Errore anteprima {File}", entry.Name);
         }
     }
 

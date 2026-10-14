@@ -394,6 +394,9 @@ public class AnimeSaturnService : IAnimeSaturnService
                     var lower = url.ToLowerInvariant();
                     if (IsTrackerOrAd(lower)) return;
 
+                    // === FIX: scarta GIF/PNG/tracking pixel anche se content-type mente ===
+                    if (IsDefinitelyNotVideo(lower)) return;
+
                     var contentType = response.Headers.TryGetValue("content-type", out var ct2) ? ct2 : "";
                     bool isVideoContentType = contentType.Contains("video/", StringComparison.OrdinalIgnoreCase)
                         || contentType.Contains("mpegurl", StringComparison.OrdinalIgnoreCase)
@@ -461,6 +464,9 @@ public class AnimeSaturnService : IAnimeSaturnService
                         var url = response.Url;
                         var lower = url.ToLowerInvariant();
                         if (IsTrackerOrAd(lower)) return;
+
+                        // === FIX: scarta GIF/PNG/tracking pixel anche se content-type mente ===
+                        if (IsDefinitelyNotVideo(lower)) return;
 
                         var contentType = response.Headers.TryGetValue("content-type", out var ct3) ? ct3 : "";
                         bool isVideoContentType = contentType.Contains("video/", StringComparison.OrdinalIgnoreCase)
@@ -596,6 +602,35 @@ public class AnimeSaturnService : IAnimeSaturnService
             return true;
 
         if (lowerUrl.Contains("videoplayback"))
+            return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// True se l'URL è sicuramente NON un video, anche se il content-type
+    /// dichiara "video/*" per errore (es. tracking pixel ping.gif).
+    /// </summary>
+    private static bool IsDefinitelyNotVideo(string lowerUrl)
+    {
+        // Estensioni immagine/svg
+        if (lowerUrl.EndsWith(".gif", StringComparison.OrdinalIgnoreCase) ||
+            lowerUrl.EndsWith(".png", StringComparison.OrdinalIgnoreCase) ||
+            lowerUrl.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
+            lowerUrl.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase) ||
+            lowerUrl.EndsWith(".webp", StringComparison.OrdinalIgnoreCase) ||
+            lowerUrl.EndsWith(".svg", StringComparison.OrdinalIgnoreCase) ||
+            lowerUrl.EndsWith(".ico", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // Tracking pixel / beacon noti
+        if (lowerUrl.Contains("ping.gif") ||
+            lowerUrl.Contains("/ping") ||
+            lowerUrl.Contains("beacon") ||
+            lowerUrl.Contains("tracker") ||
+            lowerUrl.Contains("analytics") ||
+            lowerUrl.Contains("1x1") ||
+            lowerUrl.Contains("pixel"))
             return true;
 
         return false;
