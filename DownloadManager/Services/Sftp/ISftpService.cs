@@ -7,6 +7,9 @@ public interface ISftpService
     bool IsConnected { get; }
     string CurrentRemotePath { get; }
 
+    /// <summary>Sollevato dopo ogni modifica riuscita al filesystem remoto.</summary>
+    event Action<SftpRemoteChange>? RemoteChanged;
+
     Task ConnectAsync(SftpConfig config, CancellationToken ct = default);
     Task DisconnectAsync();
     Task TestConnectionAsync(SftpConfig config, CancellationToken ct = default);
@@ -44,3 +47,9 @@ public interface ISftpService
         CancellationToken ct = default);
     void AbortCurrentOperation();
 }
+
+/// <summary>
+/// Cartella remota il cui contenuto è cambiato. Se <paramref name="Recursive"/> è false
+/// è cambiato solo il contenuto diretto; se true anche le sottocartelle.
+/// </summary>
+public record SftpRemoteChange(string DirectoryPath, bool Recursive = false);

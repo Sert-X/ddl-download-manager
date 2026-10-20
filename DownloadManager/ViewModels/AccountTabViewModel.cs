@@ -59,7 +59,8 @@ public partial class AccountTabViewModel : ViewModelBase
         Username = _auth.Current.Username;
         Password = _auth.Current.Password;
         ApplyState();
-        _auth.StateChanged += (_, _) => ApplyState();
+        // StateChanged può arrivare da un thread di background (fine login)
+        _auth.StateChanged += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(ApplyState);
     }
 
     // ============================================================
@@ -97,6 +98,7 @@ public partial class AccountTabViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
+            _logger.LogWarning(ex, "Test sessione fallito");
             StatusMessage = $"Errore: {ex.Message}";
         }
         finally
@@ -157,13 +159,13 @@ public partial class AccountTabViewModel : ViewModelBase
             var (ok, msg) = await _auth.LoginAsync(Username.Trim(), Password);
             StatusMessage = msg;
 
-            if (ok)
-            {
-                // Pulisci la password dal campo dopo il salvataggio (resta in DPAPI)
-                Password = new string('•', Password.Length);
-                await Task.Delay(300);
-                Password = _auth.Current.Password; // ripopola dallo store
-            }
+            if (ok) _logger.LogInformation("Login effettuato come {User}", Username.Trim());
+            else _logger.LogWarning("Login non riuscito: {Message}", msg);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Errore durante il login");
+            StatusMessage = $"Errore durante il login: {ex.Message}";
         }
         finally
         {

@@ -28,9 +28,14 @@ public partial class RemoteFolderPickerDialog : Window
         Opened += async (_, _) => await RefreshAsync();
     }
 
-    public static async Task<string?> ShowAsync(Window owner, ISftpService sftp, string startPath)
+    public static async Task<string?> ShowAsync(Window owner, ISftpService sftp, string startPath, string? title = null)
     {
         var dialog = new RemoteFolderPickerDialog(sftp, startPath);
+        if (!string.IsNullOrWhiteSpace(title))
+        {
+            dialog.Title = title;
+            dialog.HeaderText.Text = title;
+        }
         await dialog.ShowDialog(owner);
         return dialog.SelectedPath;
     }
@@ -39,20 +44,29 @@ public partial class RemoteFolderPickerDialog : Window
     {
         if (_sftp == null || !_sftp.IsConnected) return;
 
+        PathBox.Text = _currentPath;
+        ShowStatus("Caricamento...");
         try
         {
-            PathBox.Text = _currentPath;
-
             var entries = await _sftp.ListDirectoryAsync(_currentPath);
 
             _folders.Clear();
             foreach (var e in entries.Where(x => x.IsDirectory))
                 _folders.Add(e);
+
+            ShowStatus(_folders.Count == 0 ? "Nessuna sottocartella.\nPremi Seleziona per usare questa cartella." : null);
         }
         catch (Exception ex)
         {
-            PathBox.Text = $"{_currentPath}  —  Errore: {ex.Message}";
+            _folders.Clear();
+            ShowStatus($"Impossibile leggere la cartella:\n{ex.Message}");
         }
+    }
+
+    private void ShowStatus(string? message)
+    {
+        StatusText.Text = message;
+        StatusText.IsVisible = message != null;
     }
 
     private void OnRefreshClick(object? sender, RoutedEventArgs e) => _ = RefreshAsync();

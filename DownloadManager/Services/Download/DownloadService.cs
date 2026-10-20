@@ -1,3 +1,4 @@
+using DownloadManager.Helpers;
 using System.Diagnostics;
 using System.Globalization;
 using System.Net;
@@ -13,7 +14,7 @@ using Microsoft.Extensions.Logging;
 
 namespace DownloadManager.Services.Download;
 
-public class DownloadService : IDownloadService
+public partial class DownloadService : IDownloadService
 {
     private readonly ILogger<DownloadService> _logger;
     private readonly DownloadRepository _repository;
@@ -22,11 +23,13 @@ public class DownloadService : IDownloadService
     private readonly YtDlpLocator _ytDlpLocator;
     private readonly IProxyProvider _proxyProvider;
     private readonly ProxyService _proxyService;
+    private readonly IServiceProvider _services;
+    private readonly DownloadManager.Persistence.SettingsService _settings;
 
     private const long ChunkSize = 10 * 1024 * 1024;
     private const int ParallelChunksPerFile = 4;
     private const long SaveThreshold = 5 * 1024 * 1024;
-    private const int UiThrottleMs = 150;
+    private const int UiThrottleMs = 500;
     private const long EstimatedBitrateBytesPerSecond = 150_000;
 
     public DownloadService(
@@ -35,8 +38,12 @@ public class DownloadService : IDownloadService
         IProxyProvider proxyProvider,
         ProxyService proxyService,
         FfmpegLocator ffmpegLocator,
-        YtDlpLocator ytDlpLocator)
+        YtDlpLocator ytDlpLocator,
+        IServiceProvider services,
+        DownloadManager.Persistence.SettingsService settings)
     {
+        _services = services;
+        _settings = settings;
         _logger = logger;
         _repository = repository;
         _proxyService = proxyService;
@@ -68,7 +75,27 @@ public class DownloadService : IDownloadService
     //  WRAPPER CON RETRY PROXY
     // ============================================================
 
+    /// <summary>Item in download in questo momento: lo stesso episodio non deve mai girare due volte.</summary>
+    private static readonly HashSet<int> _runningItems = new();
+
     public async Task DownloadItemAsync(DownloadItem item, CancellationToken ct = default)
+    {
+        lock (_runningItems)
+        {
+            if (!_runningItems.Add(item.Id))
+                throw new InvalidOperationException("Questo download è già in corso.");
+        }
+        try
+        {
+            await DownloadItemWithRetryAsync(item, ct);
+        }
+        finally
+        {
+            lock (_runningItems) _runningItems.Remove(item.Id);
+        }
+    }
+
+    private async Task DownloadItemWithRetryAsync(DownloadItem item, CancellationToken ct)
     {
         const int maxAttempts = 3;
         const string providerKeyDefault = "Downloads";
@@ -230,7 +257,7 @@ public class DownloadService : IDownloadService
 
         var sw = Stopwatch.StartNew();
 
-        if (!supportsRange) await DownloadSequentialAsync(item, totalSize, ct);
+        if (!supportsRange) await DownloadSequentialAsync(item, ct);
         else await DownloadParallelAsync(item, totalSize, sw, ct);
 
         if (!File.Exists(tempPath))
@@ -315,7 +342,7 @@ public class DownloadService : IDownloadService
     //  SEQUENTIAL / PARALLEL (HTTP non-HLS)
     // ============================================================
 
-    private async Task DownloadSequentialAsync(DownloadItem item, long totalSize, CancellationToken ct)
+    private async Task DownloadSequentialAsync(DownloadItem item, CancellationToken ct)
     {
         var tempPath = item.DestinationPath + ".part";
         using var response = await _http.GetAsync(item.Url, HttpCompletionOption.ResponseHeadersRead, ct);
@@ -504,14 +531,13 @@ public class DownloadService : IDownloadService
     private static bool IsHlsUrl(string url)
     {
         if (string.IsNullOrEmpty(url)) return false;
-        var lower = url.ToLowerInvariant();
-        return lower.Contains(".m3u8")
-            || lower.Contains("vixcloud.co/playlist/");
+        if (url.Contains(".m3u8", StringComparison.OrdinalIgnoreCase)) return true;
+        return Regex.IsMatch(url, @"vixcloud\.[a-z]+/playlist/\d+", RegexOptions.IgnoreCase);
     }
 
     private async Task DownloadHlsAsync(DownloadItem item, CancellationToken ct)
     {
-        var isVixcloud = item.Url.Contains("vixcloud.co", StringComparison.OrdinalIgnoreCase);
+        var isVixcloud = item.Url.Contains("vixcloud", StringComparison.OrdinalIgnoreCase);
 
         var ytDlpPath = _ytDlpLocator.GetYtDlpPath();
         if (!string.IsNullOrEmpty(ytDlpPath))
@@ -547,488 +573,6 @@ public class DownloadService : IDownloadService
     //  HLS via yt-dlp
     // ============================================================
 
-    private async Task DownloadHlsWithYtDlpAsync(
-        DownloadItem item, string ytDlpPath, CancellationToken ct)
-    {
-        var ffmpegPath = _ffmpegLocator.GetFfmpegPath();
-        if (string.IsNullOrEmpty(ffmpegPath))
-            throw new InvalidOperationException(
-                "FFmpeg non trovato (richiesto da yt-dlp per il muxing).");
-
-        var ffmpegDir = Path.GetDirectoryName(ffmpegPath) ?? "";
-
-        _logger.LogInformation("[YT-DLP] Download HLS: {Url}", item.Url);
-
-        var tempDir = Path.Combine(
-            Path.GetTempPath(), "DDLDownloadManager", "ytdlp",
-            item.Id.ToString());
-        Directory.CreateDirectory(tempDir);
-
-        var outTemplate = Path.Combine(tempDir, "video.%(ext)s");
-        var finalMp4 = Path.Combine(tempDir, "video.mp4");
-        var planFile = Path.Combine(tempDir, "__plan.json");
-
-        // Pulisci file plan da esecuzioni precedenti
-        try { if (File.Exists(planFile)) File.Delete(planFile); } catch { }
-
-        // === Check "file finale già presente" ===
-        if (File.Exists(finalMp4) && new FileInfo(finalMp4).Length > 0)
-        {
-            bool valid = await ProbeHasAudioAndVideoAsync(finalMp4, ffmpegDir, ct);
-            if (valid)
-            {
-                _logger.LogWarning(
-                    "[YT-DLP] File finale già valido ({MB} MB), skip download",
-                    new FileInfo(finalMp4).Length / 1024 / 1024);
-
-                var destDir0 = Path.GetDirectoryName(item.DestinationPath);
-                if (!string.IsNullOrEmpty(destDir0)) Directory.CreateDirectory(destDir0);
-                if (File.Exists(item.DestinationPath)) File.Delete(item.DestinationPath);
-                File.Move(finalMp4, item.DestinationPath, overwrite: true);
-
-                try { Directory.Delete(tempDir, true); } catch { }
-
-                var finalSize0 = new FileInfo(item.DestinationPath).Length;
-                SetUi(() =>
-                {
-                    item.TotalBytes = finalSize0;
-                    item.DownloadedBytes = finalSize0;
-                    item.SpeedBytesPerSecond = 0;
-                    item.Status = DownloadStatus.Completed;
-                });
-                return;
-            }
-            else
-            {
-                _logger.LogWarning("[YT-DLP] video.mp4 senza audio: cancello e riparto");
-                try { File.Delete(finalMp4); } catch { }
-            }
-        }
-
-        // === Al resume, cancella i .part di yt-dlp ===
-        // yt-dlp non sa fare resume su HLS vixcloud: il token cambia e i
-        // frammenti già scaricati non sono più richiedibili. Meglio ricominciare.
-        try
-        {
-            var partFiles = Directory.GetFiles(tempDir, "*.part");
-            foreach (var pf in partFiles)
-            {
-                try { File.Delete(pf); } catch { }
-            }
-
-            // yt-dlp usa anche file .fXXX.mp4 / .fXXX.m4a NON completati
-            // (senza .part ma senza essere merged): cancelliamo tutto tranne
-            // il video.mp4 finale (già checkato sopra) e cookies.txt
-            var intermediateFiles = Directory.GetFiles(tempDir, "video.f*");
-            foreach (var f in intermediateFiles)
-            {
-                try { File.Delete(f); } catch { }
-            }
-
-            if (partFiles.Length > 0 || intermediateFiles.Length > 0)
-            {
-                _logger.LogWarning(
-                    "[YT-DLP] Cancellati {N} file .part/frammenti da resume precedente",
-                    partFiles.Length + intermediateFiles.Length);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "[YT-DLP] Errore pulizia .part");
-        }
-
-        // === Cookie Netscape ===
-        string? cookiesFile = null;
-        if (!string.IsNullOrEmpty(item.SessionCookies))
-        {
-            try
-            {
-                cookiesFile = Path.Combine(tempDir, "cookies.txt");
-                var sanitized = SanitizeNetscapeCookies(item.SessionCookies);
-                await File.WriteAllTextAsync(cookiesFile, sanitized, ct);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "[YT-DLP] Impossibile scrivere cookies.txt");
-                cookiesFile = null;
-            }
-        }
-
-        var psi = new ProcessStartInfo
-        {
-            FileName = ytDlpPath,
-            UseShellExecute = false,
-            RedirectStandardError = true,
-            RedirectStandardOutput = true,
-            CreateNoWindow = true
-        };
-
-        psi.ArgumentList.Add("--impersonate");
-        psi.ArgumentList.Add("chrome");
-
-        psi.ArgumentList.Add("-o");
-        psi.ArgumentList.Add(outTemplate);
-
-        psi.ArgumentList.Add("--ffmpeg-location");
-        psi.ArgumentList.Add(ffmpegDir);
-
-        if (cookiesFile != null)
-        {
-            psi.ArgumentList.Add("--cookies");
-            psi.ArgumentList.Add(cookiesFile);
-        }
-
-        psi.ArgumentList.Add("--add-header");
-        psi.ArgumentList.Add("Referer:https://streamingcommunityz.rip/");
-
-        psi.ArgumentList.Add("--add-header");
-        psi.ArgumentList.Add($"sec-ch-ua:{StreamingCommunityService.SecChUa}");
-        psi.ArgumentList.Add("--add-header");
-        psi.ArgumentList.Add("sec-ch-ua-mobile:?0");
-        psi.ArgumentList.Add("--add-header");
-        psi.ArgumentList.Add("sec-ch-ua-platform:\"Windows\"");
-
-        psi.ArgumentList.Add("--user-agent");
-        psi.ArgumentList.Add(StreamingCommunityService.RealisticUserAgent);
-
-        psi.ArgumentList.Add("--merge-output-format");
-        psi.ArgumentList.Add("mp4");
-
-        var format = BuildYtDlpFormat(item.QualityName);
-        psi.ArgumentList.Add("-f");
-        psi.ArgumentList.Add(format);
-        _logger.LogWarning("[YT-DLP] Format: {F}", format);
-
-        var proxy = _proxyProvider.GetActive(item.ProviderKey);
-        if (proxy != null)
-        {
-            var proxyUrl = BuildFfmpegProxyUrl(proxy);
-            psi.ArgumentList.Add("--proxy");
-            psi.ArgumentList.Add(proxyUrl);
-        }
-
-        psi.ArgumentList.Add("--no-playlist");
-        psi.ArgumentList.Add("--newline");
-        psi.ArgumentList.Add("--no-warnings");
-
-        // === SCRIVE SU FILE i formati scelti (NON attiva --simulate) ===
-        psi.ArgumentList.Add("--print-to-file");
-        psi.ArgumentList.Add("before_dl:%(requested_formats)j");
-        psi.ArgumentList.Add(planFile);
-
-        // === Progress strutturato ===
-        psi.ArgumentList.Add("--progress-template");
-        psi.ArgumentList.Add("download:__PROGRESS__ %(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s");
-
-        psi.ArgumentList.Add("--concurrent-fragments");
-        psi.ArgumentList.Add("16");
-
-        psi.ArgumentList.Add("--throttled-rate");
-        psi.ArgumentList.Add("500K");
-
-        psi.ArgumentList.Add("--retry-sleep");
-        psi.ArgumentList.Add("fragment:exp=1:20");
-
-        psi.ArgumentList.Add("--sleep-requests");
-        psi.ArgumentList.Add("0.1");
-
-        psi.ArgumentList.Add("--retries");
-        psi.ArgumentList.Add("10");
-        psi.ArgumentList.Add("--fragment-retries");
-        psi.ArgumentList.Add("20");
-
-        psi.ArgumentList.Add("--socket-timeout");
-        psi.ArgumentList.Add("30");
-
-        psi.ArgumentList.Add("--force-ipv4");
-
-        psi.ArgumentList.Add(item.Url);
-
-        using var process = new Process { StartInfo = psi };
-        var stderrBuffer = new StringBuilder();
-
-        // === Stato progresso cumulativo ===
-        long plannedTotalBytes = 0;        // totale video+audio (dal plan file)
-        long completedFilesBytes = 0;      // byte dei file già COMPLETATI
-        long currentFileBytes = 0;         // dimensione file CORRENTE
-        long lastProgressTick = Environment.TickCount64;   // watchdog: ultimo progresso
-        long lastSeenBytes = 0;            // watchdog: ultimi byte visti
-
-        // === Task in background: attende __plan.json e setta plannedTotalBytes ===
-        var planTask = Task.Run(async () =>
-        {
-            for (int i = 0; i < 100; i++)   // max 20 secondi
-            {
-                if (ct.IsCancellationRequested) return;
-
-                if (File.Exists(planFile))
-                {
-                    try
-                    {
-                        // Aspetta che il file sia scritto interamente
-                        var json = await File.ReadAllTextAsync(planFile, ct);
-                        if (string.IsNullOrWhiteSpace(json))
-                        {
-                            await Task.Delay(200, ct);
-                            continue;
-                        }
-
-                        using var doc = System.Text.Json.JsonDocument.Parse(json);
-                        if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Array)
-                            return;
-
-                        long total = 0;
-                        foreach (var fmt in doc.RootElement.EnumerateArray())
-                        {
-                            long size = 0;
-                            if (fmt.TryGetProperty("filesize", out var fs) &&
-                                fs.ValueKind == System.Text.Json.JsonValueKind.Number)
-                                size = fs.GetInt64();
-                            else if (fmt.TryGetProperty("filesize_approx", out var fsa) &&
-                                fsa.ValueKind == System.Text.Json.JsonValueKind.Number)
-                                size = fsa.GetInt64();
-                            total += size;
-                        }
-
-                        if (total > 0)
-                        {
-                            plannedTotalBytes = total;
-                            _logger.LogWarning(
-                                "[YT-DLP] Piano totale: {MB} MB (video+audio)",
-                                total / 1024 / 1024);
-
-                            SetUi(() =>
-                            {
-                                item.TotalBytes = plannedTotalBytes;
-                                item.DownloadedBytes = 0;
-                            });
-                            return;
-                        }
-                    }
-                    catch (System.Text.Json.JsonException)
-                    {
-                        // File ancora in scrittura, riprova
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogDebug(ex, "[YT-DLP] plan.json read");
-                    }
-                }
-                await Task.Delay(200, ct);
-            }
-        }, ct);
-
-        // === Handler progresso ===
-        process.OutputDataReceived += (_, e) =>
-        {
-            if (string.IsNullOrEmpty(e.Data)) return;
-
-            foreach (var rawSubLine in e.Data.Split('\r'))
-            {
-                var line = rawSubLine.Trim();
-                if (string.IsNullOrEmpty(line)) continue;
-
-                // === Nuovo file in download (video → audio) ===
-                // NON resettiamo la barra: trasferiamo i byte del file completato
-                // in completedFilesBytes, così il progresso resta cumulativo.
-                var destMatch = Regex.Match(line, @"Destination:\s+(.+)$");
-                if (destMatch.Success)
-                {
-                    if (currentFileBytes > 0)
-                    {
-                        completedFilesBytes += currentFileBytes;
-                    }
-                    currentFileBytes = 0;
-
-                    _logger.LogInformation("[YT-DLP] Inizio file: {File}",
-                        destMatch.Groups[1].Value.Trim());
-                    continue;
-                }
-
-                // === Riga __PROGRESS__ ===
-                if (line.StartsWith("__PROGRESS__"))
-                {
-                    var payload = line.Substring("__PROGRESS__".Length).Trim();
-                    var parts = payload.Split('|');
-                    if (parts.Length < 4) continue;
-
-                    long downloaded = 0;
-                    if (!long.TryParse(parts[0], out downloaded))
-                    {
-                        if (!double.TryParse(parts[0], NumberStyles.Float,
-                            CultureInfo.InvariantCulture, out var dblD))
-                            continue;
-                        downloaded = (long)dblD;
-                    }
-
-                    long fileTotal = 0;
-                    if (!long.TryParse(parts[1], out fileTotal))
-                    {
-                        if (double.TryParse(parts[1], NumberStyles.Float,
-                            CultureInfo.InvariantCulture, out var dblT))
-                            fileTotal = (long)dblT;
-                    }
-                    if (fileTotal <= 0)
-                    {
-                        if (double.TryParse(parts[2], NumberStyles.Float,
-                            CultureInfo.InvariantCulture, out var dblE))
-                            fileTotal = (long)dblE;
-                    }
-
-                    double speedBps = 0;
-                    double.TryParse(parts[3], NumberStyles.Float,
-                        CultureInfo.InvariantCulture, out speedBps);
-
-                    if (fileTotal > 0) currentFileBytes = fileTotal;
-                    // Notifica il watchdog che c'è progresso
-                    Interlocked.Exchange(ref lastSeenBytes, completedFilesBytes + downloaded);
-                    Interlocked.Exchange(ref lastProgressTick, Environment.TickCount64);
-
-                    // === Progresso cumulativo ===
-                    // done = byte di file completati + progresso file corrente
-                    var totalDone = completedFilesBytes + downloaded;
-
-                    // totale = planned se disponibile, altrimenti stima locale
-                    var totalForUi = plannedTotalBytes > 0
-                        ? plannedTotalBytes
-                        : (completedFilesBytes + currentFileBytes);
-
-                    var capturedSpeed = (long)speedBps;
-
-                    SetUi(() =>
-                    {
-                        item.DownloadedBytes = totalDone;
-                        if (totalForUi > 0)
-                            item.TotalBytes = totalForUi;
-                        if (capturedSpeed > 0)
-                            item.SpeedBytesPerSecond = capturedSpeed;
-                    });
-                    continue;
-                }
-
-                // === Log solo righe importanti ===
-                if (line.StartsWith("[info]") ||
-                    line.Contains("[Merger]") ||
-                    line.Contains("ERROR") ||
-                    line.Contains("WARNING"))
-                {
-                    _logger.LogInformation("[YT-DLP] {Line}", line);
-                }
-            }
-        };
-
-        process.ErrorDataReceived += (_, e) =>
-        {
-            if (string.IsNullOrEmpty(e.Data)) return;
-            lock (stderrBuffer)
-            {
-                if (stderrBuffer.Length < 4000)
-                    stderrBuffer.AppendLine(e.Data);
-            }
-        };
-
-        // === Watchdog: se per 60s non c'è progresso, killa yt-dlp ===
-
-        // Aggiorna il tick ogni volta che ricevi __PROGRESS__ (lo aggiorniamo nell'handler)
-        // (vedi patch sotto)
-
-        var watchdogCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var watchdogTask = Task.Run(async () =>
-        {
-            while (!watchdogCts.Token.IsCancellationRequested)
-            {
-                await Task.Delay(5000, watchdogCts.Token);
-
-                var now = Environment.TickCount64;
-                var currentBytes = Interlocked.Read(ref lastSeenBytes);
-
-                // Se non ci sono stati progressi per 60s → kill
-                if (currentBytes == lastSeenBytes && now - lastProgressTick > 60_000)
-                {
-                    _logger.LogError(
-                        "[YT-DLP] Watchdog: nessun progresso da 60s, kill del processo");
-                    try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
-                    return;
-                }
-
-                lastSeenBytes = currentBytes;
-                if (currentBytes != 0) lastProgressTick = now;
-            }
-        });
-
-        process.Start();
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-
-        using var reg = ct.Register(() =>
-        {
-            try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
-        });
-
-        try { watchdogCts.Cancel(); } catch { }
-
-        await process.WaitForExitAsync(CancellationToken.None);
-        try { await planTask; } catch { }
-
-        if (ct.IsCancellationRequested) throw new OperationCanceledException();
-
-        var finalFile = Directory.GetFiles(tempDir)
-            .FirstOrDefault(f =>
-                Regex.IsMatch(Path.GetFileName(f), @"^video\.[a-z0-9]+$",
-                    RegexOptions.IgnoreCase));
-
-        if (process.ExitCode != 0 && finalFile == null)
-        {
-            var err = stderrBuffer.ToString();
-            _logger.LogError("[YT-DLP] EXIT {Code}. STDERR completo:\n{Err}",
-                process.ExitCode, err);
-
-            throw new InvalidOperationException(
-                $"yt-dlp terminato con codice {process.ExitCode}.");
-        }
-
-        if (finalFile == null)
-        {
-            throw new InvalidOperationException(
-                "yt-dlp non ha prodotto un file di output.");
-        }
-
-        if (process.ExitCode != 0)
-        {
-            _logger.LogWarning(
-                "[YT-DLP] Exit {Code} ma file finale presente: proseguo",
-                process.ExitCode);
-        }
-
-        bool hasAv = await ProbeHasAudioAndVideoAsync(finalFile, ffmpegDir, ct);
-        if (!hasAv)
-        {
-            _logger.LogWarning(
-                "[YT-DLP] File finale senza traccia audio ({Path}).",
-                finalFile);
-        }
-
-        var destDir = Path.GetDirectoryName(item.DestinationPath);
-        if (!string.IsNullOrEmpty(destDir)) Directory.CreateDirectory(destDir);
-
-        if (File.Exists(item.DestinationPath)) File.Delete(item.DestinationPath);
-        File.Move(finalFile, item.DestinationPath, overwrite: true);
-
-        try { Directory.Delete(tempDir, true); } catch { }
-
-        var finalSize = new FileInfo(item.DestinationPath).Length;
-        SetUi(() =>
-        {
-            item.TotalBytes = finalSize;
-            item.DownloadedBytes = finalSize;
-            item.SpeedBytesPerSecond = 0;
-            item.Status = DownloadStatus.Completed;
-        });
-
-        _logger.LogInformation("[YT-DLP] Completato: {Path} ({MB} MB)",
-            item.DestinationPath, finalSize / 1024 / 1024);
-    }
-
     private static async Task<bool> ProbeHasAudioAndVideoAsync(
         string filePath, string ffmpegDir, CancellationToken ct)
     {
@@ -1055,6 +599,7 @@ public class DownloadService : IDownloadService
 
             using var proc = new Process { StartInfo = psi };
             proc.Start();
+            ChildProcessJob.Add(proc);
 
             var output = await proc.StandardOutput.ReadToEndAsync();
             await proc.WaitForExitAsync(ct);
@@ -1221,6 +766,7 @@ public class DownloadService : IDownloadService
         };
 
         process.Start();
+        ChildProcessJob.Add(process);
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
@@ -1296,6 +842,7 @@ public class DownloadService : IDownloadService
 
             using var proc = new Process { StartInfo = psi };
             proc.Start();
+            ChildProcessJob.Add(proc);
 
             var output = await proc.StandardOutput.ReadToEndAsync();
             await proc.WaitForExitAsync(ct);
@@ -1332,35 +879,6 @@ public class DownloadService : IDownloadService
     // ============================================================
     //  HELPER COOKIE
     // ============================================================
-
-    private static string ConvertNetscapeToCookieHeader(string netscapeCookies)
-    {
-        if (string.IsNullOrEmpty(netscapeCookies)) return "";
-
-        var sb = new StringBuilder();
-        foreach (var line in netscapeCookies.Split('\n'))
-        {
-            var trimmed = line.Trim();
-            if (string.IsNullOrEmpty(trimmed)) continue;
-            if (trimmed.StartsWith("#") && !trimmed.StartsWith("#HttpOnly_")) continue;
-
-            var work = trimmed.StartsWith("#HttpOnly_")
-                ? trimmed.Substring("#HttpOnly_".Length)
-                : trimmed;
-
-            var parts = work.Split('\t');
-            if (parts.Length < 7) continue;
-
-            var name = parts[5].Trim();
-            var value = parts[6].Trim();
-            if (string.IsNullOrEmpty(name)) continue;
-
-            if (sb.Length > 0) sb.Append("; ");
-            sb.Append(name).Append('=').Append(value);
-        }
-
-        return sb.ToString();
-    }
 
     private static string SanitizeNetscapeCookies(string raw)
     {

@@ -13,6 +13,15 @@ public partial class SeriesGroup : ObservableObject
 
     public ObservableCollection<DownloadItem> Items { get; } = new();
 
+    /// <summary>
+    /// Gli item solo a gruppo espanso. La lista nella UI si lega a questa: così i
+    /// controlli delle righe vengono creati solo quando servono, e accodare centinaia
+    /// di episodi in un gruppo chiuso non costa nulla alla UI.
+    /// </summary>
+    public ObservableCollection<DownloadItem>? ExpandedItems => IsExpanded ? Items : null;
+
+    partial void OnIsExpandedChanged(bool value) => OnPropertyChanged(nameof(ExpandedItems));
+
     public int TotalCount => Items.Count;
     public int CompletedCount => Items.Count(i => i.Status == DownloadStatus.Completed);
     public int ActiveCount => Items.Count(i => i.Status == DownloadStatus.Downloading);
@@ -43,8 +52,9 @@ public partial class SeriesGroup : ObservableObject
         ? $"{TotalSpeedBytesPerSecond / 1024 / 1024:F2} MB/s"
         : "-";
 
+    // Divisione in virgola mobile: con i long "1,8 GB" diventava "1,00"
     public string TotalSizeText => TotalBytes > 0
-        ? $"{TotalDownloadedBytes / 1024 / 1024 / 1024:F2} / {TotalBytes / 1024 / 1024 / 1024:F2} GB"
+        ? $"{TotalDownloadedBytes / 1073741824.0:F2} / {TotalBytes / 1073741824.0:F2} GB"
         : "-";
 
     public string OverallEtaText

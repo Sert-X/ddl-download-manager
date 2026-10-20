@@ -20,12 +20,17 @@ public partial class InputDialog : Window
             Title = title
         };
 
+        dialog.TitleText.Text = title;
         dialog.PromptText.Text = prompt;
         dialog.InputBox.Text = initialValue;
 
-        // Seleziona il testo esistente per una modifica rapida.
-        dialog.InputBox.SelectAll();
-        dialog.InputBox.Focus();
+        // Seleziona il testo esistente per una modifica rapida (dopo l'apertura,
+        // altrimenti il focus non viene preso).
+        dialog.Opened += (_, _) =>
+        {
+            dialog.InputBox.SelectAll();
+            dialog.InputBox.Focus();
+        };
 
         await dialog.ShowDialog(owner);
         return dialog.Result;

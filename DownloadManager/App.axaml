@@ -7,12 +7,8 @@
         <ResourceDictionary>
             <ResourceDictionary.ThemeDictionaries>
 
-                <!-- ============================================ -->
-                <!--  TEMA SCURO                                   -->
-                <!-- ============================================ -->
+                <!-- TEMA SCURO -->
                 <ResourceDictionary x:Key="Dark">
-
-                    <!-- Accent blu elettrico -->
                     <Color x:Key="SystemAccentColor">#3B82F6</Color>
                     <Color x:Key="SystemAccentColorLight1">#60A5FA</Color>
                     <Color x:Key="SystemAccentColorLight2">#93C5FD</Color>
@@ -21,7 +17,6 @@
                     <Color x:Key="SystemAccentColorDark2">#1D4ED8</Color>
                     <Color x:Key="SystemAccentColorDark3">#1E40AF</Color>
 
-                    <!-- Sfondi molto scuri -->
                     <SolidColorBrush x:Key="AppBackgroundBrush">#06070D</SolidColorBrush>
                     <SolidColorBrush x:Key="AppSurfaceBrush">#0D0F18</SolidColorBrush>
                     <SolidColorBrush x:Key="AppSurface2Brush">#141722</SolidColorBrush>
@@ -29,13 +24,52 @@
                     <SolidColorBrush x:Key="AppBorderBrush">#1F2233</SolidColorBrush>
                     <SolidColorBrush x:Key="AppTextBrush">#E8EAF2</SolidColorBrush>
                     <SolidColorBrush x:Key="AppTextMutedBrush">#7A7F98</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppExpanderBrush">#1C2033</SolidColorBrush>
+                    <!-- Superfici dedicate alla coda download: blu ardesia, non nero -->
+                    <SolidColorBrush x:Key="DownloadGroupCardBrush">#14161F</SolidColorBrush>
+                    <SolidColorBrush x:Key="DownloadGroupHeaderBrush">#1B1E2B</SolidColorBrush>
+                    <SolidColorBrush x:Key="DownloadGroupHeaderHoverBrush">#242839</SolidColorBrush>
+                    <SolidColorBrush x:Key="DownloadGroupRowBrush">#11131B</SolidColorBrush>
+                    <SolidColorBrush x:Key="DownloadGroupRowAltBrush">#161925</SolidColorBrush>
+                    <!-- Tab -->
+                    <SolidColorBrush x:Key="AppTabTrackBrush">#0D0F18</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppTabSelectedBrush">#222637</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppTabSelectedBorderBrush">#2F354B</SolidColorBrush>
+                    <!-- Scrollbar -->
+                    <!-- Menu a tendina / menu contestuali -->
+                    <SolidColorBrush x:Key="ComboBoxItemForegroundPointerOver">#E8EAF2</SolidColorBrush>
+                    <SolidColorBrush x:Key="ComboBoxItemForegroundPressed">#E8EAF2</SolidColorBrush>
+                    <SolidColorBrush x:Key="ContextMenuBackground">#141722</SolidColorBrush>
+                    <SolidColorBrush x:Key="ContextMenuBorderBrush">#2A2F45</SolidColorBrush>
 
-                    <!-- Accent blu -->
+                    <!-- Scrollbar -->
+                    <SolidColorBrush x:Key="AppScrollThumbBrush">#2E344A</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppScrollThumbHoverBrush">#4A5270</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppScrollThumbPressedBrush">#60A5FA</SolidColorBrush>
+
+                    <!-- Menu a tendina / menu contestuali -->
+                    <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#12151F"/>
+                    <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="#2A2F45"/>
+                    <SolidColorBrush x:Key="ComboBoxItemBackgroundPointerOver" Color="#1D2132"/>
+                    <SolidColorBrush x:Key="ComboBoxItemBackgroundPressed" Color="#252A3E"/>
+                    <SolidColorBrush x:Key="ComboBoxItemBackgroundSelected" Color="#252A3E"/>
+                    <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedUnfocused" Color="#252A3E"/>
+                    <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedPointerOver" Color="#2B3148"/>
+                    <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedPressed" Color="#252A3E"/>
+                    <SolidColorBrush x:Key="ComboBoxItemForegroundSelected" Color="#60A5FA"/>
+                    <SolidColorBrush x:Key="ComboBoxItemForegroundSelectedUnfocused" Color="#60A5FA"/>
+                    <SolidColorBrush x:Key="ComboBoxItemForegroundSelectedPointerOver" Color="#60A5FA"/>
+                    <SolidColorBrush x:Key="ComboBoxItemForegroundSelectedPressed" Color="#60A5FA"/>
+                    <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#12151F"/>
+                    <SolidColorBrush x:Key="MenuFlyoutPresenterBorderBrush" Color="#2A2F45"/>
+                    <SolidColorBrush x:Key="MenuFlyoutItemBackgroundPointerOver" Color="#1D2132"/>
+                    <SolidColorBrush x:Key="MenuFlyoutItemBackgroundPressed" Color="#252A3E"/>
+
                     <SolidColorBrush x:Key="AppAccentBrush">#60A5FA</SolidColorBrush>
                     <SolidColorBrush x:Key="AppAccentHoverBrush">#93C5FD</SolidColorBrush>
                     <SolidColorBrush x:Key="AppAccentSoftBrush">#333B82F6</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppAccentSoftHoverBrush">#4D3B82F6</SolidColorBrush>
 
-                    <!-- Colori semantici -->
                     <SolidColorBrush x:Key="AppSuccessBrush">#34D399</SolidColorBrush>
                     <SolidColorBrush x:Key="AppWarningBrush">#FBBF24</SolidColorBrush>
                     <SolidColorBrush x:Key="AppDangerBrush">#F87171</SolidColorBrush>
@@ -43,7 +77,6 @@
                     <SolidColorBrush x:Key="AppHoverBrush">#1A1E30</SolidColorBrush>
                     <SolidColorBrush x:Key="AppSelectedBrush">#232848</SolidColorBrush>
 
-                    <!-- Soft variants -->
                     <SolidColorBrush x:Key="AppSuccessSoftBrush" Color="#2634D399"/>
                     <SolidColorBrush x:Key="AppWarningSoftBrush" Color="#26FBBF24"/>
                     <SolidColorBrush x:Key="AppDangerSoftBrush" Color="#26F87171"/>
@@ -53,7 +86,6 @@
                     <SolidColorBrush x:Key="AppDangerSoftHoverBrush" Color="#40F87171"/>
                     <SolidColorBrush x:Key="AppInfoSoftHoverBrush" Color="#4038BDF8"/>
 
-                    <!-- Gradienti blu/ciano (meno "violet" del precedente) -->
                     <LinearGradientBrush x:Key="AppAccentGradientBrush" StartPoint="0%,0%" EndPoint="100%,100%">
                         <GradientStop Color="#2563EB" Offset="0"/>
                         <GradientStop Color="#06B6D4" Offset="1"/>
@@ -81,10 +113,6 @@
                     <SolidColorBrush x:Key="AppZeroByteHighlightBrush" Color="#3A0F0F"/>
                     <SolidColorBrush x:Key="AppZeroByteHighlightBorderBrush" Color="#7F1D1D"/>
 
-                    <SolidColorBrush x:Key="AppWarningButtonBgBrush" Color="#26FBBF24"/>
-                    <SolidColorBrush x:Key="AppWarningButtonFgBrush" Color="#FBBF24"/>
-                    <SolidColorBrush x:Key="AppWarningButtonBorderBrush" Color="#FBBF24"/>
-
                     <SolidColorBrush x:Key="AppTextSelectionBrush" Color="#2563EB"/>
                     <SolidColorBrush x:Key="AppTextSelectionForegroundBrush" Color="#FFFFFF"/>
                     <SolidColorBrush x:Key="AppCaretBrush" Color="#60A5FA"/>
@@ -102,11 +130,8 @@
                     <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="#1F2233"/>
                 </ResourceDictionary>
 
-                <!-- ============================================ -->
-                <!--  TEMA CHIARO                                  -->
-                <!-- ============================================ -->
+                <!-- TEMA CHIARO -->
                 <ResourceDictionary x:Key="Light">
-
                     <Color x:Key="SystemAccentColor">#2563EB</Color>
                     <Color x:Key="SystemAccentColorLight1">#3B82F6</Color>
                     <Color x:Key="SystemAccentColorLight2">#60A5FA</Color>
@@ -114,6 +139,46 @@
                     <Color x:Key="SystemAccentColorDark1">#1D4ED8</Color>
                     <Color x:Key="SystemAccentColorDark2">#1E40AF</Color>
                     <Color x:Key="SystemAccentColorDark3">#1E3A8A</Color>
+                    <SolidColorBrush x:Key="AppExpanderBrush">#F5F7FD</SolidColorBrush>
+                    <!-- Superfici dedicate alla coda download -->
+                    <SolidColorBrush x:Key="DownloadGroupCardBrush">#FFFFFF</SolidColorBrush>
+                    <SolidColorBrush x:Key="DownloadGroupHeaderBrush">#F1F3F9</SolidColorBrush>
+                    <SolidColorBrush x:Key="DownloadGroupHeaderHoverBrush">#E6EAF4</SolidColorBrush>
+                    <SolidColorBrush x:Key="DownloadGroupRowBrush">#FFFFFF</SolidColorBrush>
+                    <SolidColorBrush x:Key="DownloadGroupRowAltBrush">#F7F8FB</SolidColorBrush>
+                    <!-- Tab -->
+                    <SolidColorBrush x:Key="AppTabTrackBrush">#E8EBF3</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppTabSelectedBrush">#FFFFFF</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppTabSelectedBorderBrush">#D7DAE5</SolidColorBrush>
+                    <!-- Scrollbar -->
+                    <!-- Menu a tendina / menu contestuali -->
+                    <SolidColorBrush x:Key="ComboBoxItemForegroundPointerOver">#15182A</SolidColorBrush>
+                    <SolidColorBrush x:Key="ComboBoxItemForegroundPressed">#15182A</SolidColorBrush>
+                    <SolidColorBrush x:Key="ContextMenuBackground">#FFFFFF</SolidColorBrush>
+                    <SolidColorBrush x:Key="ContextMenuBorderBrush">#D7DAE5</SolidColorBrush>
+
+                    <!-- Scrollbar -->
+                    <SolidColorBrush x:Key="AppScrollThumbBrush">#C9CEDC</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppScrollThumbHoverBrush">#9CA4BC</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppScrollThumbPressedBrush">#2563EB</SolidColorBrush>
+
+                    <!-- Menu a tendina / menu contestuali -->
+                    <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#FFFFFF"/>
+                    <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="#D7DAE5"/>
+                    <SolidColorBrush x:Key="ComboBoxItemBackgroundPointerOver" Color="#EEF1F9"/>
+                    <SolidColorBrush x:Key="ComboBoxItemBackgroundPressed" Color="#E3E9F8"/>
+                    <SolidColorBrush x:Key="ComboBoxItemBackgroundSelected" Color="#E3E9F8"/>
+                    <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedUnfocused" Color="#E3E9F8"/>
+                    <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedPointerOver" Color="#DAE2F5"/>
+                    <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedPressed" Color="#E3E9F8"/>
+                    <SolidColorBrush x:Key="ComboBoxItemForegroundSelected" Color="#2563EB"/>
+                    <SolidColorBrush x:Key="ComboBoxItemForegroundSelectedUnfocused" Color="#2563EB"/>
+                    <SolidColorBrush x:Key="ComboBoxItemForegroundSelectedPointerOver" Color="#2563EB"/>
+                    <SolidColorBrush x:Key="ComboBoxItemForegroundSelectedPressed" Color="#2563EB"/>
+                    <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#FFFFFF"/>
+                    <SolidColorBrush x:Key="MenuFlyoutPresenterBorderBrush" Color="#D7DAE5"/>
+                    <SolidColorBrush x:Key="MenuFlyoutItemBackgroundPointerOver" Color="#EEF1F9"/>
+                    <SolidColorBrush x:Key="MenuFlyoutItemBackgroundPressed" Color="#E3E9F8"/>
 
                     <SolidColorBrush x:Key="AppBackgroundBrush">#F2F4F9</SolidColorBrush>
                     <SolidColorBrush x:Key="AppSurfaceBrush">#FFFFFF</SolidColorBrush>
@@ -125,6 +190,7 @@
                     <SolidColorBrush x:Key="AppAccentBrush">#2563EB</SolidColorBrush>
                     <SolidColorBrush x:Key="AppAccentHoverBrush">#1D4ED8</SolidColorBrush>
                     <SolidColorBrush x:Key="AppAccentSoftBrush">#1F2563EB</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppAccentSoftHoverBrush">#332563EB</SolidColorBrush>
                     <SolidColorBrush x:Key="AppSuccessBrush">#059669</SolidColorBrush>
                     <SolidColorBrush x:Key="AppWarningBrush">#B45309</SolidColorBrush>
                     <SolidColorBrush x:Key="AppDangerBrush">#DC2626</SolidColorBrush>
@@ -168,10 +234,6 @@
                     <SolidColorBrush x:Key="AppZeroByteHighlightBrush" Color="#FEE2E2"/>
                     <SolidColorBrush x:Key="AppZeroByteHighlightBorderBrush" Color="#FCA5A5"/>
 
-                    <SolidColorBrush x:Key="AppWarningButtonBgBrush" Color="#1FF59E0B"/>
-                    <SolidColorBrush x:Key="AppWarningButtonFgBrush" Color="#B45309"/>
-                    <SolidColorBrush x:Key="AppWarningButtonBorderBrush" Color="#B45309"/>
-
                     <SolidColorBrush x:Key="AppTextSelectionBrush" Color="#2563EB"/>
                     <SolidColorBrush x:Key="AppTextSelectionForegroundBrush" Color="#FFFFFF"/>
                     <SolidColorBrush x:Key="AppCaretBrush" Color="#2563EB"/>
@@ -190,6 +252,256 @@
                 </ResourceDictionary>
 
             </ResourceDictionary.ThemeDictionaries>
+
+            <CornerRadius x:Key="OverlayCornerRadius">10</CornerRadius>
+
+            <!-- ============================================================ -->
+            <!--  ICONE VETTORIALI (stroke, griglia 24x24)                     -->
+            <!--  Uso: <Path Classes="icon" Data="{StaticResource IconPlus}"/> -->
+            <!-- ============================================================ -->
+            <StreamGeometry x:Key="IconInfo">M 22,12 A 10,10 0 1 1 2,12 A 10,10 0 1 1 22,12 Z M 12,16 L 12,12 M 12,8 L 12,8.01</StreamGeometry>
+            <StreamGeometry x:Key="IconAlert">M 12,3 L 22,20 L 2,20 Z M 12,10 L 12,14 M 12,17 L 12,17.01</StreamGeometry>
+            <StreamGeometry x:Key="IconRefresh">M 21,12 A 9,9 0 1 1 12,3 C 14.52,3 16.93,4 18.74,5.74 L 21,8 M 21,3 L 21,8 L 16,8</StreamGeometry>
+            <StreamGeometry x:Key="IconRepeat">M 17,2 L 21,6 L 17,10 M 3,11 L 3,10 A 4,4 0 0 1 7,6 L 21,6 M 7,22 L 3,18 L 7,14 M 21,13 L 21,14 A 4,4 0 0 1 17,18 L 3,18</StreamGeometry>
+            <StreamGeometry x:Key="IconPlus">M 12,5 L 12,19 M 5,12 L 19,12</StreamGeometry>
+            <StreamGeometry x:Key="IconClose">M 18,6 L 6,18 M 6,6 L 18,18</StreamGeometry>
+            <StreamGeometry x:Key="IconCheck">M 20,6 L 9,17 L 4,12</StreamGeometry>
+            <StreamGeometry x:Key="IconArrowLeft">M 19,12 L 5,12 M 12,19 L 5,12 L 12,5</StreamGeometry>
+            <StreamGeometry x:Key="IconArrowUp">M 12,19 L 12,5 M 5,12 L 12,5 L 19,12</StreamGeometry>
+            <StreamGeometry x:Key="IconArrowDown">M 12,5 L 12,19 M 19,12 L 12,19 L 5,12</StreamGeometry>
+            <StreamGeometry x:Key="IconHome">M 3,10 L 12,3 L 21,10 L 21,20 A 1,1 0 0 1 20,21 L 15,21 L 15,14 L 9,14 L 9,21 L 4,21 A 1,1 0 0 1 3,20 Z</StreamGeometry>
+            <StreamGeometry x:Key="IconSearch">M 21,21 L 16.65,16.65 M 11,3 A 8,8 0 1 1 11,19 A 8,8 0 1 1 11,3 Z</StreamGeometry>
+            <StreamGeometry x:Key="IconFolder">M 3,6 A 2,2 0 0 1 5,4 L 9,4 L 11,7 L 19,7 A 2,2 0 0 1 21,9 L 21,18 A 2,2 0 0 1 19,20 L 5,20 A 2,2 0 0 1 3,18 Z</StreamGeometry>
+            <StreamGeometry x:Key="IconFile">M 14,2 L 6,2 A 2,2 0 0 0 4,4 L 4,20 A 2,2 0 0 0 6,22 L 18,22 A 2,2 0 0 0 20,20 L 20,8 Z M 14,2 L 14,8 L 20,8</StreamGeometry>
+            <StreamGeometry x:Key="IconMonitor">M 4,4 L 20,4 A 1,1 0 0 1 21,5 L 21,15 A 1,1 0 0 1 20,16 L 4,16 A 1,1 0 0 1 3,15 L 3,5 A 1,1 0 0 1 4,4 Z M 8,20 L 16,20 M 12,16 L 12,20</StreamGeometry>
+            <StreamGeometry x:Key="IconCloud">M 17.5,19 L 9,19 A 7,7 0 1 1 15.71,10 L 17.5,10 A 4.5,4.5 0 1 1 17.5,19 Z</StreamGeometry>
+            <StreamGeometry x:Key="IconUpload">M 21,15 L 21,19 A 2,2 0 0 1 19,21 L 5,21 A 2,2 0 0 1 3,19 L 3,15 M 17,8 L 12,3 L 7,8 M 12,3 L 12,15</StreamGeometry>
+            <StreamGeometry x:Key="IconDownload">M 21,15 L 21,19 A 2,2 0 0 1 19,21 L 5,21 A 2,2 0 0 1 3,19 L 3,15 M 7,10 L 12,15 L 17,10 M 12,15 L 12,3</StreamGeometry>
+            <StreamGeometry x:Key="IconStop">M 7,5 L 17,5 A 2,2 0 0 1 19,7 L 19,17 A 2,2 0 0 1 17,19 L 7,19 A 2,2 0 0 1 5,17 L 5,7 A 2,2 0 0 1 7,5 Z</StreamGeometry>
+            <StreamGeometry x:Key="IconPlay">M 6,4 L 20,12 L 6,20 Z</StreamGeometry>
+            <StreamGeometry x:Key="IconPause">M 6,4 L 10,4 L 10,20 L 6,20 Z M 14,4 L 18,4 L 18,20 L 14,20 Z</StreamGeometry>
+            <StreamGeometry x:Key="IconTrash">M 3,6 L 21,6 M 19,6 L 19,20 A 2,2 0 0 1 17,22 L 7,22 A 2,2 0 0 1 5,20 L 5,6 M 8,6 L 8,4 A 2,2 0 0 1 10,2 L 14,2 A 2,2 0 0 1 16,4 L 16,6 M 10,11 L 10,17 M 14,11 L 14,17</StreamGeometry>
+            <StreamGeometry x:Key="IconBulb">M 15,14 C 15.2,13 15.7,12.3 16.5,11.5 C 17.5,10.6 18,9.3 18,8 A 6,6 0 0 0 6,8 C 6,9 6.2,10.2 7.5,11.5 C 8.2,12.2 8.8,13 9,14 M 9,18 L 15,18 M 10,22 L 14,22</StreamGeometry>
+            <StreamGeometry x:Key="IconSun">M 12,8 A 4,4 0 1 1 12,16 A 4,4 0 1 1 12,8 Z M 12,2 L 12,4 M 12,20 L 12,22 M 4.93,4.93 L 6.34,6.34 M 17.66,17.66 L 19.07,19.07 M 2,12 L 4,12 M 20,12 L 22,12 M 4.93,19.07 L 6.34,17.66 M 17.66,6.34 L 19.07,4.93</StreamGeometry>
+            <StreamGeometry x:Key="IconMoon">M 21,12.79 A 9,9 0 1 1 11.21,3 A 7,7 0 0 0 21,12.79 Z</StreamGeometry>
+            <StreamGeometry x:Key="IconPlayCircle">M 22,12 A 10,10 0 1 1 2,12 A 10,10 0 1 1 22,12 Z M 10,8 L 16,12 L 10,16 Z</StreamGeometry>
+            <StreamGeometry x:Key="IconFilm">M 4,3 L 20,3 A 1,1 0 0 1 21,4 L 21,20 A 1,1 0 0 1 20,21 L 4,21 A 1,1 0 0 1 3,20 L 3,4 A 1,1 0 0 1 4,3 Z M 7,3 L 7,21 M 17,3 L 17,21 M 3,12 L 21,12 M 3,7.5 L 7,7.5 M 3,16.5 L 7,16.5 M 17,7.5 L 21,7.5 M 17,16.5 L 21,16.5</StreamGeometry>
+            <StreamGeometry x:Key="IconTv">M 4,7 L 20,7 A 2,2 0 0 1 22,9 L 22,19 A 2,2 0 0 1 20,21 L 4,21 A 2,2 0 0 1 2,19 L 2,9 A 2,2 0 0 1 4,7 Z M 17,2 L 12,7 L 7,2</StreamGeometry>
+            <StreamGeometry x:Key="IconBolt">M 13,2 L 3,14 L 12,14 L 11,22 L 21,10 L 12,10 Z</StreamGeometry>
+            <StreamGeometry x:Key="IconBoltOff">M 12.41,6.75 L 13,2 L 10.57,4.92 M 18.57,12.91 L 21,10 L 15.66,10 M 8,8 L 3,14 L 12,14 L 11,22 L 16,16 M 2,2 L 22,22</StreamGeometry>
+            <StreamGeometry x:Key="IconCheckCircle">M 22,12 A 10,10 0 1 1 2,12 A 10,10 0 1 1 22,12 Z M 8,12 L 11,15 L 16,9</StreamGeometry>
+            <StreamGeometry x:Key="IconBan">M 22,12 A 10,10 0 1 1 2,12 A 10,10 0 1 1 22,12 Z M 4.93,4.93 L 19.07,19.07</StreamGeometry>
+            <StreamGeometry x:Key="IconAlertCircle">M 22,12 A 10,10 0 1 1 2,12 A 10,10 0 1 1 22,12 Z M 12,8 L 12,12 M 12,16 L 12,16.01</StreamGeometry>
+            <StreamGeometry x:Key="IconLayers">M 12,2 L 2,7 L 12,12 L 22,7 Z M 2,17 L 12,22 L 22,17 M 2,12 L 12,17 L 22,12</StreamGeometry>
+            <StreamGeometry x:Key="IconUser">M 20,21 L 20,19 A 4,4 0 0 0 16,15 L 8,15 A 4,4 0 0 0 4,19 L 4,21 M 16,7 A 4,4 0 1 1 8,7 A 4,4 0 1 1 16,7 Z</StreamGeometry>
+            <StreamGeometry x:Key="IconKey">M 21,2 L 19,4 M 11.39,11.61 A 5.5,5.5 0 1 1 3.61,19.39 A 5.5,5.5 0 1 1 11.39,11.61 Z M 11.39,11.61 L 15.5,7.5 M 15.5,7.5 L 18,10 L 22,6 L 19,3 L 15.5,7.5</StreamGeometry>
+            <StreamGeometry x:Key="IconUnlock">M 5,11 L 19,11 A 2,2 0 0 1 21,13 L 21,20 A 2,2 0 0 1 19,22 L 5,22 A 2,2 0 0 1 3,20 L 3,13 A 2,2 0 0 1 5,11 Z M 7,11 L 7,7 A 5,5 0 0 1 17,6</StreamGeometry>
+            <StreamGeometry x:Key="IconSave">M 19,21 L 5,21 A 2,2 0 0 1 3,19 L 3,5 A 2,2 0 0 1 5,3 L 16,3 L 21,8 L 21,19 A 2,2 0 0 1 19,21 Z M 17,21 L 17,13 L 7,13 L 7,21 M 7,3 L 7,8 L 15,8</StreamGeometry>
+            <StreamGeometry x:Key="IconLogOut">M 9,21 L 5,21 A 2,2 0 0 1 3,19 L 3,5 A 2,2 0 0 1 5,3 L 9,3 M 16,17 L 21,12 L 16,7 M 21,12 L 9,12</StreamGeometry>
+            <StreamGeometry x:Key="IconEye">M 1,12 C 1,12 5,4 12,4 C 19,4 23,12 23,12 C 23,12 19,20 12,20 C 5,20 1,12 1,12 Z M 15,12 A 3,3 0 1 1 9,12 A 3,3 0 1 1 15,12 Z</StreamGeometry>
+            <StreamGeometry x:Key="IconUndo">M 3,7 L 3,13 L 9,13 M 3.51,13 A 9,9 0 1 0 5.64,6.64 L 3,9</StreamGeometry>
+            <StreamGeometry x:Key="IconGlobe">M 22,12 A 10,10 0 1 1 2,12 A 10,10 0 1 1 22,12 Z M 2,12 L 22,12 M 12,2 C 14.5,4.7 15.9,8.3 16,12 C 15.9,15.7 14.5,19.3 12,22 C 9.5,19.3 8.1,15.7 8,12 C 8.1,8.3 9.5,4.7 12,2 Z</StreamGeometry>
+            <StreamGeometry x:Key="IconPlug">M 9,2 L 9,7 M 15,2 L 15,7 M 6,7 L 18,7 L 18,12 A 6,6 0 0 1 6,12 Z M 12,18 L 12,22</StreamGeometry>
+            <StreamGeometry x:Key="IconQueue">M 3,6 L 14,6 M 3,12 L 14,12 M 3,18 L 10,18 M 18,14 L 18,22 M 14,18 L 22,18</StreamGeometry>
+            <StreamGeometry x:Key="IconEdit">M 12,20 L 21,20 M 16.5,3.5 A 2.12,2.12 0 0 1 20.5,7.5 L 7,21 L 3,22 L 4,18 Z</StreamGeometry>
+            <StreamGeometry x:Key="IconMinus">M 5,12 L 19,12</StreamGeometry>
+            <StreamGeometry x:Key="IconList">M 8,6 L 21,6 M 8,12 L 21,12 M 8,18 L 21,18 M 3,6 L 3.01,6 M 3,12 L 3.01,12 M 3,18 L 3.01,18</StreamGeometry>
+            <StreamGeometry x:Key="IconCopy">M 11,9 L 20,9 A 2,2 0 0 1 22,11 L 22,20 A 2,2 0 0 1 20,22 L 11,22 A 2,2 0 0 1 9,20 L 9,11 A 2,2 0 0 1 11,9 Z M 5,15 L 4,15 A 2,2 0 0 1 2,13 L 2,4 A 2,2 0 0 1 4,2 L 13,2 A 2,2 0 0 1 15,4 L 15,5</StreamGeometry>
+            <StreamGeometry x:Key="IconSettings">M 4,6 L 20,6 M 4,12 L 20,12 M 4,18 L 20,18 M 9,3.5 L 9,8.5 M 15,9.5 L 15,14.5 M 8,15.5 L 8,20.5</StreamGeometry>
+
+            <!-- ============================================================ -->
+            <!--  SCROLLBAR sottile: nessun "ingrandimento" al passaggio mouse  -->
+            <!-- ============================================================ -->
+            <ControlTheme x:Key="AppRepeatTrackTheme" TargetType="RepeatButton">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Focusable" Value="False"/>
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <Border Background="Transparent"/>
+                    </ControlTemplate>
+                </Setter>
+            </ControlTheme>
+
+            <ControlTheme x:Key="AppThumbTheme" TargetType="Thumb">
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <Border Classes="scrollThumb"/>
+                    </ControlTemplate>
+                </Setter>
+            </ControlTheme>
+
+            <ControlTheme x:Key="AppScrollBarTheme" TargetType="ScrollBar">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="AllowAutoHide" Value="False"/>
+                <Style Selector="^:vertical">
+                    <Setter Property="Width" Value="10"/>
+                    <Setter Property="MinWidth" Value="10"/>
+                    <Setter Property="Template">
+                        <ControlTemplate>
+                            <Border Background="Transparent" Padding="2">
+                                <Track Name="PART_Track"
+                                       Orientation="Vertical"
+                                       IsDirectionReversed="True"
+                                       Minimum="{TemplateBinding Minimum}"
+                                       Maximum="{TemplateBinding Maximum}"
+                                       ViewportSize="{TemplateBinding ViewportSize}"
+                                       Value="{TemplateBinding Value, Mode=TwoWay}">
+                                    <Track.DecreaseButton>
+                                        <RepeatButton Name="PART_PageUpButton" Theme="{StaticResource AppRepeatTrackTheme}"/>
+                                    </Track.DecreaseButton>
+                                    <Track.IncreaseButton>
+                                        <RepeatButton Name="PART_PageDownButton" Theme="{StaticResource AppRepeatTrackTheme}"/>
+                                    </Track.IncreaseButton>
+                                    <Thumb MinHeight="28" Theme="{StaticResource AppThumbTheme}"/>
+                                </Track>
+                            </Border>
+                        </ControlTemplate>
+                    </Setter>
+                </Style>
+                <Style Selector="^:horizontal">
+                    <Setter Property="Height" Value="10"/>
+                    <Setter Property="MinHeight" Value="10"/>
+                    <Setter Property="Template">
+                        <ControlTemplate>
+                            <Border Background="Transparent" Padding="2">
+                                <Track Name="PART_Track"
+                                       Orientation="Horizontal"
+                                       Minimum="{TemplateBinding Minimum}"
+                                       Maximum="{TemplateBinding Maximum}"
+                                       ViewportSize="{TemplateBinding ViewportSize}"
+                                       Value="{TemplateBinding Value, Mode=TwoWay}">
+                                    <Track.DecreaseButton>
+                                        <RepeatButton Name="PART_PageUpButton" Theme="{StaticResource AppRepeatTrackTheme}"/>
+                                    </Track.DecreaseButton>
+                                    <Track.IncreaseButton>
+                                        <RepeatButton Name="PART_PageDownButton" Theme="{StaticResource AppRepeatTrackTheme}"/>
+                                    </Track.IncreaseButton>
+                                    <Thumb MinWidth="28" Theme="{StaticResource AppThumbTheme}"/>
+                                </Track>
+                            </Border>
+                        </ControlTemplate>
+                    </Setter>
+                </Style>
+            </ControlTheme>
+
+            <!-- ============================================================ -->
+            <!--  STATUS BANNER                                                -->
+            <!--  Uso: <ContentControl Theme="{StaticResource StatusBannerTheme}" Content="{Binding StatusMessage}"/> -->
+            <!-- ============================================================ -->
+            <ControlTheme x:Key="StatusBannerTheme" TargetType="ContentControl">
+                <Setter Property="Margin" Value="0,0,0,12"/>
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <Border Background="{DynamicResource AppSurface2Brush}"
+                                BorderBrush="{DynamicResource AppBorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="10,8">
+                            <Grid ColumnDefinitions="Auto,*">
+                                <Border Width="24" Height="24" CornerRadius="12"
+                                        Background="{DynamicResource AppAccentSoftBrush}"
+                                        Margin="0,0,10,0" VerticalAlignment="Center">
+                                    <Path Data="{StaticResource IconInfo}"
+                                          Width="12" Height="12" Stretch="Uniform"
+                                          Stroke="{DynamicResource AppAccentBrush}"
+                                          StrokeThickness="2"
+                                          StrokeLineCap="Round" StrokeJoin="Round"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <TextBlock Grid.Column="1"
+                                           Text="{TemplateBinding Content}"
+                                           Foreground="{DynamicResource AppTextBrush}"
+                                           FontSize="12"
+                                           VerticalAlignment="Center"
+                                           TextWrapping="Wrap"/>
+                            </Grid>
+                        </Border>
+                    </ControlTemplate>
+                </Setter>
+            </ControlTheme>
+
+            <!-- ============================================================ -->
+            <!--  EXPANDER GRUPPO DOWNLOAD - ControlTheme con template custom  -->
+            <!--  Uso: <Expander Theme="{StaticResource DownloadGroupExpanderTheme}" .../> -->
+            <!-- ============================================================ -->
+            <ControlTheme x:Key="DownloadGroupExpanderTheme" TargetType="Expander">
+                <Setter Property="Background" Value="{DynamicResource DownloadGroupCardBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="CornerRadius" Value="12"/>
+                <Setter Property="Margin" Value="0,0,0,10"/>
+                <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="{TemplateBinding CornerRadius}"
+                                ClipToBounds="True">
+                            <DockPanel>
+                                <ToggleButton x:Name="PART_toggle"
+                                              DockPanel.Dock="Top"
+                                              IsChecked="{TemplateBinding IsExpanded, Mode=TwoWay}"
+                                              Content="{TemplateBinding Header}"
+                                              ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                              HorizontalAlignment="Stretch"
+                                              HorizontalContentAlignment="Stretch"
+                                              VerticalContentAlignment="Center"
+                                              Cursor="Hand">
+                                    <ToggleButton.Styles>
+                                        <Style Selector="ToggleButton:pointerover /template/ Border#HeaderBorder">
+                                            <Setter Property="Background" Value="{DynamicResource DownloadGroupHeaderHoverBrush}"/>
+                                        </Style>
+                                        <Style Selector="ToggleButton:checked /template/ Border#AccentBar">
+                                            <Setter Property="Background" Value="{DynamicResource AppAccentBrush}"/>
+                                        </Style>
+                                        <Style Selector="ToggleButton:checked /template/ Path#Chevron">
+                                            <Setter Property="RenderTransform" Value="rotate(180deg)"/>
+                                            <Setter Property="Stroke" Value="{DynamicResource AppAccentBrush}"/>
+                                        </Style>
+                                    </ToggleButton.Styles>
+                                    <ToggleButton.Template>
+                                        <ControlTemplate>
+                                            <Border x:Name="HeaderBorder"
+                                                    Background="{DynamicResource DownloadGroupHeaderBrush}">
+                                                <Grid ColumnDefinitions="3, *, Auto">
+                                                    <Border x:Name="AccentBar" Grid.Column="0" Background="Transparent"/>
+                                                    <ContentPresenter Grid.Column="1"
+                                                                      Padding="12,12,8,12"
+                                                                      Content="{TemplateBinding Content}"
+                                                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                                      HorizontalContentAlignment="Stretch"
+                                                                      VerticalContentAlignment="Center"
+                                                                      Foreground="{DynamicResource AppTextBrush}"/>
+                                                    <Path x:Name="Chevron" Grid.Column="2"
+                                                          Data="M 1,1 L 6,6 L 11,1"
+                                                          Stroke="{DynamicResource AppTextMutedBrush}"
+                                                          StrokeThickness="2"
+                                                          StrokeLineCap="Round"
+                                                          StrokeJoin="Round"
+                                                          Margin="6,0,16,0"
+                                                          VerticalAlignment="Center"
+                                                          RenderTransformOrigin="50%,50%"/>
+                                                </Grid>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </ToggleButton.Template>
+                                </ToggleButton>
+
+                                <Border IsVisible="{TemplateBinding IsExpanded}"
+                                        BorderBrush="{DynamicResource AppBorderBrush}"
+                                        BorderThickness="0,1,0,0">
+                                    <ContentPresenter Content="{TemplateBinding Content}"
+                                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                      HorizontalContentAlignment="Stretch"/>
+                                </Border>
+                            </DockPanel>
+                        </Border>
+                    </ControlTemplate>
+                </Setter>
+            </ControlTheme>
+
         </ResourceDictionary>
     </Application.Resources>
 
@@ -197,9 +509,7 @@
         <FluentTheme />
         <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml"/>
 
-        <!-- ============================================================ -->
-        <!--  WINDOW                                                        -->
-        <!-- ============================================================ -->
+        <!-- WINDOW -->
         <Style Selector=":is(Window)">
             <Setter Property="Background" Value="{DynamicResource AppBackgroundBrush}"/>
             <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
@@ -208,21 +518,27 @@
         </Style>
 
         <!-- ============================================================ -->
-        <!--  TABCONTROL                                                    -->
+        <!--  TABCONTROL                                                   -->
         <!-- ============================================================ -->
         <Style Selector="TabControl">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Padding" Value="0"/>
         </Style>
 
+        <Style Selector="TabControl /template/ ItemsPresenter">
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- Stile base (anche per i tab annidati) -->
         <Style Selector="TabControl > TabItem">
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}"/>
-            <Setter Property="Padding" Value="16,8"/>
-            <Setter Property="Margin" Value="0,0,6,0"/>
+            <Setter Property="Padding" Value="16,9"/>
+            <Setter Property="Margin" Value="0,0,2,0"/>
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="CornerRadius" Value="999"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="MinHeight" Value="38"/>
         </Style>
         <Style Selector="TabControl > TabItem /template/ Border#PART_SelectedPipe">
             <Setter Property="IsVisible" Value="False"/>
@@ -232,33 +548,118 @@
             <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
         </Style>
         <Style Selector="TabControl > TabItem:selected">
-            <Setter Property="Background" Value="{DynamicResource AppAccentSoftBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource AppTabSelectedBrush}"/>
             <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}"/>
         </Style>
 
+        <!-- Barra principale (Classes="nav"): capsula con tab "segmented" -->
         <Style Selector="TabControl.nav">
-            <Setter Property="Padding" Value="8,4,16,0"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top"
+                                HorizontalAlignment="Center"
+                                Background="{DynamicResource AppTabTrackBrush}"
+                                BorderBrush="{DynamicResource AppBorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="16"
+                                Padding="4"
+                                Margin="0">
+                            <ItemsPresenter Name="PART_ItemsPresenter"
+                                            ItemsPanel="{TemplateBinding ItemsPanel}"/>
+                        </Border>
+                        <ContentPresenter Name="PART_SelectedContentHost"
+                                          Content="{TemplateBinding SelectedContent}"
+                                          ContentTemplate="{TemplateBinding SelectedContentTemplate}"
+                                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                    </DockPanel>
+                </ControlTemplate>
+            </Setter>
         </Style>
         <Style Selector="TabControl.nav > TabItem">
-            <Setter Property="Width" Value="236"/>
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="Padding" Value="18,13"/>
-            <Setter Property="Margin" Value="12,3,4,3"/>
-            <Setter Property="CornerRadius" Value="16"/>
-            <Setter Property="HorizontalContentAlignment" Value="Left"/>
-        </Style>
-        <Style Selector="TabControl.nav > TabItem:pointerover">
-            <Setter Property="Background" Value="{DynamicResource AppHoverBrush}"/>
-            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+            <Setter Property="Padding" Value="14,8"/>
+            <Setter Property="Margin" Value="1,0"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
         </Style>
         <Style Selector="TabControl.nav > TabItem:selected">
-            <Setter Property="Background" Value="{DynamicResource AppAccentGradientBrush}"/>
-            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="{DynamicResource AppTabSelectedBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppTabSelectedBorderBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+        </Style>
+        <Style Selector="TabControl.nav > TabItem:selected:pointerover">
+            <Setter Property="Background" Value="{DynamicResource AppTabSelectedBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+        </Style>
+        <!-- Piccola barra accento sotto il tab selezionato -->
+        <Style Selector="TabControl.nav > TabItem:selected /template/ Border#PART_SelectedPipe">
+            <Setter Property="IsVisible" Value="True"/>
+            <Setter Property="Background" Value="{DynamicResource AppAccentBrush}"/>
+            <Setter Property="Height" Value="2"/>
+            <Setter Property="Width" Value="18"/>
+            <Setter Property="CornerRadius" Value="1"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Bottom"/>
+            <Setter Property="Margin" Value="0,0,0,2"/>
         </Style>
 
         <!-- ============================================================ -->
-        <!--  BUTTONS                                                       -->
+        <!--  GUIDE TOGGLE BUTTON (Nessun colore quando aperto)          -->
         <!-- ============================================================ -->
+        <Style Selector="ToggleButton.guideToggle">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="16,12"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="RenderTransform" Value="none"/>
+            <Setter Property="Transitions" Value="{x:Null}"/>
+        </Style>
+        <!-- Nessun effetto "scale" quando si preme -->
+        <Style Selector="ToggleButton.guideToggle:pressed">
+            <Setter Property="RenderTransform" Value="none"/>
+        </Style>
+        <Style Selector="ToggleButton.guideToggle:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="ToggleButton.guideToggle:checked:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+
+        <!-- Chevron per i toggle (guide, configurazioni, log): giu = chiuso, su = aperto -->
+        <Style Selector="Path.chevron">
+            <Setter Property="Data" Value="M 1,1 L 6,6 L 11,1"/>
+            <Setter Property="Stroke" Value="{DynamicResource AppTextMutedBrush}"/>
+            <Setter Property="StrokeThickness" Value="2"/>
+            <Setter Property="StrokeLineCap" Value="Round"/>
+            <Setter Property="StrokeJoin" Value="Round"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="8,0,2,0"/>
+            <Setter Property="RenderTransformOrigin" Value="50%,50%"/>
+        </Style>
+        <Style Selector="ToggleButton:checked Path.chevron">
+            <Setter Property="RenderTransform" Value="rotate(180deg)"/>
+        </Style>
+        <!-- Override totale del ContentPresenter per evitare l'azzurro di default -->
+        <Style Selector="ToggleButton.guideToggle /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="ToggleButton.guideToggle:checked /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="ToggleButton.guideToggle:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+
+        <!-- BUTTONS -->
         <Style Selector="Button">
             <Setter Property="Background" Value="{DynamicResource AppSurface2Brush}"/>
             <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
@@ -282,15 +683,31 @@
         </Style>
 
         <Style Selector="Button.accent">
-            <Setter Property="Background" Value="{DynamicResource AppAccentGradientBrush}"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Background" Value="{DynamicResource AppAccentSoftBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
         </Style>
+        <!-- Fluent colora "accent" direttamente sul presenter del template: va sovrascritto lì -->
+        <Style Selector="Button.accent /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppAccentSoftBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
         <Style Selector="Button.accent:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Background" Value="{DynamicResource AppAccentGradientHoverBrush}"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Background" Value="{DynamicResource AppAccentSoftHoverBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
+        <Style Selector="Button.accent:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppAccentSoftBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
+        <Style Selector="Button.accent:disabled /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppSurface2Brush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}"/>
         </Style>
 
         <Style Selector="Button.success">
@@ -354,9 +771,7 @@
             <Setter Property="FontSize" Value="14"/>
         </Style>
 
-        <!-- ============================================================ -->
-        <!--  TEXTBOX                                                       -->
-        <!-- ============================================================ -->
+        <!-- TEXTBOX / COMBOBOX -->
         <Style Selector="TextBox">
             <Setter Property="Background" Value="{DynamicResource AppInputBrush}"/>
             <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
@@ -368,20 +783,14 @@
             <Setter Property="SelectionBrush" Value="{DynamicResource AppTextSelectionBrush}"/>
             <Setter Property="SelectionForegroundBrush" Value="{DynamicResource AppTextSelectionForegroundBrush}"/>
         </Style>
-
         <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
             <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}"/>
         </Style>
-
         <Style Selector="TextBox /template/ TextPresenter">
             <Setter Property="SelectionBrush" Value="{DynamicResource AppTextSelectionBrush}"/>
             <Setter Property="SelectionForegroundBrush" Value="{DynamicResource AppTextSelectionForegroundBrush}"/>
             <Setter Property="CaretBrush" Value="{DynamicResource AppCaretBrush}"/>
         </Style>
-
-        <!-- ============================================================ -->
-        <!--  COMBOBOX                                                      -->
-        <!-- ============================================================ -->
         <Style Selector="ComboBox">
             <Setter Property="Background" Value="{DynamicResource AppInputBrush}"/>
             <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
@@ -391,11 +800,9 @@
             <Setter Property="Padding" Value="12,6"/>
             <Setter Property="MinHeight" Value="34"/>
         </Style>
-
         <Style Selector="ComboBox:pointerover /template/ Border#Background">
             <Setter Property="Background" Value="{DynamicResource AppHoverBrush}"/>
         </Style>
-
         <Style Selector="ComboBox TextBox">
             <Setter Property="SelectionBrush" Value="{DynamicResource AppTextSelectionBrush}"/>
             <Setter Property="SelectionForegroundBrush" Value="{DynamicResource AppTextSelectionForegroundBrush}"/>
@@ -406,19 +813,7 @@
             <Setter Property="CaretBrush" Value="{DynamicResource AppCaretBrush}"/>
         </Style>
 
-        <!-- ============================================================ -->
-        <!--  CHECKBOX / RADIOBUTTON                                        -->
-        <!-- ============================================================ -->
-        <Style Selector="CheckBox">
-            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
-        </Style>
-        <Style Selector="RadioButton">
-            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
-        </Style>
-
-        <!-- ============================================================ -->
-        <!--  CARD / BORDER                                                 -->
-        <!-- ============================================================ -->
+        <!-- CARD / BORDER -->
         <Style Selector="Border.card">
             <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>
@@ -444,38 +839,7 @@
             <Setter Property="BoxShadow" Value="0 3 10 0 #40000000"/>
         </Style>
 
-        <!-- ============================================================ -->
-        <!--  GRIGLIA DI LOCANDINE                                          -->
-        <!-- ============================================================ -->
-        <Style Selector="ListBox.posterGrid">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="2"/>
-        </Style>
-        <Style Selector="ListBox.posterGrid > ListBoxItem">
-            <Setter Property="Padding" Value="8"/>
-            <Setter Property="Margin" Value="4"/>
-            <Setter Property="CornerRadius" Value="16"/>
-        </Style>
-        <Style Selector="ListBox.posterGrid > ListBoxItem:selected /template/ ContentPresenter">
-            <Setter Property="Background" Value="{DynamicResource AppAccentSoftBrush}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-        </Style>
-        <Style Selector="ListBox.posterGrid ListBoxItem Border.poster">
-            <Setter Property="Transitions">
-                <Transitions>
-                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.15"/>
-                </Transitions>
-            </Setter>
-        </Style>
-        <Style Selector="ListBox.posterGrid ListBoxItem:pointerover Border.poster">
-            <Setter Property="RenderTransform" Value="scale(1.05)"/>
-        </Style>
-
-        <!-- ============================================================ -->
-        <!--  DATAGRID                                                      -->
-        <!-- ============================================================ -->
+        <!-- DATAGRID -->
         <Style Selector="DataGrid">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
@@ -503,54 +867,21 @@
             <Setter Property="Opacity" Value="1"/>
         </Style>
 
-        <Style Selector="DataGridRow.zeroByte">
-            <Setter Property="Background" Value="{DynamicResource AppZeroByteHighlightBrush}"/>
-        </Style>
-        <Style Selector="DataGridRow.zeroByte:pointerover /template/ Rectangle#BackgroundRectangle">
-            <Setter Property="Fill" Value="{DynamicResource AppZeroByteHighlightBrush}"/>
-        </Style>
-
-        <!-- ============================================================ -->
-        <!--  EXPANDER                                                      -->
-        <!-- ============================================================ -->
-        <Style Selector="Expander">
-            <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="10"/>
-            <Setter Property="Margin" Value="0,0,0,6"/>
-        </Style>
-
-        <Style Selector="Expander /template/ ToggleButton#PART_toggle">
-            <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}"/>
-        </Style>
-
-        <!-- ============================================================ -->
-        <!--  PROGRESSBAR                                                   -->
-        <!-- ============================================================ -->
+        <!-- PROGRESSBAR / SLIDER / ALTRO -->
         <Style Selector="ProgressBar">
             <Setter Property="Background" Value="{DynamicResource AppBorderBrush}"/>
             <Setter Property="Foreground" Value="{DynamicResource AppAccentGradientBrush}"/>
             <Setter Property="CornerRadius" Value="7"/>
         </Style>
 
-        <!-- ============================================================ -->
-        <!--  SLIDER                                                        -->
-        <!-- ============================================================ -->
         <Style Selector="Slider">
             <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}"/>
         </Style>
 
-        <!-- ============================================================ -->
-        <!--  SEPARATOR                                                     -->
-        <!-- ============================================================ -->
         <Style Selector="Separator">
             <Setter Property="Background" Value="{DynamicResource AppBorderBrush}"/>
         </Style>
 
-        <!-- ============================================================ -->
-        <!--  LISTBOX                                                       -->
-        <!-- ============================================================ -->
         <Style Selector="ListBox">
             <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>
@@ -566,16 +897,88 @@
             <Setter Property="Background" Value="{DynamicResource AppSelectedBrush}"/>
         </Style>
 
-        <!-- ============================================================ -->
-        <!--  SCROLLBAR                                                     -->
-        <!-- ============================================================ -->
+        <!-- SCROLLBAR -->
         <Style Selector="ScrollBar">
-            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Theme" Value="{StaticResource AppScrollBarTheme}"/>
+        </Style>
+        <Style Selector="ScrollViewer">
+            <Setter Property="AllowAutoHide" Value="False"/>
+        </Style>
+        <Style Selector="Border.scrollThumb">
+            <Setter Property="Background" Value="{DynamicResource AppScrollThumbBrush}"/>
+            <Setter Property="CornerRadius" Value="4"/>
+        </Style>
+        <Style Selector="Thumb:pointerover /template/ Border.scrollThumb">
+            <Setter Property="Background" Value="{DynamicResource AppScrollThumbHoverBrush}"/>
+        </Style>
+        <Style Selector="Thumb:pressed /template/ Border.scrollThumb">
+            <Setter Property="Background" Value="{DynamicResource AppScrollThumbPressedBrush}"/>
         </Style>
 
+        <!-- MENU A TENDINA (ComboBox) -->
+        <Style Selector="ComboBoxItem">
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Margin" Value="2,1"/>
+            <Setter Property="Padding" Value="10,7"/>
+            <Setter Property="MinHeight" Value="32"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+        </Style>
+        <Style Selector="ComboBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppHoverBrush}"/>
+        </Style>
+        <Style Selector="ComboBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppTabSelectedBrush}"/>
+        </Style>
+        <Style Selector="ComboBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppTabSelectedBorderBrush}"/>
+        </Style>
+        <Style Selector="MenuItem">
+            <Setter Property="CornerRadius" Value="6"/>
+        </Style>
+
+        <!-- ICONE VETTORIALI -->
+        <Style Selector="Path.icon">
+            <Setter Property="Width" Value="14"/>
+            <Setter Property="Height" Value="14"/>
+            <Setter Property="Stretch" Value="Uniform"/>
+            <Setter Property="Stroke" Value="{DynamicResource AppTextBrush}"/>
+            <Setter Property="StrokeThickness" Value="1.9"/>
+            <Setter Property="StrokeLineCap" Value="Round"/>
+            <Setter Property="StrokeJoin" Value="Round"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.success Path.icon"><Setter Property="Stroke" Value="{DynamicResource AppSuccessBrush}"/></Style>
+        <Style Selector="Button.warning Path.icon"><Setter Property="Stroke" Value="{DynamicResource AppWarningBrush}"/></Style>
+        <Style Selector="Button.danger Path.icon"><Setter Property="Stroke" Value="{DynamicResource AppDangerBrush}"/></Style>
+        <Style Selector="Button.info Path.icon"><Setter Property="Stroke" Value="{DynamicResource AppInfoBrush}"/></Style>
+        <Style Selector="Button.accent Path.icon"><Setter Property="Stroke" Value="{DynamicResource AppAccentBrush}"/></Style>
+        <Style Selector="StackPanel.bi">
+            <Setter Property="Orientation" Value="Horizontal"/>
+            <Setter Property="Spacing" Value="7"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Path.icon.accent"><Setter Property="Stroke" Value="{DynamicResource AppAccentBrush}"/></Style>
+        <Style Selector="Path.icon.warn"><Setter Property="Stroke" Value="{DynamicResource AppWarningBrush}"/></Style>
+        <Style Selector="TabItem:selected Path.icon.accent"><Setter Property="Stroke" Value="{DynamicResource AppAccentBrush}"/></Style>
+        <Style Selector="TabItem Path.icon"><Setter Property="Stroke" Value="{DynamicResource AppTextMutedBrush}"/></Style>
+        <Style Selector="TabItem:selected Path.icon"><Setter Property="Stroke" Value="{DynamicResource AppAccentBrush}"/></Style>
+
         <!-- ============================================================ -->
-        <!--  PROXY BADGE                                                   -->
+        <!--  MENU A TENDINA / MENU CONTESTUALI                            -->
         <!-- ============================================================ -->
+        <Style Selector="ComboBox /template/ Border#PopupBorder">
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Padding" Value="4"/>
+        </Style>
+        <Style Selector="ContextMenu">
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="4"/>
+        </Style>
+        <!-- LOG GLOBALE -->
+        <Style Selector="Border.logRow:pointerover">
+            <Setter Property="Background" Value="{DynamicResource AppHoverBrush}"/>
+        </Style>
+
         <Style Selector="Border.proxyBadge">
             <Setter Property="Background" Value="{DynamicResource AppSurface2Brush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>

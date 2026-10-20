@@ -2,73 +2,52 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="DownloadManager.Views.BootstrapDialog"
         Title="DDL Download Manager — Preparazione"
-        Width="520" Height="320"
+        Width="560" Height="380"
         WindowStartupLocation="CenterScreen"
         CanResize="False"
-        ShowInTaskbar="True">
+        ShowInTaskbar="True"
+        Background="{DynamicResource AppBackgroundBrush}">
 
-    <Border Background="{DynamicResource AppSurfaceBrush}"
-            BorderBrush="{DynamicResource AppBorderBrush}"
-            BorderThickness="1"
-            Padding="24">
-        <Grid RowDefinitions="Auto, Auto, Auto, *, Auto">
+    <Grid RowDefinitions="Auto, Auto, *, Auto" Margin="22">
 
-            <!-- Intestazione -->
-            <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="12" Margin="0,0,0,16">
-                <TextBlock Text="⚙" FontSize="28" VerticalAlignment="Center"
-                           Foreground="{DynamicResource AppAccentBrush}"/>
-                <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="Preparazione dell'applicazione"
-                               FontSize="16" FontWeight="Bold"/>
-                    <TextBlock Text="Primo avvio — attendere prego"
-                               FontSize="11"
-                               Foreground="{DynamicResource AppTextMutedBrush}"/>
-                </StackPanel>
-            </StackPanel>
-
-            <!-- Messaggio corrente -->
-            <TextBlock Grid.Row="1"
-                       x:Name="StatusText"
-                       Text="Inizializzazione..."
-                       FontSize="13"
-                       TextWrapping="Wrap"
-                       Margin="0,0,0,12"/>
-
-            <!-- Barra di progresso -->
-            <StackPanel Grid.Row="2" Spacing="6" Margin="0,0,0,16">
-                <ProgressBar x:Name="ProgressBar"
-                             IsIndeterminate="True"
-                             Height="8"/>
-                <TextBlock x:Name="ProgressDetailText"
-                           Text=""
-                           FontSize="11"
-                           Foreground="{DynamicResource AppTextMutedBrush}"/>
-            </StackPanel>
-
-            <!-- Log scrollabile -->
-            <Border Grid.Row="3"
-                    Background="{DynamicResource AppSurface2Brush}"
-                    BorderBrush="{DynamicResource AppBorderBrush}"
-                    BorderThickness="1"
-                    CornerRadius="6"
-                    Margin="0,0,0,16">
-                <ScrollViewer VerticalScrollBarVisibility="Auto"
-                              Padding="10">
-                    <TextBlock x:Name="LogText"
-                               Text=""
-                               FontFamily="Consolas,Menlo,monospace"
-                               FontSize="11"
-                               TextWrapping="Wrap"/>
-                </ScrollViewer>
+        <!-- Intestazione -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto, *" Margin="0,0,0,18">
+            <Border Width="46" Height="46" CornerRadius="23" Background="{DynamicResource AppAccentSoftBrush}">
+                <Path Classes="icon accent" Data="{StaticResource IconSettings}" Width="22" Height="22"/>
             </Border>
-
-            <!-- Nota informativa -->
-            <TextBlock Grid.Row="4"
-                       Text="Il primo avvio può richiedere 1-2 minuti per scaricare i componenti necessari (browser Chromium ~150 MB)."
-                       FontSize="11"
-                       FontStyle="Italic"
-                       TextWrapping="Wrap"
-                       Foreground="{DynamicResource AppTextMutedBrush}"/>
+            <StackPanel Grid.Column="1" Margin="14,0,0,0" Spacing="2" VerticalAlignment="Center">
+                <TextBlock Text="Preparazione dell'applicazione" FontSize="17" FontWeight="Bold"/>
+                <TextBlock Text="Primo avvio: scarico i componenti necessari, attendi qualche istante."
+                           FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource AppTextMutedBrush}"/>
+            </StackPanel>
         </Grid>
-    </Border>
+
+        <!-- Stato e progresso -->
+        <Border Grid.Row="1" Classes="card" Margin="0,0,0,12">
+            <StackPanel Spacing="8">
+                <TextBlock x:Name="StatusText" Text="Inizializzazione..." FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                <ProgressBar x:Name="ProgressBar" IsIndeterminate="True" Height="8"/>
+                <TextBlock x:Name="ProgressDetailText" Text="" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Log -->
+        <Border Grid.Row="2"
+                Background="{DynamicResource AppInputBrush}"
+                BorderBrush="{DynamicResource AppBorderBrush}"
+                BorderThickness="1" CornerRadius="10" Margin="0,0,0,12">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="12,8">
+                <SelectableTextBlock x:Name="LogText" Text=""
+                                     FontFamily="Consolas, Cascadia Mono, monospace" FontSize="11"
+                                     TextWrapping="Wrap" Foreground="{DynamicResource AppTextMutedBrush}"/>
+            </ScrollViewer>
+        </Border>
+
+        <!-- Nota -->
+        <StackPanel Grid.Row="3" Classes="bi">
+            <Path Classes="icon" Data="{StaticResource IconInfo}"/>
+            <TextBlock Text="Il primo avvio può richiedere 1-2 minuti (browser Chromium ~150 MB)."
+                       FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource AppTextMutedBrush}"/>
+        </StackPanel>
+    </Grid>
 </Window>

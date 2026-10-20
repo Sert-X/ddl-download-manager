@@ -296,6 +296,17 @@ public partial class SftpVideoPlayerWindow : Window
         return tcs.Task;
     }
 
+    /// <summary>Icona del pulsante centrale: pausa mentre riproduce, play altrimenti.</summary>
+    private void SetPlayPauseIcon(bool playing)
+    {
+        if (this.FindControl<Avalonia.Controls.Shapes.Path>("PlayPauseIcon") is { } icon &&
+            this.TryFindResource(playing ? "IconPause" : "IconPlay", out var geometry) &&
+            geometry is Avalonia.Media.Geometry g)
+        {
+            icon.Data = g;
+        }
+    }
+
     private void SetStatus(string text)
     {
         Dispatcher.UIThread.Post(() =>
@@ -345,7 +356,7 @@ public partial class SftpVideoPlayerWindow : Window
             SetStatus("In riproduzione");
             Dispatcher.UIThread.Post(() =>
             {
-                if (_playPauseButton != null) _playPauseButton.Content = "Pausa";
+                SetPlayPauseIcon(playing: true);
             });
         };
 
@@ -354,7 +365,7 @@ public partial class SftpVideoPlayerWindow : Window
             SetStatus("In pausa");
             Dispatcher.UIThread.Post(() =>
             {
-                if (_playPauseButton != null) _playPauseButton.Content = "Play";
+                SetPlayPauseIcon(playing: false);
             });
         };
 
@@ -363,7 +374,7 @@ public partial class SftpVideoPlayerWindow : Window
             SetStatus("Riproduzione terminata");
             Dispatcher.UIThread.Post(() =>
             {
-                if (_playPauseButton != null) _playPauseButton.Content = "Play";
+                SetPlayPauseIcon(playing: false);
             });
         };
 

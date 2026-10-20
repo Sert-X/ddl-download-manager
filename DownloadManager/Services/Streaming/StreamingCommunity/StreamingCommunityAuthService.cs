@@ -53,6 +53,38 @@ public class StreamingCommunityAuthService
     //  LOGIN
     // ============================================================
 
+    public class AuthenticatedWebProxy : IWebProxy
+    {
+        private readonly Uri _proxyUri;
+        private readonly NetworkCredential? _credentials;
+
+        public AuthenticatedWebProxy(string proxyAddress, string? username, string? password)
+        {
+            _proxyUri = new Uri(proxyAddress);
+            if (!string.IsNullOrEmpty(username))
+            {
+                _credentials = new NetworkCredential(username, password);
+            }
+        }
+
+        public ICredentials? Credentials
+        {
+            get => _credentials;
+            set { /* Ignorato, usiamo _credentials interno */ }
+        }
+
+        public Uri? GetProxy(Uri destination) => _proxyUri;
+
+        public bool IsBypassed(Uri host) => false;
+
+        // Forza l'invio delle credenziali per evitare la sfida 407
+        public bool IsBypassed(Uri host, out bool isBypassed)
+        {
+            isBypassed = false;
+            return false;
+        }
+    }
+
     public async Task<(bool Success, string Message)> LoginAsync(
         string username, string password, CancellationToken ct = default)
     {
@@ -78,14 +110,8 @@ public class StreamingCommunityAuthService
             if (proxy != null)
             {
                 var scheme = proxy.Protocol == ProxyProtocol.Socks5 ? "socks5" : "http";
-                var webProxy = new WebProxy($"{scheme}://{proxy.Host}:{proxy.Port}");
-
-                if (proxy.Auth == ProxyAuthType.UserPassword && !string.IsNullOrEmpty(proxy.Username))
-                {
-                    webProxy.Credentials = new NetworkCredential(proxy.Username, proxy.Password);
-                }
-
-                handler.Proxy = webProxy;
+                // Usa un IWebProxy personalizzato invece di WebProxy
+                handler.Proxy = new AuthenticatedWebProxy($"{scheme}://{proxy.Host}:{proxy.Port}", proxy.Username, proxy.Password);
                 handler.UseProxy = true;
 
                 _logger.LogInformation("[SC-AUTH] Login con proxy: {Host}:{Port}",

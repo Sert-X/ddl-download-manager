@@ -616,30 +616,36 @@ public class StreamingCommunityService : IStreamingCommunityService
 
         var page = await NewStealthPageAsync();
         string? m3u8Url = null;
-        var vixRequests = new List<string>();
+        var allPlaylistReqs = new List<string>();
         var m3u8Found = new TaskCompletionSource<string>(
             TaskCreationOptions.RunContinuationsAsynchronously);
 
         try
         {
+            // 1. Intercetta TUTTE le richieste playlist/m3u8, senza filtri sul dominio
             page.Request += (_, request) =>
             {
                 var url = request.Url;
+                var isCandidate =
+                    url.Contains("/playlist", StringComparison.OrdinalIgnoreCase) ||
+                    url.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase);
 
-                if (url.Contains("vixcloud", StringComparison.OrdinalIgnoreCase) ||
-                    url.Contains("/playlist", StringComparison.OrdinalIgnoreCase))
-                {
-                    lock (vixRequests) vixRequests.Add(url);
-                    _logger.LogWarning("[SC] REQ: {Url}", url);
-                }
+                if (!isCandidate) return;
 
-                if (url.Contains("vixcloud.co/playlist")
-                    && !url.Contains("type=")
-                    && !url.Contains("rendition=")
-                    && string.IsNullOrEmpty(m3u8Url))
+                lock (allPlaylistReqs) allPlaylistReqs.Add(url);
+                _logger.LogWarning("[SC] REQ: {Url}", url);
+
+                // Master = niente type/rendition/track. Nessun controllo su vixcloud.co
+                var isMaster = url.Contains("/playlist", StringComparison.OrdinalIgnoreCase)
+                            && !url.Contains("type=", StringComparison.OrdinalIgnoreCase)
+                            && !url.Contains("rendition=", StringComparison.OrdinalIgnoreCase)
+                            && !url.Contains("track=", StringComparison.OrdinalIgnoreCase)
+                            && string.IsNullOrEmpty(m3u8Url);
+
+                if (isMaster)
                 {
                     m3u8Url = url;
-                    _logger.LogWarning("[SC] ✅ MASTER identificato: {Url}", url);
+                    _logger.LogWarning("[SC] ✅ MASTER da network: {Url}", url);
                     m3u8Found.TrySetResult(url);
                 }
             };
@@ -651,20 +657,84 @@ public class StreamingCommunityService : IStreamingCommunityService
                 WaitUntil = WaitUntilState.DOMContentLoaded,
                 Timeout = 60000
             });
-
             _logger.LogWarning("[SC] Watch HTTP: {Status}", resp?.Status);
 
-            // Attesa efficiente: esce appena il master arriva (max 12s)
-            using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(12)))
+            // 2. Prova a leggere window.movieData dal browser (metodo più affidabile)
+            try
             {
+                var movieDataJson = await page.EvaluateAsync<string?>(@"() => {
+                    try {
+                        if (!window.movieData) return null;
+                        var md = window.movieData;
+                        var masterUrl =
+                            (typeof md.masterPlaylist === 'string') ? md.masterPlaylist :
+                            (md.masterPlaylist && md.masterPlaylist.url) || null;
+                        return JSON.stringify({
+                            masterUrl: masterUrl,
+                            token: (md.params && md.params.token) || null,
+                            expires: (md.params && md.params.expires) || null,
+                            keys: Object.keys(md)
+                        });
+                    } catch (e) { return JSON.stringify({ error: e.toString() }); }
+                }");
+
+                if (!string.IsNullOrEmpty(movieDataJson) && movieDataJson != "null")
+                {
+                    _logger.LogWarning("[SC] movieData: {Json}", movieDataJson);
+
+                    using var doc = JsonDocument.Parse(movieDataJson);
+                    var root = doc.RootElement;
+
+                    if (root.TryGetProperty("masterUrl", out var mu) &&
+                        mu.ValueKind == JsonValueKind.String)
+                    {
+                        var rawMaster = mu.GetString();
+                        if (!string.IsNullOrEmpty(rawMaster))
+                        {
+                            var qs = new List<string>();
+                            if (root.TryGetProperty("token", out var tk) &&
+                                tk.ValueKind == JsonValueKind.String &&
+                                !string.IsNullOrEmpty(tk.GetString()))
+                                qs.Add("token=" + tk.GetString());
+                            if (root.TryGetProperty("expires", out var ex) &&
+                                ex.ValueKind == JsonValueKind.String &&
+                                !string.IsNullOrEmpty(ex.GetString()))
+                                qs.Add("expires=" + ex.GetString());
+
+                            var full = rawMaster;
+                            if (!full.Contains("?"))
+                            {
+                                if (qs.Count > 0) full += "?" + string.Join("&", qs);
+                            }
+                            else if (qs.Count > 0)
+                            {
+                                full += "&" + string.Join("&", qs);
+                            }
+
+                            m3u8Url = full;
+                            _logger.LogWarning("[SC] ✅ MASTER da movieData: {Url}", full);
+                            m3u8Found.TrySetResult(full);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[SC] Errore lettura movieData");
+            }
+
+            // Attesa breve: se movieData non c'era, aspetta la rete
+            if (string.IsNullOrEmpty(m3u8Url))
+            {
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(12));
                 try { await m3u8Found.Task.WaitAsync(cts.Token); }
                 catch (OperationCanceledException) { }
             }
 
-            // Se non arrivato, click play e attesa breve
+            // 3. Click play se ancora niente
             if (string.IsNullOrEmpty(m3u8Url))
             {
-                var sels = new[] { ".vjs-big-play-button", ".play-button", "video" };
+                var sels = new[] { ".vjs-big-play-button", ".play-button", "video", "iframe" };
                 foreach (var sel in sels)
                 {
                     try
@@ -685,16 +755,25 @@ public class StreamingCommunityService : IStreamingCommunityService
                 catch (OperationCanceledException) { }
             }
 
-            // Fallback: costruisci master dalla rendition
+            // 4. Fallback: usa lo HOST REALE della rendition intercettata, non vixcloud.co
             if (string.IsNullOrEmpty(m3u8Url))
             {
-                _logger.LogWarning("[SC] ❌ Nessun master. Totale req vix: {N}", vixRequests.Count);
+                _logger.LogWarning("[SC] ❌ Nessun master. Totale req playlist: {N}", allPlaylistReqs.Count);
+                foreach (var u in allPlaylistReqs) _logger.LogWarning("[SC]   - {Url}", u);
 
-                var firstRendition = vixRequests
-                    .FirstOrDefault(u => u.Contains("vixcloud.co/playlist") && u.Contains("type=video"));
+                var firstRendition =
+                    allPlaylistReqs.FirstOrDefault(u =>
+                        u.Contains("/playlist/", StringComparison.OrdinalIgnoreCase) &&
+                        u.Contains("type=video", StringComparison.OrdinalIgnoreCase))
+                    ?? allPlaylistReqs.FirstOrDefault(u =>
+                        u.Contains("/playlist/", StringComparison.OrdinalIgnoreCase) &&
+                        u.Contains("type=audio", StringComparison.OrdinalIgnoreCase))
+                    ?? allPlaylistReqs.FirstOrDefault(u =>
+                        u.Contains("/playlist/", StringComparison.OrdinalIgnoreCase));
 
                 if (!string.IsNullOrEmpty(firstRendition))
                 {
+                    var uri = new Uri(firstRendition); // Estrae scheme + host reali (es. vixcloud.cc)
                     var mId = Regex.Match(firstRendition, @"/playlist/(\d+)");
                     if (mId.Success)
                     {
@@ -704,15 +783,17 @@ public class StreamingCommunityService : IStreamingCommunityService
                         {
                             var qs = firstRendition.Substring(qIdx + 1)
                                 .Split('&')
-                                .Where(kv => kv.StartsWith("token=", StringComparison.OrdinalIgnoreCase)
-                                          || kv.StartsWith("expires=", StringComparison.OrdinalIgnoreCase)
-                                          || kv.StartsWith("h=", StringComparison.OrdinalIgnoreCase))
+                                .Where(kv =>
+                                    kv.StartsWith("token=", StringComparison.OrdinalIgnoreCase) ||
+                                    kv.StartsWith("expires=", StringComparison.OrdinalIgnoreCase) ||
+                                    kv.StartsWith("h=", StringComparison.OrdinalIgnoreCase))
                                 .ToArray();
                             if (qs.Length > 0) tokenPart = "?" + string.Join("&", qs);
                         }
 
-                        m3u8Url = $"https://vixcloud.co/playlist/{mId.Groups[1].Value}{tokenPart}";
-                        _logger.LogWarning("[SC] Tentativo fallback master: {Url}", m3u8Url);
+                        // Costruisce il master usando l'host della rendition (es. vixcloud.cc)
+                        m3u8Url = $"{uri.Scheme}://{uri.Host}/playlist/{mId.Groups[1].Value}{tokenPart}";
+                        _logger.LogWarning("[SC] Tentativo fallback master (host dinamico): {Url}", m3u8Url);
                     }
                 }
             }
@@ -1067,38 +1148,114 @@ public class StreamingCommunityService : IStreamingCommunityService
         return full.Videos;
     }
 
-    private class MasterPlaylist
+    public async Task<MasterTracks> GetAvailableTracksAsync(
+        string contentLink, bool isSeries, int seasonNumber, int episodeNumber)
     {
-        public List<VideoQuality> Videos { get; } = new();
-        public List<VideoQuality> Audios { get; } = new();
+        var masterUrl = !isSeries
+            ? await GetMovieStreamUrlAsync(contentLink)
+            : await GetVideoUrlAsync(contentLink, true, seasonNumber, episodeNumber);
+
+        if (string.IsNullOrEmpty(masterUrl))
+        {
+            _logger.LogWarning("[SC] GetAvailableTracks: nessun master url");
+            return new MasterTracks();
+        }
+
+        var tracks = await ParseMasterFullAsync(masterUrl, CancellationToken.None);
+        _logger.LogInformation("[SC] Analisi: {V} qualità, audio [{A}], sottotitoli [{S}]",
+            tracks.Videos.Count,
+            string.Join(", ", tracks.Audios.Select(a => a.DisplayName)),
+            string.Join(", ", tracks.Subtitles.Select(t => t.DisplayName)));
+        return tracks;
     }
 
-    private async Task<MasterPlaylist> ParseMasterFullAsync(string masterUrl, CancellationToken ct)
+    public async Task<MasterTracks> GetMasterTracksAsync(string masterUrl, CancellationToken ct = default)
     {
-        var result = new MasterPlaylist();
+        if (_context == null) await InitializeAsync();
+        return await ParseMasterFullAsync(masterUrl, ct);
+    }
+
+    public async Task<double?> GetPlaylistDurationAsync(string mediaPlaylistUrl, CancellationToken ct = default)
+    {
+        var text = await FetchTextAsync(mediaPlaylistUrl);
+        if (string.IsNullOrEmpty(text)) return null;
+
+        double total = 0;
+        foreach (Match m in Regex.Matches(text, @"#EXTINF:\s*([0-9.]+)"))
+            if (double.TryParse(m.Groups[1].Value, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var d))
+                total += d;
+        return total > 0 ? total : null;
+    }
+
+    public async Task<string?> DownloadSubtitleAsync(string playlistUrl, CancellationToken ct = default)
+    {
+        var text = await FetchTextAsync(playlistUrl);
+        if (string.IsNullOrEmpty(text)) return null;
+
+        // A volte l'URI punta direttamente al file .vtt
+        if (text.TrimStart().StartsWith("WEBVTT", StringComparison.Ordinal)) return text;
+
+        // Altrimenti è una media playlist di segmenti WebVTT: si concatenano tenendo
+        // una sola intestazione.
+        var baseUri = new Uri(playlistUrl);
+        var sb = new System.Text.StringBuilder("WEBVTT\n\n");
+        foreach (var raw in text.Split('\n'))
+        {
+            ct.ThrowIfCancellationRequested();
+            var line = raw.Trim();
+            if (line.Length == 0 || line.StartsWith('#')) continue;
+
+            var segUrl = line.StartsWith("http") ? line : new Uri(baseUri, line).ToString();
+            var seg = await FetchTextAsync(segUrl);
+            if (string.IsNullOrEmpty(seg)) continue;
+
+            foreach (var segLine in seg.Replace("\r\n", "\n").Split('\n'))
+            {
+                if (segLine.StartsWith("WEBVTT", StringComparison.Ordinal) ||
+                    segLine.StartsWith("X-TIMESTAMP-MAP", StringComparison.Ordinal))
+                    continue;
+                sb.Append(segLine).Append('\n');
+            }
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>GET testuale con il contesto del browser (passa Cloudflare e cookie di sessione).</summary>
+    private async Task<string?> FetchTextAsync(string url)
+    {
         try
         {
-            if (_context == null) return result;
+            if (_context == null) await InitializeAsync();
+            if (_context == null) return null;
 
-            string? text = null;
-
-            try
+            var resp = await _context.APIRequest.GetAsync(url, new APIRequestContextOptions { Timeout = 30000 });
+            if (!resp.Ok)
             {
-                var apiResp = await _context.APIRequest.GetAsync(masterUrl, new APIRequestContextOptions
-                {
-                    Timeout = 30000
-                });
-
-                if (!apiResp.Ok) return result;
-
-                text = await apiResp.TextAsync();
+                _logger.LogWarning("[SC] GET {Url}: HTTP {Status}", url, resp.Status);
+                return null;
             }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "[SC] ParseMaster: errore download master");
-                return result;
-            }
+            return await resp.TextAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[SC] GET fallito: {Url}", url);
+            return null;
+        }
+    }
 
+    private static string Attr(string line, string name)
+    {
+        var m = Regex.Match(line, name + @"=(?:""([^""]*)""|([^,]*))");
+        return m.Success ? (m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value) : "";
+    }
+
+    private async Task<MasterTracks> ParseMasterFullAsync(string masterUrl, CancellationToken ct)
+    {
+        var result = new MasterTracks();
+        try
+        {
+            var text = await FetchTextAsync(masterUrl);
             if (string.IsNullOrEmpty(text)) return result;
 
             var lines = text.Split('\n');
@@ -1108,23 +1265,27 @@ public class StreamingCommunityService : IStreamingCommunityService
             {
                 var line = lines[i].Trim();
 
-                if (line.StartsWith("#EXT-X-MEDIA:", StringComparison.Ordinal) &&
-                    line.Contains("TYPE=AUDIO", StringComparison.OrdinalIgnoreCase))
+                if (line.StartsWith("#EXT-X-MEDIA:", StringComparison.Ordinal))
                 {
-                    var nameM = Regex.Match(line, @"NAME=""([^""]+)""");
-                    var uriM = Regex.Match(line, @"URI=""([^""]+)""");
-                    if (uriM.Success)
-                    {
-                        var audioUrl = uriM.Groups[1].Value;
-                        if (!audioUrl.StartsWith("http"))
-                            audioUrl = new Uri(baseUri, audioUrl).ToString();
+                    var type = Attr(line, "TYPE");
+                    var uri = Attr(line, "URI");
+                    if (string.IsNullOrEmpty(uri)) continue;   // traccia inclusa nel video: non scaricabile a parte
 
-                        result.Audios.Add(new VideoQuality
-                        {
-                            Name = nameM.Success ? nameM.Groups[1].Value : "audio",
-                            Url = audioUrl
-                        });
-                    }
+                    var kind = type.Equals("AUDIO", StringComparison.OrdinalIgnoreCase) ? MediaTrackKind.Audio
+                             : type.Equals("SUBTITLES", StringComparison.OrdinalIgnoreCase) ? MediaTrackKind.Subtitle
+                             : (MediaTrackKind?)null;
+                    if (kind == null) continue;
+
+                    var track = new MediaTrack
+                    {
+                        Kind = kind.Value,
+                        Name = Attr(line, "NAME"),
+                        Language = Attr(line, "LANGUAGE"),
+                        Url = uri.StartsWith("http") ? uri : new Uri(baseUri, uri).ToString(),
+                        IsDefault = Attr(line, "DEFAULT").Equals("YES", StringComparison.OrdinalIgnoreCase),
+                        IsForced = Attr(line, "FORCED").Equals("YES", StringComparison.OrdinalIgnoreCase)
+                    };
+                    (kind == MediaTrackKind.Audio ? result.Audios : result.Subtitles).Add(track);
                     continue;
                 }
 
@@ -1139,6 +1300,7 @@ public class StreamingCommunityService : IStreamingCommunityService
                         name = $"{long.Parse(bwMatch.Groups[1].Value) / 1_000_000}Mbps";
 
                     long bw = bwMatch.Success ? long.Parse(bwMatch.Groups[1].Value) : 0;
+                    long.TryParse(Attr(line, "AVERAGE-BANDWIDTH"), out var avgBw);
 
                     for (int j = i + 1; j < lines.Length; j++)
                     {
@@ -1154,7 +1316,8 @@ public class StreamingCommunityService : IStreamingCommunityService
                         {
                             Name = name,
                             Url = variantUrl,
-                            Bandwidth = bw
+                            Bandwidth = bw,
+                            AverageBandwidth = avgBw
                         });
                         break;
                     }

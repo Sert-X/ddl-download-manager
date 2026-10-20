@@ -88,6 +88,15 @@ public class DownloadRepository
 
             if (!cols.Contains("AudioUrl", StringComparer.OrdinalIgnoreCase))
                 await conn.ExecuteAsync("ALTER TABLE Downloads ADD COLUMN AudioUrl TEXT NOT NULL DEFAULT ''");
+
+            if (!cols.Contains("AudioLanguages", StringComparer.OrdinalIgnoreCase))
+                await conn.ExecuteAsync("ALTER TABLE Downloads ADD COLUMN AudioLanguages TEXT NOT NULL DEFAULT ''");
+
+            if (!cols.Contains("SubtitleLanguages", StringComparer.OrdinalIgnoreCase))
+                await conn.ExecuteAsync("ALTER TABLE Downloads ADD COLUMN SubtitleLanguages TEXT NOT NULL DEFAULT ''");
+
+            if (!cols.Contains("BurnSubtitles", StringComparer.OrdinalIgnoreCase))
+                await conn.ExecuteAsync("ALTER TABLE Downloads ADD COLUMN BurnSubtitles INTEGER NOT NULL DEFAULT 0");
         }
         catch (Exception ex)
         {
@@ -108,11 +117,13 @@ public class DownloadRepository
             INSERT INTO Downloads
                 (Url, DestinationPath, SeriesName, EpisodeNumber, SeasonNumber,
                  TotalBytes, DownloadedBytes, Status, ErrorMessage, Category,
-                 EpisodeTitle, ProviderKey, QualityName, ContentLink, EpisodeId, IsSeries, AudioUrl)
+                 EpisodeTitle, ProviderKey, QualityName, ContentLink, EpisodeId, IsSeries, AudioUrl,
+                 AudioLanguages, SubtitleLanguages, BurnSubtitles)
             VALUES
                 (@Url, @DestinationPath, @SeriesName, @EpisodeNumber, @SeasonNumber,
                  @TotalBytes, @DownloadedBytes, @Status, @ErrorMessage, @Category,
-                 @EpisodeTitle, @ProviderKey, @QualityName, @ContentLink, @EpisodeId, @IsSeries, @AudioUrl);
+                 @EpisodeTitle, @ProviderKey, @QualityName, @ContentLink, @EpisodeId, @IsSeries, @AudioUrl,
+                 @AudioLanguages, @SubtitleLanguages, @BurnSubtitles);
             SELECT last_insert_rowid();
         ", new
         {
@@ -132,7 +143,10 @@ public class DownloadRepository
             item.ContentLink,
             item.EpisodeId,
             IsSeries = item.IsSeries ? 1 : 0,
-            item.AudioUrl
+            item.AudioUrl,
+            item.AudioLanguages,
+            item.SubtitleLanguages,
+            BurnSubtitles = item.BurnSubtitles ? 1 : 0
         });
         item.Id = id;
         return id;
@@ -158,11 +172,13 @@ public class DownloadRepository
                 INSERT INTO Downloads
                     (Url, DestinationPath, SeriesName, EpisodeNumber, SeasonNumber,
                      TotalBytes, DownloadedBytes, Status, ErrorMessage, Category,
-                     EpisodeTitle, ProviderKey, QualityName, ContentLink, EpisodeId, IsSeries, AudioUrl)
+                     EpisodeTitle, ProviderKey, QualityName, ContentLink, EpisodeId, IsSeries, AudioUrl,
+                 AudioLanguages, SubtitleLanguages, BurnSubtitles)
                 VALUES
                     (@Url, @DestinationPath, @SeriesName, @EpisodeNumber, @SeasonNumber,
                      @TotalBytes, @DownloadedBytes, @Status, @ErrorMessage, @Category,
-                     @EpisodeTitle, @ProviderKey, @QualityName, @ContentLink, @EpisodeId, @IsSeries, @AudioUrl);
+                     @EpisodeTitle, @ProviderKey, @QualityName, @ContentLink, @EpisodeId, @IsSeries, @AudioUrl,
+                 @AudioLanguages, @SubtitleLanguages, @BurnSubtitles);
                 SELECT last_insert_rowid();
             ", new
             {
@@ -182,7 +198,10 @@ public class DownloadRepository
                 item.ContentLink,
                 item.EpisodeId,
                 IsSeries = item.IsSeries ? 1 : 0,
-                item.AudioUrl
+                item.AudioUrl,
+                item.AudioLanguages,
+                item.SubtitleLanguages,
+                BurnSubtitles = item.BurnSubtitles ? 1 : 0
             }, transaction: tx);
 
             item.Id = id;
@@ -218,7 +237,10 @@ public class DownloadRepository
                 ContentLink = @ContentLink,
                 EpisodeId = @EpisodeId,
                 IsSeries = @IsSeries,
-                AudioUrl = @AudioUrl
+                AudioUrl = @AudioUrl,
+                AudioLanguages = @AudioLanguages,
+                SubtitleLanguages = @SubtitleLanguages,
+                BurnSubtitles = @BurnSubtitles
             WHERE Id = @Id;
         ", new
         {
@@ -239,7 +261,10 @@ public class DownloadRepository
             item.ContentLink,
             item.EpisodeId,
             IsSeries = item.IsSeries ? 1 : 0,
-            item.AudioUrl
+            item.AudioUrl,
+            item.AudioLanguages,
+            item.SubtitleLanguages,
+            BurnSubtitles = item.BurnSubtitles ? 1 : 0
         });
     }
 
@@ -284,7 +309,10 @@ public class DownloadRepository
             ContentLink = r.ContentLink ?? "",
             EpisodeId = r.EpisodeId,
             IsSeries = r.IsSeries != 0,
-            AudioUrl = r.AudioUrl ?? ""
+            AudioUrl = r.AudioUrl ?? "",
+            AudioLanguages = r.AudioLanguages ?? "",
+            SubtitleLanguages = r.SubtitleLanguages ?? "",
+            BurnSubtitles = r.BurnSubtitles != 0
         }).ToList();
     }
 
@@ -292,6 +320,14 @@ public class DownloadRepository
     {
         await using var conn = new SqliteConnection(_connectionString);
         await conn.ExecuteAsync("DELETE FROM Downloads WHERE Id = @Id;", new { Id = id });
+    }
+
+    /// <summary>Elimina più download con una sola query (invece di una connessione per riga).</summary>
+    public async Task DeleteManyAsync(IReadOnlyCollection<int> ids)
+    {
+        if (ids.Count == 0) return;
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.ExecuteAsync("DELETE FROM Downloads WHERE Id IN @Ids;", new { Ids = ids });
     }
 
     public async Task SaveChunkAsync(int downloadId, long start, long end)
@@ -344,5 +380,8 @@ public class DownloadRepository
         public int EpisodeId { get; set; }
         public int IsSeries { get; set; }
         public string AudioUrl { get; set; } = "";
+        public string? AudioLanguages { get; set; }
+        public string? SubtitleLanguages { get; set; }
+        public int BurnSubtitles { get; set; }
     }
 }

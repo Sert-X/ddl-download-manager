@@ -15,6 +15,7 @@ public partial class ConfirmDialog : Window
     public static async Task<bool> ShowAsync(Window owner, string prompt, string title = "Conferma")
     {
         var dialog = new ConfirmDialog { Title = title };
+        dialog.TitleText.Text = title;
         dialog.PromptText.Text = prompt;
 
         dialog.Opened += (_, _) => dialog.OkButton.Focus();

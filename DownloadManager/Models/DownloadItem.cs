@@ -26,6 +26,14 @@ public partial class DownloadItem : ObservableObject
     public int EpisodeId { get; set; }              // ID episodio streamingcommunity (0 = film)
     public bool IsSeries { get; set; }              // true se è una serie
 
+    // === Tracce scelte nell'analisi (Film/Serie) ===
+    /// <summary>Lingue audio da includere (codice LANGUAGE della playlist o nome traccia), separate da '|'. Vuoto = automatico (italiano).</summary>
+    public string AudioLanguages { get; set; } = "";
+    /// <summary>Lingue dei sottotitoli da includere, separate da '|'. Vuoto = nessuno.</summary>
+    public string SubtitleLanguages { get; set; } = "";
+    /// <summary>Se true il primo sottotitolo scelto viene impresso nel video (richiede ricodifica).</summary>
+    public bool BurnSubtitles { get; set; }
+
     public Func<CancellationToken, Task<string?>>? UrlExtractor { get; set; }
     public Func<CancellationToken, Task<string?>>? AudioExtractor { get; set; }
     public Func<CancellationToken, Task<string?>>? CookieExtractor { get; set; }

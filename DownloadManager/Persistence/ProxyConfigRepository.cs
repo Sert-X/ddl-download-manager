@@ -151,10 +151,7 @@ public class ProxyConfigRepository
         catch { return false; }
     }
 
-    public async Task InsertAsync(ProxyConfig p)
-    {
-        using var conn = Open();
-        var id = await conn.ExecuteScalarAsync<long>(@"
+    private const string InsertSql = @"
             INSERT INTO Proxies
                 (Name, Protocol, Host, Port, Auth, Username, PasswordEnc,
                  TestResult, LastTested, ProviderResultsJson,
@@ -171,15 +168,9 @@ public class ProxyConfigRepository
                  @EnabledAw, @EnabledAs, @EnabledSc, @EnabledDl,
                  @ManualAw, @ManualAs, @ManualSc, @ManualDl,
                  @RemovedFromProvidersJson);
-            SELECT last_insert_rowid();",
-            BuildParams(p, includeId: false));
-        p.Id = (int)id;
-    }
+            SELECT last_insert_rowid();";
 
-    public async Task UpdateAsync(ProxyConfig p)
-    {
-        using var conn = Open();
-        await conn.ExecuteAsync(@"
+    private const string UpdateSql = @"
             UPDATE Proxies SET
                 Name = @Name, Protocol = @Protocol, Host = @Host, Port = @Port,
                 Auth = @Auth, Username = @Username, PasswordEnc = @PasswordEnc,
@@ -195,8 +186,40 @@ public class ProxyConfigRepository
                 ManuallyDisabledSc = @ManualSc,
                 ManuallyDisabledDl = @ManualDl,
                 RemovedFromProvidersJson = @RemovedFromProvidersJson
-            WHERE Id = @Id",
-            BuildParams(p, includeId: true));
+            WHERE Id = @Id";
+
+    public async Task InsertAsync(ProxyConfig p)
+    {
+        using var conn = Open();
+        var id = await conn.ExecuteScalarAsync<long>(InsertSql, BuildParams(p, includeId: false));
+        p.Id = (int)id;
+    }
+
+    public async Task UpdateAsync(ProxyConfig p)
+    {
+        using var conn = Open();
+        await conn.ExecuteAsync(UpdateSql, BuildParams(p, includeId: true));
+    }
+
+    /// <summary>
+    /// Salva più proxy (insert se Id == 0, altrimenti update) con una sola
+    /// connessione e una sola transazione: molto più veloce di N chiamate singole.
+    /// </summary>
+    public async Task SaveManyAsync(IReadOnlyCollection<ProxyConfig> proxies)
+    {
+        if (proxies.Count == 0) return;
+
+        using var conn = Open();
+        await conn.OpenAsync();
+        using var tx = conn.BeginTransaction();
+        foreach (var p in proxies)
+        {
+            if (p.Id == 0)
+                p.Id = (int)await conn.ExecuteScalarAsync<long>(InsertSql, BuildParams(p, includeId: false), tx);
+            else
+                await conn.ExecuteAsync(UpdateSql, BuildParams(p, includeId: true), tx);
+        }
+        tx.Commit();
     }
 
     private static object BuildParams(ProxyConfig p, bool includeId)
@@ -247,6 +270,13 @@ public class ProxyConfigRepository
     {
         using var conn = Open();
         await conn.ExecuteAsync("DELETE FROM Proxies WHERE Id = @Id", new { Id = id });
+    }
+
+    public async Task DeleteManyAsync(IReadOnlyCollection<int> ids)
+    {
+        if (ids.Count == 0) return;
+        using var conn = Open();
+        await conn.ExecuteAsync("DELETE FROM Proxies WHERE Id IN @Ids", new { Ids = ids });
     }
 
     // --- DPAPI (Windows only) ---

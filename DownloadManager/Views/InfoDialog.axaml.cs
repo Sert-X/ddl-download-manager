@@ -21,6 +21,7 @@ public partial class InfoDialog : Window
             Title = title
         };
 
+        dlg.TitleText.Text = title;
         dlg.MessageText.Text = message;
 
         await dlg.ShowDialog(owner);

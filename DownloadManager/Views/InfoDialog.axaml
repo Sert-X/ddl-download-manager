@@ -2,34 +2,31 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="DownloadManager.Views.InfoDialog"
         Title="Informazione"
-        Width="420" Height="180"
+        Width="460"
+        SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         CanResize="False"
         ShowInTaskbar="False"
-        Background="{DynamicResource AppSurfaceBrush}">
+        Background="{DynamicResource AppBackgroundBrush}">
 
-    <Grid RowDefinitions="*, Auto" Margin="20">
+    <StackPanel Margin="22" Spacing="20">
 
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="14" VerticalAlignment="Center">
-            <TextBlock x:Name="IconText"
-                       Text="ℹ"
-                       FontSize="32"
-                       Foreground="{DynamicResource AppAccentBrush}"
-                       VerticalAlignment="Top"/>
-            <TextBlock x:Name="MessageText"
-                       Text=""
-                       FontSize="14"
-                       TextWrapping="Wrap"
-                       VerticalAlignment="Center"
-                       MaxWidth="340"/>
-        </StackPanel>
+        <Grid ColumnDefinitions="Auto, *">
+            <Border Width="42" Height="42" CornerRadius="21"
+                    Background="{DynamicResource AppAccentSoftBrush}"
+                    VerticalAlignment="Top">
+                <Path Classes="icon accent" Data="{StaticResource IconInfo}" Width="20" Height="20"/>
+            </Border>
+            <StackPanel Grid.Column="1" Margin="14,0,0,0" Spacing="6" VerticalAlignment="Center">
+                <TextBlock x:Name="TitleText" Text="Informazione" FontSize="15" FontWeight="Bold"/>
+                <SelectableTextBlock x:Name="MessageText" FontSize="13" TextWrapping="Wrap"
+                                     Foreground="{DynamicResource AppTextMutedBrush}"/>
+            </StackPanel>
+        </Grid>
 
-        <StackPanel Grid.Row="1" Orientation="Horizontal"
-                    HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
-            <Button Content="OK"
-                    Classes="accent"
-                    MinWidth="100"
-                    Click="OnOkClick"/>
-        </StackPanel>
-    </Grid>
+        <Button Classes="accent" MinWidth="110" HorizontalAlignment="Right"
+                IsDefault="True" IsCancel="True" Click="OnOkClick">
+            <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCheck}"/><TextBlock Text="OK"/></StackPanel>
+        </Button>
+    </StackPanel>
 </Window>

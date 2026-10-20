@@ -29,8 +29,18 @@ public partial class OrganizerTabViewModel : ViewModelBase
     [ObservableProperty] private ObservableCollection<ProposedOperation> _previewOperations = new();
     [ObservableProperty] private ObservableCollection<FileOperation> _operationHistory = new();
     [ObservableProperty] private ProposedOperation? _selectedPreviewOperation;
-    [ObservableProperty] private string _organizeStatusMessage = string.Empty;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(CurrentStatusMessage))] private string _organizeStatusMessage = string.Empty;
     [ObservableProperty] private bool _isOrganizeBusy;
+
+    // Sotto-tab attiva (0 = singola, 1 = unisci, 2 = dividi): decide quale stato mostrare sopra la guida.
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(CurrentStatusMessage))] private int _selectedSubTabIndex;
+
+    public string CurrentStatusMessage => SelectedSubTabIndex switch
+    {
+        1 => MergeStatusMessage,
+        2 => SplitStatusMessage,
+        _ => OrganizeStatusMessage
+    };
 
     // --- Merge ---
     [ObservableProperty] private MergeSourceFolder? _selectedMergeFolder;
@@ -38,7 +48,7 @@ public partial class OrganizerTabViewModel : ViewModelBase
     [ObservableProperty] private string _mergePattern = "{Series}/{Series} - {Episode:D3}";
     [ObservableProperty] private int _mergeStartingEpisode = 1;
     [ObservableProperty] private ObservableCollection<ProposedOperation> _mergePreviewOperations = new();
-    [ObservableProperty] private string _mergeStatusMessage = string.Empty;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(CurrentStatusMessage))] private string _mergeStatusMessage = string.Empty;
     [ObservableProperty] private bool _isMergeBusy;
 
     // --- Split ---
@@ -50,7 +60,7 @@ public partial class OrganizerTabViewModel : ViewModelBase
     [ObservableProperty] private bool _splitUniformMode = true;
     [ObservableProperty] private int _splitUniformEpisodes = 50;
     [ObservableProperty] private ObservableCollection<ProposedOperation> _splitPreviewOperations = new();
-    [ObservableProperty] private string _splitStatusMessage = string.Empty;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(CurrentStatusMessage))] private string _splitStatusMessage = string.Empty;
     [ObservableProperty] private bool _isSplitBusy;
 
     public ObservableCollection<MergeSourceFolder> MergeSourceFolders { get; } = new();

@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
@@ -29,7 +28,6 @@ public partial class StreamingTabViewModel : ViewModelBase
     private bool _loadingQualities;
 
     private const string CategoryName = "streaming";
-    private const int ExtractionParallelism = 6;
 
     // ============================================================
     //  PROPERTY RICERCA
@@ -53,6 +51,33 @@ public partial class StreamingTabViewModel : ViewModelBase
     [ObservableProperty] private string _seasonFolderPattern = "Stagione {number}";
 
     [ObservableProperty] private ObservableCollection<VideoQuality> _availableQualities = new();
+
+    // === Tracce audio / sottotitoli trovate dall'analisi ===
+    public ObservableCollection<MediaTrack> AudioTracks { get; } = new();
+    public ObservableCollection<MediaTrack> SubtitleTracks { get; } = new();
+    [ObservableProperty] private bool _burnSubtitles;
+    [ObservableProperty] private int _concurrentFragments = 24;
+
+    public bool HasAudioTracks => AudioTracks.Count > 0;
+    public bool HasSubtitleTracks => SubtitleTracks.Count > 0;
+
+    public string AudioSelectionText
+    {
+        get
+        {
+            var sel = AudioTracks.Where(t => t.IsSelected).Select(t => t.DisplayName).ToList();
+            return sel.Count == 0 ? "Automatico (italiano)" : string.Join(", ", sel);
+        }
+    }
+
+    public string SubtitleSelectionText
+    {
+        get
+        {
+            var sel = SubtitleTracks.Where(t => t.IsSelected).Select(t => t.DisplayName).ToList();
+            return sel.Count == 0 ? "Nessuno" : string.Join(", ", sel);
+        }
+    }
     [ObservableProperty] private VideoQuality? _selectedQuality;
 
     [ObservableProperty] private int _maxConcurrency = 1;
@@ -278,10 +303,12 @@ public partial class StreamingTabViewModel : ViewModelBase
         MovieNamingPattern = _settings.Current.StreamingMovieNamingPattern;
         SeriesNamingPattern = _settings.Current.StreamingSeriesNamingPattern;
         SeasonFolderPattern = _settings.Current.SeasonFolderPattern;
-        MaxConcurrency = _settings.Current.MaxConcurrency;
-        _queueService.MaxConcurrency = MaxConcurrency;
-        MaxConcurrency = 1;
-        _queueService.MaxConcurrency = 1;
+        // Slot propri: prima questa riga forzava a 1 il limite di TUTTA la coda,
+        // rallentando anche gli anime.
+        MaxConcurrency = _settings.Current.MaxConcurrencyStreaming;
+        BurnSubtitles = _settings.Current.StreamingBurnSubtitles;
+        ConcurrentFragments = Math.Clamp(_settings.Current.StreamingConcurrentFragments, 4, 64);
+        _queueService.SetMaxConcurrency(CategoryName, MaxConcurrency);
 
         SearchResults.CollectionChanged += (_, _) =>
             OnPropertyChanged(nameof(SearchResultsCountText));
@@ -377,6 +404,8 @@ public partial class StreamingTabViewModel : ViewModelBase
                 _downloads.Remove(it);
                 RemoveFromGroup(it);
             }
+
+        OnPropertyChanged(nameof(SeriesSummaryText));
     }
 
     private void AddToGroup(DownloadItem item)
@@ -397,7 +426,6 @@ public partial class StreamingTabViewModel : ViewModelBase
             group.Items.Add(item);
             item.PropertyChanged += OnDownloadItemPropertyChanged;
         }
-        OnPropertyChanged(nameof(SeriesSummaryText));
     }
 
     private void RemoveFromGroup(DownloadItem item)
@@ -410,7 +438,6 @@ public partial class StreamingTabViewModel : ViewModelBase
             group.Items.Remove(item);
             if (group.Items.Count == 0) SeriesGroups.Remove(group);
         }
-        OnPropertyChanged(nameof(SeriesSummaryText));
     }
 
     private void OnDownloadItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -445,6 +472,7 @@ public partial class StreamingTabViewModel : ViewModelBase
         SelectedSeason = null;
         AvailableQualities.Clear();
         SelectedQuality = null;
+        ClearTracks();
         IsQualitiesLoading = false;   // ← NUOVO (reset nel caso rimanesse appeso)
         OnPropertyChanged(nameof(HasSeasons));
     }
@@ -481,8 +509,8 @@ public partial class StreamingTabViewModel : ViewModelBase
 
     partial void OnMaxConcurrencyChanged(int value)
     {
-        if (_queueService != null) _queueService.MaxConcurrency = value;
-        if (_settings != null) { _settings.Current.MaxConcurrency = value; _settings.Save(); }
+        _queueService?.SetMaxConcurrency(CategoryName, value);
+        if (_settings != null) { _settings.Current.MaxConcurrencyStreaming = value; _settings.Save(); }
     }
 
     // ============================================================
@@ -656,6 +684,72 @@ public partial class StreamingTabViewModel : ViewModelBase
         finally { IsLoadingEpisodes = false; }
     }
 
+    private void ClearTracks()
+    {
+        foreach (var t in AudioTracks.Concat(SubtitleTracks)) t.PropertyChanged -= OnTrackSelectionChanged;
+        AudioTracks.Clear();
+        SubtitleTracks.Clear();
+        NotifyTracksChanged();
+    }
+
+    /// <summary>
+    /// Mostra le tracce trovate e preseleziona le ultime lingue scelte; se nessuna è
+    /// disponibile, l'audio italiano (o quello predefinito della playlist).
+    /// </summary>
+    private void LoadTracks(MasterTracks tracks)
+    {
+        ClearTracks();
+
+        var savedAudio = _settings.Current.StreamingAudioLanguages.Split('|', StringSplitOptions.RemoveEmptyEntries);
+        var savedSubs = _settings.Current.StreamingSubtitleLanguages.Split('|', StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var a in tracks.Audios)
+        {
+            a.IsSelected = savedAudio.Any(a.Matches);
+            AudioTracks.Add(a);
+        }
+        if (AudioTracks.Count > 0 && !AudioTracks.Any(t => t.IsSelected))
+            (AudioTracks.FirstOrDefault(t => t.IsItalian) ?? AudioTracks.FirstOrDefault(t => t.IsDefault) ?? AudioTracks[0]).IsSelected = true;
+
+        foreach (var sub in tracks.Subtitles)
+        {
+            sub.IsSelected = savedSubs.Any(sub.Matches);
+            SubtitleTracks.Add(sub);
+        }
+
+        foreach (var t in AudioTracks.Concat(SubtitleTracks)) t.PropertyChanged += OnTrackSelectionChanged;
+        NotifyTracksChanged();
+    }
+
+    private void OnTrackSelectionChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(MediaTrack.IsSelected)) return;
+        _settings.Current.StreamingAudioLanguages = string.Join("|", AudioTracks.Where(t => t.IsSelected).Select(t => t.Key));
+        _settings.Current.StreamingSubtitleLanguages = string.Join("|", SubtitleTracks.Where(t => t.IsSelected).Select(t => t.Key));
+        _settings.Save();
+        NotifyTracksChanged();
+    }
+
+    private void NotifyTracksChanged()
+    {
+        OnPropertyChanged(nameof(HasAudioTracks));
+        OnPropertyChanged(nameof(HasSubtitleTracks));
+        OnPropertyChanged(nameof(AudioSelectionText));
+        OnPropertyChanged(nameof(SubtitleSelectionText));
+    }
+
+    partial void OnBurnSubtitlesChanged(bool value)
+    {
+        _settings.Current.StreamingBurnSubtitles = value;
+        _settings.Save();
+    }
+
+    partial void OnConcurrentFragmentsChanged(int value)
+    {
+        _settings.Current.StreamingConcurrentFragments = value;
+        _settings.Save();
+    }
+
     private async Task LoadQualitiesForCurrentSelectionAsync()
     {
         if (_loadingQualities) return;
@@ -666,6 +760,7 @@ public partial class StreamingTabViewModel : ViewModelBase
         {
             AvailableQualities.Clear();
             SelectedQuality = null;
+            ClearTracks();
 
             if (SelectedResult == null) return;
             if (SelectedResult.IsSeries && SelectedSeason == null) return;
@@ -673,9 +768,11 @@ public partial class StreamingTabViewModel : ViewModelBase
             int seasonNum = SelectedSeason?.Number ?? 1;
             bool isSeries = SelectedResult.IsSeries;
 
-            StatusMessage = "Analisi qualità disponibili...";
-            var qualities = await _service.GetAvailableQualitiesAsync(
+            StatusMessage = "Analisi di qualità, audio e sottotitoli...";
+            var tracks = await _service.GetAvailableTracksAsync(
                 SelectedResult.Link, isSeries, seasonNum, 1);
+            var qualities = tracks.Videos;
+            LoadTracks(tracks);
 
             AvailableQualities.Add(new VideoQuality
             {
@@ -689,7 +786,7 @@ public partial class StreamingTabViewModel : ViewModelBase
             SelectedQuality = AvailableQualities.FirstOrDefault();
 
             StatusMessage = qualities.Count > 0
-                ? $"Qualità: {string.Join(", ", qualities.Select(q => q.Name))}"
+                ? $"Qualità: {string.Join(", ", qualities.Select(q => q.Name))} · Audio: {AudioTracks.Count} · Sottotitoli: {SubtitleTracks.Count}"
                 : "Nessuna qualità rilevata (uso auto).";
         }
         catch (Exception ex)
@@ -790,7 +887,7 @@ public partial class StreamingTabViewModel : ViewModelBase
                 return;
             }
 
-            var queued = await EnqueueWithParallelExtractionAsync(
+            var queued = await EnqueueEpisodesAsync(
                 SelectedResult.Link, seasonNumber, seriesName, toDownload, token);
 
             var msg = $"{queued} episodi accodati";
@@ -848,7 +945,7 @@ public partial class StreamingTabViewModel : ViewModelBase
                 toAdd.Add(ep);
             }
 
-            var queued = await EnqueueWithParallelExtractionAsync(
+            var queued = await EnqueueEpisodesAsync(
                 series.Link, season.Number, seriesName, toAdd, token);
 
             StatusMessage = queued > 0
@@ -902,7 +999,7 @@ public partial class StreamingTabViewModel : ViewModelBase
                     var eps = await _service.GetEpisodesAsync(series.Link, season.Number);
                     var toAdd = eps.Where(ep => ep.EpisodeId > 0).ToList();
 
-                    var queued = await EnqueueWithParallelExtractionAsync(
+                    var queued = await EnqueueEpisodesAsync(
                         series.Link, season.Number, seriesName, toAdd, token);
 
                     totalQueued += queued;
@@ -931,156 +1028,50 @@ public partial class StreamingTabViewModel : ViewModelBase
     }
 
     // ============================================================
-    //  ESTRAZIONE PARALLELA
+    //  ACCODAMENTO EPISODI
     // ============================================================
 
-    private async Task<int> EnqueueWithParallelExtractionAsync(
+    /// <summary>
+    /// Accoda subito gli episodi senza estrarre prima gli URL: l'estrazione avviene
+    /// all'avvio di ciascun download. I token vixcloud scadono in poco tempo, quindi
+    /// pre-estrarli per un'intera stagione era solo attesa sprecata (venivano
+    /// comunque ri-estratti per tutti gli episodi non partiti subito).
+    /// </summary>
+    private async Task<int> EnqueueEpisodesAsync(
         string seriesLink, int seasonNumber, string seriesName,
         List<StreamingEpisode> episodes, CancellationToken ct)
     {
         if (episodes.Count == 0) return 0;
 
-        var capturedQuality = SelectedQuality?.Name ?? "";
-        if (capturedQuality.StartsWith("Auto")) capturedQuality = "";
+        var existing = _queueService.SnapshotExistingEpisodeKeys(CategoryName, seriesName);
+        var items = new List<DownloadItem>(episodes.Count);
 
-        StatusMessage = $"Estrazione URL ({episodes.Count} episodi, {ExtractionParallelism} in parallelo)...";
-
-        var extracted = new ConcurrentBag<(StreamingEpisode Ep, string? Url)>();
-
-        using var sem = new SemaphoreSlim(ExtractionParallelism, ExtractionParallelism);
-
-        int done = 0;
-
-        var tasks = episodes.Select(async ep =>
-        {
-            await sem.WaitAsync(ct);
-            try
-            {
-                ct.ThrowIfCancellationRequested();
-
-                var epNumParsed = int.TryParse(ep.Number, out var epNumTmp) ? epNumTmp : 0;
-                if (epNumParsed <= 0) return;
-
-                try
-                {
-                    var masterUrl = await _service.GetVideoUrlAsync(
-                        seriesLink, isSeries: true,
-                        seasonNumber: seasonNumber,
-                        episodeNumber: epNumParsed,
-                        episodeId: ep.EpisodeId);
-
-                    if (string.IsNullOrEmpty(masterUrl))
-                    {
-                        extracted.Add((ep, null));
-                        return;
-                    }
-
-                    if (masterUrl.Contains("type=video", StringComparison.OrdinalIgnoreCase) ||
-                        masterUrl.Contains("rendition=", StringComparison.OrdinalIgnoreCase))
-                    {
-                        _logger.LogWarning(
-                            "[STREAMING-TAB] ATTENZIONE: master contiene ancora rendition: {Url}",
-                            masterUrl);
-                    }
-
-                    extracted.Add((ep, masterUrl));
-                }
-                catch (OperationCanceledException) { throw; }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex,
-                        "[STREAMING-TAB] Estrazione fallita per ep {Ep}", ep.Number);
-                    extracted.Add((ep, null));
-                }
-                finally
-                {
-                    var completed = Interlocked.Increment(ref done);
-                    StatusMessage = $"Estrazione {completed}/{episodes.Count}...";
-                }
-            }
-            finally
-            {
-                sem.Release();
-            }
-        }).ToList();
-
-        await Task.WhenAll(tasks);
-
-        int queued = 0;
-        var ordered = extracted
-            .OrderBy(e => int.TryParse(e.Ep.Number, out var orderNum) ? orderNum : 0)
-            .ToList();
-
-        foreach (var (ep, url) in ordered)
+        foreach (var ep in episodes.OrderBy(e => int.TryParse(e.Number, out var n) ? n : 0))
         {
             ct.ThrowIfCancellationRequested();
 
-            var epNumOrdered = int.TryParse(ep.Number, out var epNumOrdTmp) ? epNumOrdTmp : 0;
-            if (epNumOrdered <= 0) continue;
-            if (_queueService.ContainsEpisode(CategoryName, seriesName, epNumOrdered)) continue;
+            var epNum = int.TryParse(ep.Number, out var parsed) ? parsed : 0;
+            if (epNum <= 0 || !existing.Add(epNum)) continue;
 
-            var capturedUrl = url;
-            var capturedEp = epNumOrdered;
-            var capturedEpId = ep.EpisodeId;
-            var capturedLink = seriesLink;
-            var capturedSeason = seasonNumber;
-            var q = capturedQuality;
+            int? epId = ep.EpisodeId > 0 ? ep.EpisodeId : null;
+            Func<CancellationToken, Task<string?>> extractor = _ => _service.GetVideoUrlAsync(
+                seriesLink, isSeries: true,
+                seasonNumber: seasonNumber, episodeNumber: epNum,
+                episodeId: epId);
 
-            Func<CancellationToken, Task<string?>> extractor = async t =>
-            {
-                if (!string.IsNullOrEmpty(capturedUrl) && !IsVixcloudTokenExpired(capturedUrl))
-                    return capturedUrl;
-
-                _logger.LogWarning(
-                    "[STREAMING-TAB] URL scaduto/mancante per ep {Ep}, ri-estraggo...", capturedEp);
-
-                var master = await _service.GetVideoUrlAsync(
-                    capturedLink, isSeries: true,
-                    seasonNumber: capturedSeason, episodeNumber: capturedEp,
-                    episodeId: capturedEpId);
-
-                return master;
-            };
-
-            Func<CancellationToken, Task<string?>>? audioExtractor = null;
-
-            var item = BuildDownloadItem(
-                capturedUrl ?? "", seriesName, capturedEp, ep.Title, seasonNumber,
-                extractor, audioExtractor,
-                contentLink: capturedLink,
-                episodeId: capturedEpId,
-                isSeries: true);
-
-            await _queueService.EnqueueAsync(item);
-            queued++;
+            items.Add(BuildDownloadItem(
+                "", seriesName, epNum, ep.Title, seasonNumber,
+                extractor, null,
+                contentLink: seriesLink,
+                episodeId: ep.EpisodeId,
+                isSeries: true));
         }
 
-        return queued;
-    }
-
-    private static bool IsVixcloudTokenExpired(string url)
-    {
-        try
-        {
-            var qIdx = url.IndexOf('?');
-            if (qIdx < 0) return false;
-
-            var qs = url.Substring(qIdx + 1);
-            foreach (var kv in qs.Split('&'))
-            {
-                if (kv.StartsWith("expires=", StringComparison.OrdinalIgnoreCase))
-                {
-                    var val = kv.Substring("expires=".Length);
-                    if (long.TryParse(val, out var exp))
-                    {
-                        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                        return exp - now < 30;
-                    }
-                }
-            }
-        }
-        catch { }
-        return false;
+        await _queueService.EnqueueManyAsync(items);
+        _logger.LogInformation(
+            "[STREAMING-TAB] Accodati {Count} episodi di '{Series}' (URL estratti all'avvio di ogni download)",
+            items.Count, seriesName);
+        return items.Count;
     }
 
     [RelayCommand]
@@ -1126,6 +1117,9 @@ public partial class StreamingTabViewModel : ViewModelBase
             },
             QualityName = SelectedQuality?.Name ?? "",
             ProviderKey = "StreamingCommunity",
+            AudioLanguages = string.Join("|", AudioTracks.Where(t => t.IsSelected).Select(t => t.Key)),
+            SubtitleLanguages = string.Join("|", SubtitleTracks.Where(t => t.IsSelected).Select(t => t.Key)),
+            BurnSubtitles = BurnSubtitles && SubtitleTracks.Any(t => t.IsSelected),
 
             ContentLink = contentLink,
             EpisodeId = episodeId,
@@ -1181,6 +1175,13 @@ public partial class StreamingTabViewModel : ViewModelBase
         if (count == 0) { StatusMessage = "Nessun download da avviare."; return; }
         _queueService.StartAll(CategoryName);
         StatusMessage = $"Avvio di {count} download.";
+    }
+
+    [RelayCommand]
+    private void PauseAll()
+    {
+        _queueService.PauseAll(CategoryName);
+        StatusMessage = "Download di film e serie in pausa.";
     }
 
     [RelayCommand]
@@ -1262,7 +1263,7 @@ public partial class StreamingTabViewModel : ViewModelBase
         _settings.Current.StreamingCreateSeriesFolder = CreateSeriesFolder;
         _settings.Current.StreamingBaseDownloadFolder = BaseDownloadFolder;
         _settings.Current.SeasonFolderPattern = SeasonFolderPattern;
-        _settings.Current.MaxConcurrency = MaxConcurrency;
+        _settings.Current.MaxConcurrencyStreaming = MaxConcurrency;
         _settings.Save();
         StatusMessage = "Impostazioni salvate.";
     }

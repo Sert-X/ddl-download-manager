@@ -2,135 +2,114 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="DownloadManager.Views.UpdateDialog"
         Title="Aggiornamento disponibile"
-        Width="600" Height="500"
-        MinWidth="500" MinHeight="350"
+        Width="600" Height="520"
+        MinWidth="500" MinHeight="380"
         WindowStartupLocation="CenterOwner"
         CanResize="True"
         ShowInTaskbar="False"
-        Background="{DynamicResource AppSurfaceBrush}">
+        Background="{DynamicResource AppBackgroundBrush}">
 
-    <Grid RowDefinitions="Auto, *, Auto" Margin="24">
+    <Grid RowDefinitions="Auto, *, Auto" Margin="22">
 
         <!-- Intestazione -->
-        <StackPanel Grid.Row="0" Spacing="6" Margin="0,0,0,16">
-            <StackPanel Orientation="Horizontal" Spacing="10">
-                <TextBlock Text="🔄" FontSize="28" VerticalAlignment="Center"/>
-                <TextBlock x:Name="TitleText"
-                           Text="Aggiornamento disponibile"
-                           FontSize="18" FontWeight="Bold"
-                           VerticalAlignment="Center"/>
+        <Grid Grid.Row="0" ColumnDefinitions="Auto, *" Margin="0,0,0,16">
+            <Border Width="46" Height="46" CornerRadius="23" Background="{DynamicResource AppAccentSoftBrush}">
+                <Path Classes="icon accent" Data="{StaticResource IconDownload}" Width="22" Height="22"/>
+            </Border>
+            <StackPanel Grid.Column="1" Margin="14,0,0,0" Spacing="2" VerticalAlignment="Center">
+                <TextBlock x:Name="TitleText" Text="Aggiornamento disponibile" FontSize="17" FontWeight="Bold"/>
+                <TextBlock x:Name="SubtitleText" Text="" FontSize="12" TextWrapping="Wrap"
+                           Foreground="{DynamicResource AppTextMutedBrush}"/>
             </StackPanel>
-            <TextBlock x:Name="SubtitleText"
-                       Text=""
-                       FontSize="13"
-                       Foreground="{DynamicResource AppTextMutedBrush}"
-                       TextWrapping="Wrap"/>
-        </StackPanel>
+        </Grid>
 
         <!-- Contenuto variabile per fase -->
-        <Border Grid.Row="1"
-                Background="{DynamicResource AppSurface2Brush}"
-                CornerRadius="8"
-                Padding="16">
-
+        <Border Grid.Row="1" Classes="card" Padding="16">
             <Grid>
 
                 <!-- FASE 1: conferma -->
-                <StackPanel x:Name="ConfirmPanel" Spacing="10" VerticalAlignment="Top">
-                <TextBlock x:Name="VersionInfoText"
-                        FontSize="14"
-                        TextWrapping="Wrap"/>
-
-                <TextBlock Text="Novità di questa versione:"
-                        FontWeight="SemiBold" Margin="0,6,0,0"/>
-
-                <Border Background="{DynamicResource AppSurfaceBrush}"
-                        BorderBrush="{DynamicResource AppBorderBrush}"
-                        BorderThickness="1"
-                        CornerRadius="6"
-                        Height="180"
-                        Padding="10">
-                <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                HorizontalScrollBarVisibility="Disabled">
-                        <TextBlock x:Name="ChangelogText"
-                                TextWrapping="Wrap"
-                                FontSize="12"
-                                Foreground="{DynamicResource AppTextBrush}"/>
-                </ScrollViewer>
-                </Border>
-                </StackPanel>
+                <DockPanel x:Name="ConfirmPanel">
+                    <TextBlock DockPanel.Dock="Top" x:Name="VersionInfoText" FontSize="13" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                    <StackPanel DockPanel.Dock="Top" Classes="bi" Margin="0,0,0,8">
+                        <Path Classes="icon accent" Data="{StaticResource IconList}"/>
+                        <TextBlock Text="Novità di questa versione" FontWeight="SemiBold"/>
+                    </StackPanel>
+                    <Border Background="{DynamicResource AppInputBrush}"
+                            BorderBrush="{DynamicResource AppBorderBrush}"
+                            BorderThickness="1" CornerRadius="10" Padding="12">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <SelectableTextBlock x:Name="ChangelogText" TextWrapping="Wrap" FontSize="12"
+                                                 Foreground="{DynamicResource AppTextBrush}"/>
+                        </ScrollViewer>
+                    </Border>
+                </DockPanel>
 
                 <!-- FASE 2: download in corso -->
                 <StackPanel x:Name="DownloadPanel" Spacing="14" VerticalAlignment="Center" IsVisible="False">
-                    <TextBlock Text="Download in corso..."
-                            FontWeight="SemiBold" FontSize="14"/>
+                    <Grid ColumnDefinitions="*, Auto">
+                        <StackPanel Classes="bi">
+                            <Path Classes="icon accent" Data="{StaticResource IconDownload}"/>
+                            <TextBlock Text="Download in corso..." FontWeight="SemiBold" FontSize="14"/>
+                        </StackPanel>
+                        <TextBlock Grid.Column="1" x:Name="PercentText" Text="0%" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource AppAccentBrush}" VerticalAlignment="Center"/>
+                    </Grid>
 
-                    <ProgressBar x:Name="ProgressBarCtrl"
-                                Minimum="0" Maximum="100"
-                                Value="0"
-                                Height="20"/>
+                    <ProgressBar x:Name="ProgressBarCtrl" Minimum="0" Maximum="100" Value="0" Height="10"/>
 
                     <Grid ColumnDefinitions="*, *">
                         <StackPanel Grid.Column="0" Spacing="2">
-                                <TextBlock Text="Scaricato" FontSize="11"
-                                        Foreground="{DynamicResource AppTextMutedBrush}"/>
-                                <TextBlock x:Name="BytesText" Text="0%"
-                                        FontWeight="SemiBold" FontSize="12"/>
+                            <TextBlock Text="Scaricato" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                            <TextBlock x:Name="BytesText" Text="0%" FontWeight="SemiBold" FontSize="12"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Spacing="2">
-                                <TextBlock Text="Velocità" FontSize="11"
-                                        Foreground="{DynamicResource AppTextMutedBrush}"/>
-                                <TextBlock x:Name="SpeedText" Text="-"
-                                        FontWeight="SemiBold" FontSize="12"
-                                        Foreground="{DynamicResource AppSuccessBrush}"/>
+                            <TextBlock Text="Velocità" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                            <TextBlock x:Name="SpeedText" Text="-" FontWeight="SemiBold" FontSize="12"
+                                       Foreground="{DynamicResource AppSuccessBrush}"/>
                         </StackPanel>
-                        </Grid>
-
-                        <TextBlock x:Name="PercentText" Text="0%"
-                                FontSize="11"
-                                HorizontalAlignment="Right"
-                                Foreground="{DynamicResource AppTextMutedBrush}"/>
+                    </Grid>
                 </StackPanel>
 
                 <!-- FASE 3: pronto per riavvio -->
                 <StackPanel x:Name="ReadyPanel" Spacing="12" VerticalAlignment="Center" IsVisible="False">
-                    <TextBlock Text="✅ Download completato!"
-                            FontWeight="Bold" FontSize="14"
-                            Foreground="{DynamicResource AppSuccessBrush}"/>
-
-                    <TextBlock Text="L'app deve riavviarsi per applicare l'aggiornamento."
-                            TextWrapping="Wrap"/>
-
-                    <TextBlock Text="• Riavvia ora: l'app si chiude e si riapre subito aggiornata"
-                            FontSize="12"
-                            Foreground="{DynamicResource AppTextMutedBrush}"/>
-                    <TextBlock Text="• Al prossimo avvio: l'aggiornamento verrà applicato quando chiudi l'app"
-                            FontSize="12"
-                            Foreground="{DynamicResource AppTextMutedBrush}"/>
+                    <StackPanel Classes="bi">
+                        <Path Classes="icon" Data="{StaticResource IconCheckCircle}" Stroke="{DynamicResource AppSuccessBrush}" Width="18" Height="18"/>
+                        <TextBlock Text="Download completato" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AppSuccessBrush}"/>
+                    </StackPanel>
+                    <TextBlock Text="L'app deve riavviarsi per applicare l'aggiornamento." TextWrapping="Wrap"/>
+                    <Border Background="{DynamicResource AppInputBrush}" CornerRadius="10" Padding="12">
+                        <StackPanel Spacing="6">
+                            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}">
+                                <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">Riavvia ora:</Run>
+                                <Run>l'app si chiude e si riapre subito aggiornata.</Run>
+                            </TextBlock>
+                            <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}">
+                                <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">Al prossimo avvio:</Run>
+                                <Run>l'aggiornamento viene applicato quando chiudi l'app.</Run>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
 
                 <!-- FASE 4: errore -->
-                <StackPanel x:Name="ErrorPanel" Spacing="12" VerticalAlignment="Center" IsVisible="False">
-                    <TextBlock Text="❌ Errore durante l'aggiornamento"
-                            FontWeight="Bold" FontSize="14"
-                            Foreground="{DynamicResource AppDangerBrush}"/>
-                    <TextBlock x:Name="ErrorText"
-                            TextWrapping="Wrap"
-                            FontFamily="Consolas,Menlo,monospace"
-                            FontSize="11"/>
-                </StackPanel>
+                <DockPanel x:Name="ErrorPanel" IsVisible="False">
+                    <StackPanel DockPanel.Dock="Top" Classes="bi" Margin="0,0,0,10">
+                        <Path Classes="icon" Data="{StaticResource IconAlertCircle}" Stroke="{DynamicResource AppDangerBrush}" Width="18" Height="18"/>
+                        <TextBlock Text="Errore durante l'aggiornamento" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AppDangerBrush}"/>
+                    </StackPanel>
+                    <Border Background="{DynamicResource AppInputBrush}" CornerRadius="10" Padding="12">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <SelectableTextBlock x:Name="ErrorText" TextWrapping="Wrap"
+                                                 FontFamily="Consolas, Cascadia Mono, monospace" FontSize="11"/>
+                        </ScrollViewer>
+                    </Border>
+                </DockPanel>
 
             </Grid>
         </Border>
 
-        <!-- Bottoni -->
-        <StackPanel Grid.Row="2"
-                    x:Name="ButtonsPanel"
-                    Orientation="Horizontal"
-                    HorizontalAlignment="Right"
-                    Spacing="10"
-                    Margin="0,16,0,0">
-            <!-- I bottoni vengono popolati dal code-behind -->
-        </StackPanel>
+        <!-- Bottoni (popolati dal code-behind in base alla fase) -->
+        <StackPanel Grid.Row="2" x:Name="ButtonsPanel" Orientation="Horizontal"
+                    HorizontalAlignment="Right" Spacing="10" Margin="0,16,0,0"/>
     </Grid>
 </Window>

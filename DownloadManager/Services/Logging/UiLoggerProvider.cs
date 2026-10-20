@@ -64,21 +64,41 @@ public class UiLoggerProvider : ILoggerProvider
                 _ => Models.LogLevel.Info
             };
 
+        /// <summary>
+        /// Nome del logger (namespace + classe) → sezione mostrata nel log globale.
+        /// L'ordine conta: le voci più specifiche vengono prima.
+        /// </summary>
+        private static readonly (string Fragment, string Category)[] CategoryMap =
+        {
+            (".AnimeWorld", "AnimeWorld"),
+            (".AnimeSaturn", "AnimeSaturn"),
+            (".StreamingCommunity", "Streaming"),
+            ("StreamingTab", "Streaming"),
+            ("DownloadTab", "Anime"),
+            (".Services.Download", "Download"),
+            (".FileOrganizer", "Organizza"),
+            ("OrganizerTab", "Organizza"),
+            ("ZeroByte", "SFTP"),
+            (".Sftp", "SFTP"),
+            ("SftpTab", "SFTP"),
+            (".Proxy", "Proxy"),
+            ("ProxyTab", "Proxy"),
+            (".Domains", "Domini"),
+            ("DomainsTab", "Domini"),
+            (".Videobox", "Videobox"),
+            ("VideoboxTab", "Videobox"),
+            ("AccountTab", "Account"),
+            (".Update", "Aggiornamenti"),
+            (".Persistence", "Database"),
+        };
+
         private static string MapCategory(string categoryName)
         {
-            if (categoryName.Contains(".AnimeWorld", StringComparison.OrdinalIgnoreCase))
-                return "Download";
+            foreach (var (fragment, category) in CategoryMap)
+                if (categoryName.Contains(fragment, StringComparison.OrdinalIgnoreCase))
+                    return category;
 
-            if (categoryName.Contains(".Services.Download", StringComparison.OrdinalIgnoreCase))
-                return "Download";
-
-            if (categoryName.Contains(".FileOrganizer", StringComparison.OrdinalIgnoreCase))
-                return "Organizza";
-
-            if (categoryName.Contains(".Sftp", StringComparison.OrdinalIgnoreCase))
-                return "SFTP";
-
-            return "General";
+            return "Generale";
         }
     }
 }

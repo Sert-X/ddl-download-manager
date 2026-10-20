@@ -25,6 +25,9 @@ public class SftpWinScpService : ISftpService, IDisposable
         _sessionLimiter = sessionLimiter;
     }
 
+    /// <summary>Sollevato dopo ogni modifica riuscita al filesystem remoto (creazione, eliminazione, rinomina, upload).</summary>
+    public event Action<SftpRemoteChange>? RemoteChanged;
+
     public bool IsConnected => _session?.Opened == true;
     public string CurrentRemotePath { get; private set; } = "/";
 
@@ -384,6 +387,8 @@ public class SftpWinScpService : ISftpService, IDisposable
         {
             _sessionGate.Release();
         }
+
+        RemoteChanged?.Invoke(new SftpRemoteChange(GetParentPath(remotePath)));
     }
 
     public async Task DeleteFileAsync(string remotePath, CancellationToken ct = default)
@@ -448,6 +453,8 @@ public class SftpWinScpService : ISftpService, IDisposable
         {
             _sessionGate.Release();
         }
+
+        RemoteChanged?.Invoke(new SftpRemoteChange(GetParentPath(remotePath)));
     }
 
     public async Task DeleteDirectoryAsync(string remotePath, CancellationToken ct = default)
@@ -506,6 +513,8 @@ public class SftpWinScpService : ISftpService, IDisposable
         {
             _sessionGate.Release();
         }
+
+        RemoteChanged?.Invoke(new SftpRemoteChange(GetParentPath(remotePath)));
     }
 
     private static string GetParentPath(string fullPath)
@@ -529,6 +538,10 @@ public class SftpWinScpService : ISftpService, IDisposable
         {
             _sessionGate.Release();
         }
+
+        RemoteChanged?.Invoke(new SftpRemoteChange(GetParentPath(oldPath)));
+        if (GetParentPath(oldPath) != GetParentPath(newPath))
+            RemoteChanged?.Invoke(new SftpRemoteChange(GetParentPath(newPath)));
     }
 
     public async Task UploadFileAsync(
@@ -566,6 +579,8 @@ public class SftpWinScpService : ISftpService, IDisposable
         {
             _sessionGate.Release();
         }
+
+        RemoteChanged?.Invoke(new SftpRemoteChange(GetParentPath(remotePath)));
 
         progress?.Report(new SftpProgress
         {
@@ -612,6 +627,8 @@ public class SftpWinScpService : ISftpService, IDisposable
         {
             _sessionGate.Release();
         }
+
+        RemoteChanged?.Invoke(new SftpRemoteChange(remoteTarget, Recursive: true));
     }
 
     public async Task DownloadFileAsync(

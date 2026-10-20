@@ -127,11 +127,14 @@ public partial class SftpTabViewModel : ViewModelBase
         _sftpDownloadQueue.AllJobs.Any(j =>
             j.Status == SftpJobStatus.Downloading || j.Status == SftpJobStatus.Pending);
 
-    public bool ShowSftpRed => HasFailedSftpItems;
+    // Pallino della tab: grigio se disconnesso, altrimenti rosso (errori) / giallo (attività) / verde.
+    public bool ShowSftpGray => !IsSftpConnected;
 
-    public bool ShowSftpYellow => HasActiveSftpItems && !HasFailedSftpItems;
+    public bool ShowSftpRed => IsSftpConnected && HasFailedSftpItems;
 
-    public bool ShowSftpGreen => !HasActiveSftpItems && !HasFailedSftpItems;
+    public bool ShowSftpYellow => IsSftpConnected && HasActiveSftpItems && !HasFailedSftpItems;
+
+    public bool ShowSftpGreen => IsSftpConnected && !HasActiveSftpItems && !HasFailedSftpItems;
 
     public string RemoteStatusText
     {
@@ -223,6 +226,10 @@ public partial class SftpTabViewModel : ViewModelBase
                 break;
             case nameof(SharedState.IsSftpConnected):
                 OnPropertyChanged(nameof(IsSftpConnected));
+                OnPropertyChanged(nameof(ShowSftpGray));
+                OnPropertyChanged(nameof(ShowSftpRed));
+                OnPropertyChanged(nameof(ShowSftpYellow));
+                OnPropertyChanged(nameof(ShowSftpGreen));
                 break;
         }
     }
@@ -883,24 +890,21 @@ public partial class SftpTabViewModel : ViewModelBase
             {
                 var entries = await Task.Run(() =>
                 {
+                    // Un'unica enumerazione: dimensione e data arrivano già con la lettura
+                    // della cartella, senza una chiamata di sistema in più per ogni file.
                     var list = new List<LocalFileEntry>();
-                    foreach (var dir in Directory.GetDirectories(pathToRead))
+                    var options = new EnumerationOptions { IgnoreInaccessible = true, AttributesToSkip = 0 };
+                    foreach (var info in new DirectoryInfo(pathToRead).EnumerateFileSystemInfos("*", options))
                     {
-                        try
+                        bool isDir = info is DirectoryInfo;
+                        list.Add(new LocalFileEntry
                         {
-                            var info = new DirectoryInfo(dir);
-                            list.Add(new LocalFileEntry { Name = info.Name, FullPath = info.FullName, IsDirectory = true, Size = 0, Modified = info.LastWriteTime });
-                        }
-                        catch { }
-                    }
-                    foreach (var file in Directory.GetFiles(pathToRead))
-                    {
-                        try
-                        {
-                            var info = new FileInfo(file);
-                            list.Add(new LocalFileEntry { Name = info.Name, FullPath = info.FullName, IsDirectory = false, Size = info.Length, Modified = info.LastWriteTime });
-                        }
-                        catch { }
+                            Name = info.Name,
+                            FullPath = info.FullName,
+                            IsDirectory = isDir,
+                            Size = isDir ? 0 : ((FileInfo)info).Length,
+                            Modified = info.LastWriteTime
+                        });
                     }
                     return list;
                 });
@@ -993,7 +997,6 @@ public partial class SftpTabViewModel : ViewModelBase
         });
     }
 
-    private void InvalidateZeroByteCacheForFolder(string? folderPath) => _zeroByteChecker.InvalidateFolder(folderPath);
     private void InvalidateZeroByteCacheRecursive(string? folderPath) => _zeroByteChecker.InvalidateRecursive(folderPath);
 
     [RelayCommand]

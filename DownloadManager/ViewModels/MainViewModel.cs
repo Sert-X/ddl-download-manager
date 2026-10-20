@@ -1,4 +1,7 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
+using System.Text.RegularExpressions;
 using System.IO;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -37,6 +40,8 @@ public partial class MainWindowViewModel : ViewModelBase
     private readonly LogService _logService;
     private readonly ILogger<SftpTabViewModel> _sftpLogger;
 
+    public VideoboxTabViewModel Videobox { get; }
+
     /// <summary>Stato condiviso tra i tab.</summary>
     public SharedState Shared { get; }
 
@@ -53,6 +58,12 @@ public partial class MainWindowViewModel : ViewModelBase
 
     // --- Log globale ---
     public ObservableCollection<LogEntry> Logs => _logService.Logs;
+
+    /// <summary>Versione mostrata nel titolo, letta dall'assembly (non più scritta a mano).</summary>
+    public string AppVersionText { get; } =
+        System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version is { } v
+            ? $"v{v.Major}.{v.Minor}.{v.Build}"
+            : "";
 
     // --- Badge proxy (top bar) ---
     public string ActiveProxyBadgeText
@@ -109,7 +120,8 @@ public partial class MainWindowViewModel : ViewModelBase
         ILogger<DownloadTabViewModel> downloadLogger,
         ILogger<StreamingTabViewModel> streamingLogger,
         IStreamingCommunityService streamingCommunityService,
-        AccountTabViewModel accountVm)
+        AccountTabViewModel accountVm,
+        VideoboxTabViewModel videobox)
     {
         Shared = new SharedState();
         _animeWorldService = animeWorldService;
@@ -133,8 +145,6 @@ public partial class MainWindowViewModel : ViewModelBase
         // ============================================================
 
         AnimeDownload = new DownloadTabViewModel(
-            _animeWorldService,
-            _animeSaturnService,
             _animeProviderRegistry,
             _queueService,
             _fileNameBuilder,
@@ -151,6 +161,8 @@ public partial class MainWindowViewModel : ViewModelBase
             Shared);
 
         Account = accountVm;
+        Videobox = videobox;
+        Videobox.Initialize(Shared); // Passa lo stato condiviso che hai creato tu
 
         // ============================================================
         //  TOP BAR — BADGE PROXY
@@ -216,6 +228,25 @@ public partial class MainWindowViewModel : ViewModelBase
         //  IMPOSTAZIONI INIZIALI
         // ============================================================
 
+        // ============================================================
+        //  LOG — i messaggi di stato di ogni tab finiscono nel log globale
+        // ============================================================
+
+        TrackStatus(AnimeDownload, "Anime", nameof(DownloadTabViewModel.StatusMessage));
+        TrackStatus(Streaming, "Streaming", nameof(StreamingTabViewModel.StatusMessage));
+        TrackStatus(Account, "Account", nameof(AccountTabViewModel.StatusMessage));
+        TrackStatus(Organizer, "Organizza",
+            nameof(OrganizerTabViewModel.OrganizeStatusMessage),
+            nameof(OrganizerTabViewModel.MergeStatusMessage),
+            nameof(OrganizerTabViewModel.SplitStatusMessage));
+        TrackStatus(Sftp, "SFTP", nameof(SftpTabViewModel.SftpStatusMessage));
+        TrackStatus(Videobox, "Videobox", nameof(VideoboxTabViewModel.StatusMessage));
+        TrackStatus(Proxy, "Proxy", nameof(ProxyTabViewModel.ProxyStatusMessage));
+        TrackStatus(Domains, "Domini", nameof(DomainsTabViewModel.StatusMessage));
+
+        foreach (var entry in Logs) AddToFilteredLogs(entry);
+        Logs.CollectionChanged += OnLogsChanged;
+
         Shared.BaseDownloadFolder = _settings.Current.BaseDownloadFolder;
         Shared.CreateSeriesFolder = _settings.Current.CreateSeriesFolder;
         ThemeVariant = _settings.Current.ThemeVariant;
@@ -240,15 +271,113 @@ public partial class MainWindowViewModel : ViewModelBase
     //  LOG
     // ============================================================
 
+    // ---- Filtri del log ----
+
+    /// <summary>Log visibili nel pannello, secondo i filtri di livello e sezione.</summary>
+    public ObservableCollection<LogEntry> FilteredLogs { get; } = new();
+
+    private const string AllLogCategories = "Tutte le sezioni";
+    public ObservableCollection<string> LogCategories { get; } = new() { AllLogCategories };
+
+    public string[] LogLevelFilters { get; } = { "Tutti i livelli", "Avvisi ed errori", "Solo errori" };
+
+    [ObservableProperty] private string _selectedLogCategory = AllLogCategories;
+    [ObservableProperty] private int _selectedLogLevelFilter;
+
+    partial void OnSelectedLogCategoryChanged(string value) => RebuildFilteredLogs();
+    partial void OnSelectedLogLevelFilterChanged(int value) => RebuildFilteredLogs();
+
+    private bool MatchesLogFilter(LogEntry e)
+    {
+        if (SelectedLogLevelFilter == 1 && e.Level == Models.LogLevel.Info) return false;
+        if (SelectedLogLevelFilter == 2 && e.Level != Models.LogLevel.Error) return false;
+        return SelectedLogCategory is null or AllLogCategories || e.Category == SelectedLogCategory;
+    }
+
+    private void AddToFilteredLogs(LogEntry e)
+    {
+        if (!LogCategories.Contains(e.Category)) LogCategories.Add(e.Category);
+        if (MatchesLogFilter(e)) FilteredLogs.Add(e);
+    }
+
+    private void RebuildFilteredLogs()
+    {
+        FilteredLogs.Clear();
+        foreach (var e in Logs)
+            if (MatchesLogFilter(e)) FilteredLogs.Add(e);
+    }
+
+    private void OnLogsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        switch (e.Action)
+        {
+            case NotifyCollectionChangedAction.Add when e.NewItems != null:
+                foreach (LogEntry entry in e.NewItems) AddToFilteredLogs(entry);
+                break;
+            case NotifyCollectionChangedAction.Remove when e.OldItems != null:
+                // Il LogService toglie le voci più vecchie: sono in testa, la ricerca è immediata.
+                foreach (LogEntry entry in e.OldItems) FilteredLogs.Remove(entry);
+                break;
+            default:
+                RebuildFilteredLogs();
+                break;
+        }
+    }
+
+    // ---- Messaggi di stato delle tab ----
+
+    private static readonly Regex DigitsRegex = new(@"\d+", RegexOptions.Compiled);
+    private readonly Dictionary<string, (string Pattern, DateTime At)> _lastStatusLog = new();
+
+    private void TrackStatus(INotifyPropertyChanged vm, string category, params string[] properties)
+    {
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == null || Array.IndexOf(properties, e.PropertyName) < 0) return;
+            LogStatus(category, vm.GetType().GetProperty(e.PropertyName)?.GetValue(vm) as string);
+        };
+    }
+
+    private void LogStatus(string category, string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return;
+
+        // I contatori di avanzamento ("Test 3/50...") cambiano di continuo: se il messaggio
+        // differisce dal precedente solo nei numeri ed è recente, non lo ripeto.
+        var pattern = DigitsRegex.Replace(message, "#");
+        var now = DateTime.Now;
+        lock (_lastStatusLog)
+        {
+            if (_lastStatusLog.TryGetValue(category, out var last) &&
+                last.Pattern == pattern && now - last.At < TimeSpan.FromSeconds(10))
+                return;
+            _lastStatusLog[category] = (pattern, now);
+        }
+
+        _logService.Add(new LogEntry { Category = category, Level = GuessLevel(message), Message = message });
+    }
+
+    private static Models.LogLevel GuessLevel(string message)
+    {
+        var m = message.ToLowerInvariant();
+        if (m.Contains("errore") || m.Contains("\u274c") || m.Contains("fallit") || m.Contains("impossibile") || m.Contains("non riuscit"))
+            return Models.LogLevel.Error;
+        if (m.Contains("\u26a0") || m.Contains("attenzione") || m.Contains("annullat") || m.Contains("interrott") || m.Contains("scadut") || m.Contains("disconness"))
+            return Models.LogLevel.Warning;
+        return Models.LogLevel.Info;
+    }
+
+    private static string FormatLogLine(LogEntry l) => $"{l.TimestampText} {l.LevelIcon} [{l.Category}] {l.Message}";
+
     [RelayCommand]
     private async Task CopyLogsAsync()
     {
         try
         {
-            var text = string.Join(Environment.NewLine,
-                Logs.Select(l => $"{l.TimestampText} {l.LevelIcon} [{l.Category}] {l.Message}"));
+            var text = string.Join(Environment.NewLine, FilteredLogs.Select(FormatLogLine));
 
-            // Usa clip.exe di Windows: sempre presente, indipendente dall'API Avalonia.
+            // clip.exe di Windows: sempre presente. Il testo va in UTF-16 con BOM,
+            // altrimenti viene letto nella codepage OEM e gli accenti si rovinano.
             var psi = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "clip.exe",
@@ -260,13 +389,17 @@ public partial class MainWindowViewModel : ViewModelBase
             using var proc = System.Diagnostics.Process.Start(psi);
             if (proc == null) return;
 
-            await proc.StandardInput.WriteAsync(text);
-            proc.StandardInput.Close();
+            var stdin = proc.StandardInput.BaseStream;
+            await stdin.WriteAsync(System.Text.Encoding.Unicode.GetPreamble());
+            await stdin.WriteAsync(System.Text.Encoding.Unicode.GetBytes(text));
+            stdin.Close();
             await proc.WaitForExitAsync();
+
+            LogStatus("Generale", $"Copiate {FilteredLogs.Count} righe di log negli appunti.");
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[COPY-LOG] {ex}");
+            LogStatus("Generale", $"Errore copia log: {ex.Message}");
         }
     }
 
@@ -301,14 +434,12 @@ public partial class MainWindowViewModel : ViewModelBase
             if (file is null) return;
 
             var path = file.Path.LocalPath;
-            var lines = Logs.Select(l =>
-                $"{l.TimestampText} {l.LevelIcon} [{l.Category}] {l.Message}");
-
-            await File.WriteAllLinesAsync(path, lines);
+            await File.WriteAllLinesAsync(path, Logs.Select(FormatLogLine));
+            LogStatus("Generale", $"Log esportato in {path}");
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[EXPORT-LOG] {ex}");
+            LogStatus("Generale", $"Errore esportazione log: {ex.Message}");
         }
     }
 

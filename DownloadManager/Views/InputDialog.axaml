@@ -1,27 +1,38 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="DownloadManager.Views.InputDialog"
-        Width="420" Height="180"
+        Title="Input"
+        Width="460"
+        SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         CanResize="False"
-        Title="Input">
-    <DockPanel Margin="20">
-        <TextBlock x:Name="PromptText"
-                   DockPanel.Dock="Top"
-                   TextWrapping="Wrap"
-                   Margin="0,0,0,12"/>
+        ShowInTaskbar="False"
+        Background="{DynamicResource AppBackgroundBrush}">
 
-        <StackPanel DockPanel.Dock="Bottom"
-                    Orientation="Horizontal"
-                    HorizontalAlignment="Right"
-                    Spacing="10"
-                    Margin="0,15,0,0">
-            <Button x:Name="CancelButton" Content="Annulla" Width="90" Click="OnCancelClick"/>
-            <Button x:Name="OkButton" Content="OK" Width="90" IsDefault="True" Click="OnOkClick"/>
+    <StackPanel Margin="22" Spacing="16">
+
+        <Grid ColumnDefinitions="Auto, *">
+            <Border Width="42" Height="42" CornerRadius="21"
+                    Background="{DynamicResource AppAccentSoftBrush}"
+                    VerticalAlignment="Top">
+                <Path Classes="icon accent" Data="{StaticResource IconEdit}" Width="20" Height="20"/>
+            </Border>
+            <StackPanel Grid.Column="1" Margin="14,0,0,0" Spacing="6" VerticalAlignment="Center">
+                <TextBlock x:Name="TitleText" Text="Input" FontSize="15" FontWeight="Bold"/>
+                <TextBlock x:Name="PromptText" FontSize="13" TextWrapping="Wrap"
+                           Foreground="{DynamicResource AppTextMutedBrush}"/>
+            </StackPanel>
+        </Grid>
+
+        <TextBox x:Name="InputBox" KeyDown="OnInputKeyDown"/>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+            <Button x:Name="CancelButton" Classes="ghost" MinWidth="100" Click="OnCancelClick">
+                <TextBlock Text="Annulla"/>
+            </Button>
+            <Button x:Name="OkButton" Classes="accent" MinWidth="100" IsDefault="True" Click="OnOkClick">
+                <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCheck}"/><TextBlock Text="OK"/></StackPanel>
+            </Button>
         </StackPanel>
-
-        <TextBox x:Name="InputBox"
-                 VerticalAlignment="Top"
-                 KeyDown="OnInputKeyDown"/>
-    </DockPanel>
+    </StackPanel>
 </Window>

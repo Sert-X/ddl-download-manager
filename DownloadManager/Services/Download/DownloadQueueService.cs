@@ -18,13 +18,22 @@ public class DownloadQueueService
     private readonly List<DownloadItem> _pending = new();
     private readonly HashSet<int> _pendingIds = new();
     private readonly Dictionary<int, CancellationTokenSource> _active = new();
+    /// <summary>Categoria (anime / streaming) di ogni download attivo: ogni categoria ha i suoi slot.</summary>
+    private readonly Dictionary<int, string> _activeCategory = new();
     private readonly object _queueLock = new();
 
     private readonly SemaphoreSlim _dispatchGate = new(1, 1);
 
-    private int _maxConcurrency = 3;
-    private bool _isPaused = true;
-    private bool _autoStartOnFirstEnqueue = true;
+    private const int DefaultMaxConcurrency = 3;
+    private readonly Dictionary<string, int> _maxConcurrency = new();
+
+    /// <summary>
+    /// Categorie la cui coda è in esecuzione. All'avvio è vuoto: i download ripristinati
+    /// dalla sessione precedente restano fermi finché in quella categoria non si avvia
+    /// qualcosa (Avvia tutti, nuovo accodamento, riprendi...). Accodare un anime non fa più
+    /// partire i film rimasti in coda, e viceversa.
+    /// </summary>
+    private readonly HashSet<string> _runningCategories = new();
     private bool _isRunning = true;
 
     public DownloadQueueService(
@@ -39,22 +48,32 @@ public class DownloadQueueService
 
     public ObservableCollection<DownloadItem> AllItems { get; } = new();
 
-    public int MaxConcurrency
+    /// <summary>Download simultanei per una categoria (ognuna ha i propri slot).</summary>
+    public int GetMaxConcurrency(string category)
     {
-        get => _maxConcurrency;
-        set
+        lock (_queueLock)
+            return _maxConcurrency.TryGetValue(category, out var v) ? v : DefaultMaxConcurrency;
+    }
+
+    public void SetMaxConcurrency(string category, int value)
+    {
+        value = Math.Clamp(value, 1, 20);
+        lock (_queueLock)
         {
-            if (value < 1) value = 1;
-            if (value > 20) value = 20;
-            _maxConcurrency = value;
-            _logger.LogInformation("Max concurrency: {Value}", value);
-            TryDispatch();
+            if (_maxConcurrency.TryGetValue(category, out var old) && old == value) return;
+            _maxConcurrency[category] = value;
         }
+        _logger.LogInformation("[QUEUE] Download simultanei per '{Category}': {Value}", category, value);
+        TryDispatch();
     }
 
     public int ActiveCount { get { lock (_queueLock) return _active.Count; } }
     public int PendingCount { get { lock (_queueLock) return _pending.Count; } }
-    public bool IsPaused => _isPaused;
+
+    private void MarkRunning(string category)
+    {
+        lock (_queueLock) _runningCategories.Add(category);
+    }
 
     public event Action? QueueChanged;
 
@@ -62,16 +81,49 @@ public class DownloadQueueService
     //  RESTORE / ENQUEUE
     // ============================================================
 
+    /// <summary>
+    /// Elimina le cartelle temporanee di yt-dlp (una per download, chiamata con l'Id)
+    /// che non appartengono a nessun download ancora da finire: residui di download
+    /// falliti, annullati o rimossi che altrimenti restano su disco per sempre.
+    /// </summary>
+    private void CleanupStaleTempFolders(HashSet<int> keepIds)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "DDLDownloadManager", "ytdlp");
+        if (!Directory.Exists(root)) return;
+
+        int removed = 0;
+        foreach (var dir in Directory.GetDirectories(root))
+        {
+            if (int.TryParse(Path.GetFileName(dir), out var id) && keepIds.Contains(id)) continue;
+            try { Directory.Delete(dir, recursive: true); removed++; }
+            catch (Exception ex) { _logger.LogDebug(ex, "[QUEUE] Cartella temporanea non eliminabile: {Dir}", dir); }
+        }
+        if (removed > 0)
+            _logger.LogInformation("[QUEUE] Eliminate {N} cartelle temporanee di download non più in coda", removed);
+    }
+
     public async Task RestoreFromDatabaseAsync()
     {
+        // Prima di riprendere qualsiasi download: via i yt-dlp/ffmpeg orfani di una
+        // sessione chiusa male, che altrimenti scriverebbero negli stessi file.
+        try { DownloadManager.Helpers.OrphanProcessCleaner.KillOrphans(_logger); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[QUEUE] Pulizia processi orfani fallita"); }
+
         var unfinished = await _repository.GetUnfinishedAsync();
         _logger.LogInformation("Ripristino {Count} download non completati (in pausa)", unfinished.Count);
+
+        CleanupStaleTempFolders(unfinished.Select(i => i.Id).ToHashSet());
 
         foreach (var item in unfinished)
         {
             RewireStreamingExtractors(item);
             item.Status = DownloadStatus.Pending;
             await AddToListAsync(item);
+            lock (_queueLock)
+            {
+                if (_pendingIds.Add(item.Id))
+                    _pending.Add(item);
+            }
         }
     }
 
@@ -93,40 +145,15 @@ public class DownloadQueueService
         var capturedSeason = item.SeasonNumber;
         var capturedEp = item.EpisodeNumber;
         var capturedEpId = item.EpisodeId > 0 ? (int?)item.EpisodeId : null;
-        var capturedQuality = item.QualityName ?? "";
-
-        item.UrlExtractor = async t =>
-        {
-            var master = await sc.GetVideoUrlAsync(
-                capturedLink, isSeries: capturedIsSeries,
-                seasonNumber: capturedSeason,
-                episodeNumber: capturedEp,
-                episodeId: capturedEpId);
-
-            if (string.IsNullOrEmpty(master)) return null;
-            if (string.IsNullOrEmpty(capturedQuality)) return master;
-
-            var (v, _) = await sc.ResolveQualityAsync(master, capturedQuality, t);
-            return v;
-        };
+        // Restituisce la playlist master: qualità, lingue audio e sottotitoli vengono
+        // scelti dal download stesso (DownloadService.Tracks) in base ai campi salvati.
+        item.UrlExtractor = _ => sc.GetVideoUrlAsync(
+            capturedLink, isSeries: capturedIsSeries,
+            seasonNumber: capturedSeason,
+            episodeNumber: capturedEp,
+            episodeId: capturedEpId);
 
         item.CookieExtractor = async _ => await sc.GetSessionCookiesNetscapeAsync();
-
-        if (!string.IsNullOrEmpty(capturedQuality))
-        {
-            item.AudioExtractor = async t =>
-            {
-                var master = await sc.GetVideoUrlAsync(
-                    capturedLink, isSeries: capturedIsSeries,
-                    seasonNumber: capturedSeason,
-                    episodeNumber: capturedEp,
-                    episodeId: capturedEpId);
-
-                if (string.IsNullOrEmpty(master)) return null;
-                var (_, a) = await sc.ResolveQualityAsync(master, capturedQuality, t);
-                return a;
-            };
-        }
     }
 
     // ============================================================
@@ -148,11 +175,7 @@ public class DownloadQueueService
                 _pending.Add(item);
         }
 
-        if (_autoStartOnFirstEnqueue)
-        {
-            _autoStartOnFirstEnqueue = false;
-            _isPaused = false;
-        }
+        MarkRunning(item.Category);
 
         QueueChanged?.Invoke();
         TryDispatch();
@@ -182,23 +205,16 @@ public class DownloadQueueService
             item.Status = DownloadStatus.Pending;
 
         // 3. Aggiungi TUTTI ad AllItems con UNA SOLA InvokeAsync
-        if (Dispatcher.UIThread.CheckAccess())
+        //    (HashSet: evita una scansione di AllItems per ogni item)
+        void AddAll()
         {
+            var present = AllItems.ToHashSet();
             foreach (var item in items)
-            {
-                if (!AllItems.Contains(item)) AllItems.Add(item);
-            }
+                if (present.Add(item)) AllItems.Add(item);
         }
-        else
-        {
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                foreach (var item in items)
-                {
-                    if (!AllItems.Contains(item)) AllItems.Add(item);
-                }
-            });
-        }
+
+        if (Dispatcher.UIThread.CheckAccess()) AddAll();
+        else await Dispatcher.UIThread.InvokeAsync(AddAll);
 
         // 4. Aggiungi TUTTI alla pending con UN SOLO lock
         lock (_queueLock)
@@ -210,11 +226,8 @@ public class DownloadQueueService
             }
         }
 
-        if (_autoStartOnFirstEnqueue)
-        {
-            _autoStartOnFirstEnqueue = false;
-            _isPaused = false;
-        }
+        foreach (var category in items.Select(i => i.Category).Distinct())
+            MarkRunning(category);
 
         // 5. UNA SOLA notifica + UN SOLO dispatch
         QueueChanged?.Invoke();
@@ -308,8 +321,7 @@ public class DownloadQueueService
             _pendingIds.Add(item.Id);
         }
 
-        _isPaused = false;
-        _autoStartOnFirstEnqueue = false;
+        MarkRunning(item.Category);
 
         QueueChanged?.Invoke();
         TryDispatch();
@@ -359,199 +371,10 @@ public class DownloadQueueService
         }
     }
 
-    // ============================================================
-    //  START / PAUSE / CANCEL (globali)
-    // ============================================================
-
-    public void StartAll()
-    {
-        _isPaused = false;
-        _autoStartOnFirstEnqueue = false;
-
-        lock (_queueLock)
-        {
-            foreach (var item in AllItems)
-            {
-                if (item.Status == DownloadStatus.Paused ||
-                    item.Status == DownloadStatus.Pending ||
-                    item.Status == DownloadStatus.Failed)
-                {
-                    item.Status = DownloadStatus.Pending;
-                    item.ErrorMessage = string.Empty;
-
-                    if (!_active.ContainsKey(item.Id) && _pendingIds.Add(item.Id))
-                        _pending.Add(item);
-                }
-            }
-        }
-
-        QueueChanged?.Invoke();
-        TryDispatch();
-    }
-
-    public void PauseAll()
-    {
-        _isPaused = true;
-        _autoStartOnFirstEnqueue = false;
-
-        List<DownloadItem> toPause;
-        lock (_queueLock)
-        {
-            toPause = _active.Keys
-                .Select(id => AllItems.FirstOrDefault(i => i.Id == id))
-                .Where(i => i != null)
-                .Cast<DownloadItem>()
-                .ToList();
-
-            foreach (var item in _pending)
-            {
-                if (item.Status == DownloadStatus.Pending)
-                    item.Status = DownloadStatus.Paused;
-            }
-            _pending.Clear();
-            _pendingIds.Clear();
-        }
-
-        foreach (var item in toPause)
-        {
-            item.PauseRequested = true;
-            if (_active.TryGetValue(item.Id, out var cts))
-                cts.Cancel();
-        }
-
-        QueueChanged?.Invoke();
-    }
-
-    public void CancelAll()
-    {
-        List<int> activeIds;
-        List<DownloadItem> toCancel;
-
-        lock (_queueLock)
-        {
-            activeIds = _active.Keys.ToList();
-            toCancel = AllItems
-                .Where(i => i.Status == DownloadStatus.Pending
-                         || i.Status == DownloadStatus.Paused
-                         || i.Status == DownloadStatus.Failed)
-                .ToList();
-
-            _pending.Clear();
-            _pendingIds.Clear();
-        }
-
-        foreach (var item in toCancel)
-        {
-            item.PauseRequested = false;
-            item.Status = DownloadStatus.Cancelled;
-        }
-
-        foreach (var id in activeIds)
-        {
-            if (_active.TryGetValue(id, out var cts))
-            {
-                try { cts.Cancel(); } catch { }
-            }
-        }
-
-        QueueChanged?.Invoke();
-    }
-
-    public void ClearCompleted()
-    {
-        var toRemove = AllItems.Where(i => i.Status == DownloadStatus.Completed).ToList();
-        Dispatcher.UIThread.Post(() =>
-        {
-            foreach (var item in toRemove) AllItems.Remove(item);
-        });
-        QueueChanged?.Invoke();
-    }
-
-    public void ClearCancelled()
-    {
-        List<DownloadItem> toRemove;
-        lock (_queueLock)
-        {
-            toRemove = AllItems.Where(i => i.Status == DownloadStatus.Cancelled).ToList();
-            foreach (var item in toRemove)
-            {
-                _pending.RemoveAll(p => p.Id == item.Id);
-                _pendingIds.Remove(item.Id);
-            }
-        }
-        Dispatcher.UIThread.Post(() =>
-        {
-            foreach (var item in toRemove) AllItems.Remove(item);
-        });
-        QueueChanged?.Invoke();
-    }
-
-    public void ClearFailed()
-    {
-        var toRemove = AllItems.Where(i => i.Status == DownloadStatus.Failed).ToList();
-        Dispatcher.UIThread.Post(() =>
-        {
-            foreach (var item in toRemove) AllItems.Remove(item);
-        });
-        QueueChanged?.Invoke();
-    }
-
     public void CancelGroup(SeriesGroup group)
     {
         foreach (var item in group.Items.ToList())
             CancelItem(item);
-    }
-
-    public async Task DeleteAllAsync()
-    {
-        CancelAll();
-        await Task.Delay(300);
-
-        List<DownloadItem> snapshot;
-        lock (_queueLock)
-        {
-            snapshot = AllItems.ToList();
-            _pending.Clear();
-            _pendingIds.Clear();
-        }
-
-        foreach (var item in snapshot)
-        {
-            if (item.Id > 0)
-            {
-                try { await _repository.DeleteAsync(item.Id); } catch { }
-            }
-        }
-
-        await Dispatcher.UIThread.InvokeAsync(() => AllItems.Clear());
-
-        QueueChanged?.Invoke();
-    }
-
-    public async Task DeleteEverythingAsync()
-    {
-        CancelAll();
-        await Task.Delay(300);
-
-        List<DownloadItem> snapshot;
-        lock (_queueLock)
-        {
-            snapshot = AllItems.ToList();
-            _pending.Clear();
-            _pendingIds.Clear();
-        }
-
-        foreach (var item in snapshot)
-        {
-            if (item.Id > 0)
-            {
-                try { await _repository.DeleteAsync(item.Id); } catch { }
-            }
-        }
-
-        await Dispatcher.UIThread.InvokeAsync(() => AllItems.Clear());
-
-        QueueChanged?.Invoke();
     }
 
     // ============================================================
@@ -581,7 +404,7 @@ public class DownloadQueueService
         QueueChanged?.Invoke();
     }
 
-    public void ResumeItem(DownloadItem item, bool force = false)
+    public void ResumeItem(DownloadItem item)
     {
         if (item.Status == DownloadStatus.Completed) return;
 
@@ -601,8 +424,7 @@ public class DownloadQueueService
                 _pending.Add(item);
         }
 
-        _isPaused = false;
-        _autoStartOnFirstEnqueue = false;
+        MarkRunning(item.Category);
 
         QueueChanged?.Invoke();
         TryDispatch();
@@ -645,11 +467,58 @@ public class DownloadQueueService
 
         if (item.Id > 0)
         {
-            try { await _repository.DeleteAsync(item.Id); } catch { }
+            try { await _repository.DeleteAsync(item.Id); }
+            catch (Exception ex) { _logger.LogWarning(ex, "[QUEUE] Eliminazione dal database fallita (Id {Id})", item.Id); }
         }
 
         await Dispatcher.UIThread.InvokeAsync(() => AllItems.Remove(item));
 
+        QueueChanged?.Invoke();
+    }
+
+    public async Task RemoveManyAsync(IReadOnlyList<DownloadItem> items)
+    {
+        if (items == null || items.Count == 0) return;
+
+        var activeCtsToCancel = new List<CancellationTokenSource>();
+        var idsToRemove = new HashSet<int>();
+
+        lock (_queueLock)
+        {
+            foreach (var item in items)
+            {
+                idsToRemove.Add(item.Id);
+                if (_active.TryGetValue(item.Id, out var cts))
+                {
+                    activeCtsToCancel.Add(cts);
+                }
+            }
+
+            // Rimuoviamo subito dalla coda interna
+            _pending.RemoveAll(i => idsToRemove.Contains(i.Id));
+            foreach (var id in idsToRemove)
+                _pendingIds.Remove(id);
+        }
+
+        // 1. Cancella i download attivi (in parallelo)
+        foreach (var cts in activeCtsToCancel)
+        {
+            try { cts.Cancel(); } catch { }
+        }
+
+        // Se c'erano file attivi, aspetta UNA sola volta per tutti
+        if (activeCtsToCancel.Count > 0)
+        {
+            await Task.Delay(200); 
+        }
+
+        // 2. Elimina dal Database con una sola query
+        await DeleteFromDatabaseAsync(items);
+
+        // 3. Rimuovi dalla UI in un solo colpo (UNA SOLA InvokeAsync)
+        await RemoveFromAllItemsAsync(items);
+
+        // 4. Notifica una sola volta
         QueueChanged?.Invoke();
     }
 
@@ -686,9 +555,12 @@ public class DownloadQueueService
             item.IsPriority = false;
         });
 
-        try { await _repository.ClearChunksAsync(item.Id); } catch { }
+        try { await _repository.ClearChunksAsync(item.Id); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[QUEUE] Pulizia chunk fallita (Id {Id})", item.Id); }
 
-        for (int i = 0; i < 20; i++)
+        // Aspetta che il tentativo precedente sia davvero chiuso (yt-dlp può metterci
+        // qualche secondo): ripartire prima voleva dire due processi sugli stessi file.
+        for (int i = 0; i < 300; i++)
         {
             lock (_queueLock)
             {
@@ -696,6 +568,19 @@ public class DownloadQueueService
                     break;
             }
             await Task.Delay(50);
+        }
+        lock (_queueLock)
+        {
+            if (_active.ContainsKey(item.Id))
+            {
+                _logger.LogWarning("[QUEUE] Riprova annullata: il download {Id} non si è ancora fermato", item.Id);
+                Dispatcher.UIThread.Post(() =>
+                {
+                    item.Status = DownloadStatus.Failed;
+                    item.ErrorMessage = "Il tentativo precedente si sta ancora chiudendo: riprova tra qualche secondo.";
+                });
+                return;
+            }
         }
 
         lock (_queueLock)
@@ -707,8 +592,7 @@ public class DownloadQueueService
                 _pending.Add(item);
         }
 
-        _isPaused = false;
-        _autoStartOnFirstEnqueue = false;
+        MarkRunning(item.Category);
 
         QueueChanged?.Invoke();
         TryDispatch();
@@ -754,8 +638,7 @@ public class DownloadQueueService
 
     public void StartAll(string category)
     {
-        _isPaused = false;
-        _autoStartOnFirstEnqueue = false;
+        MarkRunning(category);
 
         lock (_queueLock)
         {
@@ -778,6 +661,18 @@ public class DownloadQueueService
         TryDispatch();
     }
 
+    /// <summary>
+    /// Toglie dalla coda d'attesa gli item di una categoria, anche dall'indice degli ID:
+    /// senza questo, "Avvia tutti" dopo una pausa non li riaccodava più (restavano in pausa).
+    /// Da chiamare con _queueLock acquisito.
+    /// </summary>
+    private void RemovePendingOfCategory(string category)
+    {
+        foreach (var item in _pending)
+            if (item.Category == category) _pendingIds.Remove(item.Id);
+        _pending.RemoveAll(i => i.Category == category);
+    }
+
     public void PauseAll(string category)
     {
         List<DownloadItem> toPause;
@@ -789,7 +684,7 @@ public class DownloadQueueService
                 .Cast<DownloadItem>()
                 .ToList();
 
-            _pending.RemoveAll(i => i.Category == category);
+            RemovePendingOfCategory(category);
 
             foreach (var item in AllItems.Where(i =>
                 i.Category == category && i.Status == DownloadStatus.Pending))
@@ -828,7 +723,7 @@ public class DownloadQueueService
                             i.Status == DownloadStatus.Failed))
                 .ToList();
 
-            _pending.RemoveAll(i => i.Category == category);
+            RemovePendingOfCategory(category);
         }
 
         foreach (var item in toCancel)
@@ -893,6 +788,29 @@ public class DownloadQueueService
         QueueChanged?.Invoke();
     }
 
+    private async Task DeleteFromDatabaseAsync(IEnumerable<DownloadItem> items)
+    {
+        var ids = items.Where(i => i.Id > 0).Select(i => i.Id).ToList();
+        try { await _repository.DeleteManyAsync(ids); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[QUEUE] Eliminazione di {Count} download dal database fallita", ids.Count); }
+    }
+
+    /// <summary>Toglie più item da AllItems scorrendo la lista una volta sola (Remove singoli sono O(n) ciascuno).</summary>
+    private async Task RemoveFromAllItemsAsync(IEnumerable<DownloadItem> items)
+    {
+        var set = items.ToHashSet();
+        if (set.Count == 0) return;
+
+        void Remove()
+        {
+            for (int i = AllItems.Count - 1; i >= 0; i--)
+                if (set.Contains(AllItems[i])) AllItems.RemoveAt(i);
+        }
+
+        if (Dispatcher.UIThread.CheckAccess()) Remove();
+        else await Dispatcher.UIThread.InvokeAsync(Remove);
+    }
+
     public async Task DeleteEverythingAsync(string category)
     {
         CancelAll(category);
@@ -902,22 +820,13 @@ public class DownloadQueueService
         lock (_queueLock)
         {
             snapshot = AllItems.Where(i => i.Category == category).ToList();
+            var ids = snapshot.Select(i => i.Id).ToHashSet();
             _pending.RemoveAll(i => i.Category == category);
-            _pendingIds.RemoveWhere(id => snapshot.Any(s => s.Id == id));
+            _pendingIds.RemoveWhere(ids.Contains);
         }
 
-        foreach (var item in snapshot)
-        {
-            if (item.Id > 0)
-            {
-                try { await _repository.DeleteAsync(item.Id); } catch { }
-            }
-        }
-
-        await Dispatcher.UIThread.InvokeAsync(() =>
-        {
-            foreach (var item in snapshot) AllItems.Remove(item);
-        });
+        await DeleteFromDatabaseAsync(snapshot);
+        await RemoveFromAllItemsAsync(snapshot);
 
         QueueChanged?.Invoke();
     }
@@ -942,23 +851,33 @@ public class DownloadQueueService
                     lock (_queueLock)
                     {
                         if (!_isRunning) return;
-                        if (_isPaused) return;
-                        if (_active.Count >= _maxConcurrency) return;
 
-                        while (_pending.Count > 0)
+                        // Slot liberi per categoria: anime e film/serie non si rubano il posto.
+                        var activeByCategory = new Dictionary<string, int>();
+                        foreach (var c in _activeCategory.Values)
+                            activeByCategory[c] = activeByCategory.GetValueOrDefault(c) + 1;
+
+                        for (int i = 0; i < _pending.Count; i++)
                         {
-                            var candidate = _pending[0];
-                            _pending.RemoveAt(0);
+                            var candidate = _pending[i];
 
                             if (candidate.Status == DownloadStatus.Cancelled ||
                                 candidate.Status == DownloadStatus.Completed ||
                                 candidate.Status == DownloadStatus.Paused)
                             {
+                                _pending.RemoveAt(i--);
                                 _pendingIds.Remove(candidate.Id);
                                 continue;
                             }
 
+                            var category = candidate.Category;
+                            if (!_runningCategories.Contains(category)) continue;
+
+                            var max = _maxConcurrency.TryGetValue(category, out var m) ? m : DefaultMaxConcurrency;
+                            if (activeByCategory.GetValueOrDefault(category) >= max) continue;
+
                             item = candidate;
+                            _pending.RemoveAt(i);
                             _pendingIds.Remove(candidate.Id);
                             break;
                         }
@@ -967,6 +886,7 @@ public class DownloadQueueService
 
                         cts = new CancellationTokenSource();
                         _active[item.Id] = cts;
+                        _activeCategory[item.Id] = item.Category;
                     }
 
                     _ = RunItemAsync(item!, cts!);
@@ -1018,10 +938,14 @@ public class DownloadQueueService
             lock (_queueLock)
             {
                 if (_active.TryGetValue(item.Id, out var currentCts) && currentCts == cts)
+                {
                     _active.Remove(item.Id);
+                    _activeCategory.Remove(item.Id);
+                }
             }
 
-            try { await _repository.UpdateAsync(item); } catch { }
+            try { await _repository.UpdateAsync(item); }
+            catch (Exception ex) { _logger.LogWarning(ex, "[QUEUE] Salvataggio stato fallito (Id {Id})", item.Id); }
 
             QueueChanged?.Invoke();
             TryDispatch();

@@ -2,57 +2,80 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:models="using:DownloadManager.Models"
         x:Class="DownloadManager.Views.RemoteFolderPickerDialog"
-        Width="620" Height="520"
+        Title="Seleziona cartella remota"
+        Width="640" Height="540"
+        MinWidth="460" MinHeight="380"
         WindowStartupLocation="CenterOwner"
         CanResize="True"
-        Title="Seleziona cartella remota">
+        ShowInTaskbar="False"
+        Background="{DynamicResource AppBackgroundBrush}">
 
-    <DockPanel Margin="15">
+    <DockPanel Margin="20">
 
-        <Grid DockPanel.Dock="Top" ColumnDefinitions="*, Auto, Auto" Margin="0,0,0,8">
-            <TextBox Grid.Column="0" x:Name="PathBox"
-                     IsReadOnly="True"
-                     FontFamily="Consolas,Menlo,monospace"
-                     Margin="0,0,8,0"/>
-            <Button Grid.Column="1" Content="🔄" Click="OnRefreshClick" Margin="0,0,8,0"
-                    ToolTip.Tip="Aggiorna"/>
-            <Button Grid.Column="2" Content="⬅ Su" Click="OnGoUpClick"
-                    ToolTip.Tip="Cartella superiore"/>
+        <!-- Intestazione -->
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto, *" Margin="0,0,0,16">
+            <Border Width="42" Height="42" CornerRadius="21" Background="{DynamicResource AppAccentSoftBrush}">
+                <Path Classes="icon accent" Data="{StaticResource IconCloud}" Width="20" Height="20"/>
+            </Border>
+            <StackPanel Grid.Column="1" Margin="14,0,0,0" Spacing="2" VerticalAlignment="Center">
+                <TextBlock x:Name="HeaderText" Text="Seleziona cartella remota" FontSize="15" FontWeight="Bold"/>
+                <TextBlock Text="Doppio clic per entrare in una cartella, poi premi Seleziona." FontSize="12"
+                           Foreground="{DynamicResource AppTextMutedBrush}"/>
+            </StackPanel>
         </Grid>
 
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
-            <Button Content="🏠 Home" Click="OnHomeClick"/>
-            <Button Content="📂 Cartella corrente" Click="OnUseCurrentClick"
-                    ToolTip.Tip="Seleziona la cartella attualmente aperta"/>
-        </StackPanel>
+        <!-- Barra di navigazione -->
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto, Auto, Auto, *" Margin="0,0,0,10">
+            <Button Grid.Column="0" Classes="iconCircle" Click="OnGoUpClick" ToolTip.Tip="Cartella superiore" Margin="0,0,6,0">
+                <Path Classes="icon" Data="{StaticResource IconArrowUp}"/>
+            </Button>
+            <Button Grid.Column="1" Classes="iconCircle" Click="OnHomeClick" ToolTip.Tip="Cartella home dell'utente SFTP" Margin="0,0,6,0">
+                <Path Classes="icon" Data="{StaticResource IconHome}"/>
+            </Button>
+            <Button Grid.Column="2" Classes="iconCircle" Click="OnRefreshClick" ToolTip.Tip="Ricarica il contenuto" Margin="0,0,10,0">
+                <Path Classes="icon" Data="{StaticResource IconRefresh}"/>
+            </Button>
+            <TextBox Grid.Column="3" x:Name="PathBox" IsReadOnly="True"
+                     FontFamily="Consolas, Cascadia Mono, monospace" FontSize="12"
+                     VerticalContentAlignment="Center"
+                     ToolTip.Tip="Cartella attualmente aperta"/>
+        </Grid>
 
-        <StackPanel DockPanel.Dock="Bottom"
-                    Orientation="Horizontal"
-                    HorizontalAlignment="Right"
-                    Spacing="10"
-                    Margin="0,10,0,0">
-            <Button Content="Annulla" Width="100" Click="OnCancelClick" IsCancel="True"/>
-            <Button Content="Seleziona" Width="100" Click="OnOkClick" IsDefault="True"
-                    Background="#4CAF50" Foreground="White"/>
-        </StackPanel>
+        <!-- Pulsanti -->
+        <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*, Auto" Margin="0,14,0,0">
+            <Button Grid.Column="0" Classes="ghost" HorizontalAlignment="Left" Click="OnUseCurrentClick"
+                    ToolTip.Tip="Seleziona la cartella attualmente aperta (quella nel percorso in alto)">
+                <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconFolder}"/><TextBlock Text="Usa cartella corrente"/></StackPanel>
+            </Button>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                <Button Classes="ghost" MinWidth="100" Click="OnCancelClick" IsCancel="True">
+                    <TextBlock Text="Annulla"/>
+                </Button>
+                <Button Classes="accent" MinWidth="120" Click="OnOkClick" IsDefault="True"
+                        ToolTip.Tip="Seleziona la cartella evidenziata (o quella corrente se nessuna è evidenziata)">
+                    <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCheck}"/><TextBlock Text="Seleziona"/></StackPanel>
+                </Button>
+            </StackPanel>
+        </Grid>
 
-        <Border BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
-                BorderThickness="1"
-                CornerRadius="4">
-            <ListBox x:Name="FoldersList"
-                     Background="Transparent"
-                     DoubleTapped="OnFolderDoubleTapped">
-                <ListBox.ItemTemplate>
-                    <DataTemplate DataType="models:SftpRemoteEntry">
-                        <Grid ColumnDefinitions="30, *">
-                            <TextBlock Grid.Column="0" Text="📁" VerticalAlignment="Center"/>
-                            <TextBlock Grid.Column="1" Text="{Binding Name}"
-                                       VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"/>
-                        </Grid>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
+        <!-- Elenco cartelle -->
+        <Border Classes="card" Padding="6">
+            <Panel>
+                <ListBox x:Name="FoldersList" Background="Transparent" DoubleTapped="OnFolderDoubleTapped">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="models:SftpRemoteEntry">
+                            <StackPanel Classes="bi">
+                                <Path Classes="icon accent" Data="{StaticResource IconFolder}"/>
+                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <TextBlock x:Name="StatusText" IsVisible="False"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           TextWrapping="Wrap" TextAlignment="Center" Margin="20"
+                           FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}"/>
+            </Panel>
         </Border>
     </DockPanel>
 </Window>

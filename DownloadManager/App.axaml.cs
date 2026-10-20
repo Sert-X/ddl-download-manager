@@ -15,6 +15,7 @@ using DownloadManager.Services.Download;
 using DownloadManager.Services.FileOrganizer;
 using DownloadManager.Services.Logging;
 using DownloadManager.Services.Sftp;
+using DownloadManager.Services.Videobox;
 using DownloadManager.ViewModels;
 using DownloadManager.Views;
 using DownloadManager.Services.Domains;
@@ -31,6 +32,38 @@ public partial class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+        DownloadManager.Helpers.IconCentering.Install();
+    }
+
+    /// <summary>
+    /// Rete di sicurezza: un'eccezione non gestita (tipicamente in un handler
+    /// async void della UI) finisce nel log globale invece di chiudere l'app.
+    /// Gli errori fatali del dominio vengono anche scritti in crash.log.
+    /// </summary>
+    private static void InstallGlobalExceptionHandlers(ILogger logger)
+    {
+        Dispatcher.UIThread.UnhandledException += (_, e) =>
+        {
+            logger.LogError(e.Exception, "Errore non gestito nell'interfaccia");
+            e.Handled = true;
+        };
+
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            logger.LogError(e.Exception.GetBaseException(), "Errore non gestito in un'operazione in background");
+            e.SetObserved();
+        };
+
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            try
+            {
+                var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DDLDownloadManager");
+                Directory.CreateDirectory(dir);
+                File.AppendAllText(Path.Combine(dir, "crash.log"), $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {e.ExceptionObject}{Environment.NewLine}{Environment.NewLine}");
+            }
+            catch { /* ultima difesa: non si può fare altro */ }
+        };
     }
 
     public override void OnFrameworkInitializationCompleted()
@@ -44,9 +77,9 @@ public partial class App : Application
         var logService = new LogService();
         services.AddSingleton(logService);
 
+        // Niente console logger: l'app è WinExe e non ha una console da scriverci.
         services.AddLogging(builder =>
         {
-            builder.AddConsole();
             builder.AddProvider(new UiLoggerProvider(logService));
             builder.SetMinimumLevel(LogLevel.Information);
         });
@@ -87,10 +120,16 @@ public partial class App : Application
         services.AddSingleton<DomainResolver>();
         services.AddSingleton<DomainTester>();
 
+        // Registra VideoboxApiService e VideoboxTabViewModel
+        services.AddSingleton<VideoboxApiService>();
+        services.AddTransient<VideoboxTabViewModel>();
+
         services.AddTransient<MainWindowViewModel>();
         services.AddTransient<MainWindow>();
 
         Services = services.BuildServiceProvider();
+
+        InstallGlobalExceptionHandlers(Services.GetRequiredService<ILogger<App>>());
 
         // ============================================================
         //  2. BOOTSTRAP FFMPEG (copia in %LOCALAPPDATA%)
@@ -334,7 +373,8 @@ public partial class App : Application
                 }
 
                 var queue = Services!.GetRequiredService<DownloadQueueService>();
-                queue.CancelAll();
+                queue.CancelAll("anime");
+                queue.CancelAll("streaming");
 
                 var sftpService = Services!.GetRequiredService<ISftpService>();
                 var t1 = sftpService.DisconnectAsync();

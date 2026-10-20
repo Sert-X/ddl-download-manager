@@ -29,39 +29,24 @@ public partial class MainWindow : Window
 
     private bool _logCollapsed;
     private double _logHeightBeforeCollapse = 150;
+    private bool _syncingEpisodeSelection;
 
     private void OnToggleLogClick(object? sender, RoutedEventArgs e)
     {
-        _logCollapsed = !_logCollapsed;
-
+        _logCollapsed = ToggleLogButton.IsChecked != true;
         if (_logCollapsed)
         {
             _logHeightBeforeCollapse = LogPanel.Height;
-            LogPanel.Height = 36;
-            LogPanel.MaxHeight = 36;
-            if (LogScrollViewer != null) LogScrollViewer.IsVisible = false;
-            if (ToggleLogButton != null) ToggleLogButton.Content = "\u25B2";
+            LogPanel.MaxHeight = 43;
+            LogPanel.Height = 43;
+            LogScrollViewer.IsVisible = false;
         }
         else
         {
             LogPanel.MaxHeight = 400;
             LogPanel.Height = _logHeightBeforeCollapse;
-            if (LogScrollViewer != null) LogScrollViewer.IsVisible = true;
-            if (ToggleLogButton != null) ToggleLogButton.Content = "\u25BC";
+            LogScrollViewer.IsVisible = true;
         }
-    }
-    private bool _sftpConfigCollapsed;
-    private bool _syncingEpisodeSelection;
-
-    private void OnToggleSftpConfigClick(object? sender, RoutedEventArgs e)
-    {
-        _sftpConfigCollapsed = !_sftpConfigCollapsed;
-
-        if (SftpConfigBody != null)
-            SftpConfigBody.IsVisible = !_sftpConfigCollapsed;
-
-        if (ToggleSftpConfigButton != null)
-            ToggleSftpConfigButton.Content = _sftpConfigCollapsed ? "\u25BC" : "\u25B2";
     }
 
     public MainWindow(MainWindowViewModel viewModel, ISftpService sftpService)
@@ -97,6 +82,17 @@ public partial class MainWindow : Window
 
         DataContext = viewModel;
         _sftpService = sftpService;
+
+        // Log: segue le voci nuove solo se l'utente è già in fondo (non lo strappa
+        // via mentre sta leggendo righe più vecchie).
+        viewModel.FilteredLogs.CollectionChanged += (_, e) =>
+        {
+            if (e.Action != System.Collections.Specialized.NotifyCollectionChangedAction.Add) return;
+            var sv = LogScrollViewer;
+            bool atBottom = sv.Offset.Y >= sv.Extent.Height - sv.Viewport.Height - 40;
+            if (atBottom)
+                Avalonia.Threading.Dispatcher.UIThread.Post(sv.ScrollToEnd, Avalonia.Threading.DispatcherPriority.Background);
+        };
 
         LocalFilesGrid.AddHandler(
             PointerPressedEvent, OnLocalGridPointerPressed,
@@ -164,7 +160,7 @@ public partial class MainWindow : Window
         if (!_sftpService.IsConnected) return null;
 
         var start = Vm?.Sftp.SftpCurrentRemotePath ?? "/";
-        return await RemoteFolderPickerDialog.ShowAsync(this, _sftpService, start);
+        return await RemoteFolderPickerDialog.ShowAsync(this, _sftpService, start, title);
     }
 
     // ============================================================
@@ -677,7 +673,7 @@ public partial class MainWindow : Window
     private void OnProxyListSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (Vm == null || _syncingProxySelection) return;
-        if (sender is not ListBox lb) return;
+        if (sender is not ListBox) return;
 
         _syncingProxySelection = true;
         try

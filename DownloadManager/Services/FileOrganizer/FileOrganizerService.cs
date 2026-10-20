@@ -28,9 +28,6 @@ public class FileOrganizerService : IFileOrganizerService
 
     private static readonly Regex FirstNumberRegex = new(@"(\d{1,4})", RegexOptions.Compiled);
 
-    private static readonly Regex EpisodeStartRegex = new(
-        @"[\s_\-\._](?:Ep|Episode|Puntata|E\d|\d{1,4}[\s_\-\._])",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex TitleRegex = new(
         @"(?:Episodio|Ep|Episode|Puntata)\s*\d+(?:[\-\._]\d+)*\s*[-–]?\s*(.+)$",

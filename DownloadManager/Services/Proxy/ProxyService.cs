@@ -30,14 +30,43 @@ public class ProxyService
 
     public async Task SaveAsync(ProxyConfig p)
     {
+        // Un proxy nuovo (creato o importato) deve essere visibile anche ai
+        // provider, che leggono da All: senza questo non veniva mai usato.
+        if (!All.Contains(p)) All.Add(p);
+
         if (p.Id == 0) await _repository.InsertAsync(p);
         else await _repository.UpdateAsync(p);
+    }
+
+    /// <summary>
+    /// Salva più proxy in un'unica transazione, fuori dal thread UI.
+    /// </summary>
+    public async Task SaveManyAsync(IEnumerable<ProxyConfig> proxies)
+    {
+        var list = proxies.ToList();
+        if (list.Count == 0) return;
+
+        foreach (var p in list)
+            if (!All.Contains(p)) All.Add(p);
+
+        await Task.Run(() => _repository.SaveManyAsync(list));
     }
 
     public async Task DeleteAsync(ProxyConfig p)
     {
         if (p.Id > 0) await _repository.DeleteAsync(p.Id);
         All.Remove(p);
+    }
+
+    /// <summary>Elimina più proxy con una sola query, fuori dal thread UI.</summary>
+    public async Task DeleteManyAsync(IEnumerable<ProxyConfig> proxies)
+    {
+        var list = proxies.ToList();
+        var ids = list.Where(p => p.Id > 0).Select(p => p.Id).ToList();
+        if (ids.Count > 0) await Task.Run(() => _repository.DeleteManyAsync(ids));
+
+        var set = list.ToHashSet();
+        All.RemoveAll(set.Contains);
     }
 
     // ============================================================
@@ -109,17 +138,17 @@ public class ProxyService
             return null;
         }
 
-        // Disattiva il provider su tutti, attiva solo su next
-        foreach (var p in All) SetEnabledFor(p, providerKey, false);
+        // Disattiva il provider su tutti, attiva solo su next (salvando solo quelli cambiati)
+        var changed = All.Where(p => p != next && IsEnabledFor(p, providerKey)).ToList();
+        foreach (var p in changed) SetEnabledFor(p, providerKey, false);
         SetEnabledFor(next, providerKey, true);
 
         // Reset manual-override perché è una rotazione automatica
         ClearManualDisabled(next, providerKey);
+        changed.Add(next);
 
-        foreach (var p in All)
-        {
-            try { await _repository.UpdateAsync(p); } catch { }
-        }
+        try { await SaveManyAsync(changed); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[PROXY] Salvataggio rotazione fallito"); }
 
         _logger.LogWarning("[PROXY] Rotazione {P} → {Name}", providerKey, next.Name);
         ActiveProxyChanged?.Invoke(this, EventArgs.Empty);
@@ -132,7 +161,8 @@ public class ProxyService
 
         proxy.ConsecutiveFailures++;
         proxy.LastFailedUtc = DateTime.UtcNow;
-        try { await _repository.UpdateAsync(proxy); } catch { }
+        try { await _repository.UpdateAsync(proxy); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[PROXY] Salvataggio di {Name} fallito", proxy.Name); }
 
         _logger.LogWarning("[PROXY] {Name} failed su {P} ({N})",
             proxy.Name, providerKey, proxy.ConsecutiveFailures);
@@ -207,7 +237,8 @@ public class ProxyService
         if (IsEnabledFor(p, providerKey)) return;
 
         SetEnabledFor(p, providerKey, true);
-        try { await _repository.UpdateAsync(p); } catch { }
+        try { await _repository.UpdateAsync(p); }
+        catch (Exception ex) { _logger.LogWarning(ex, "[PROXY] Salvataggio di {Name} fallito", p.Name); }
         ActiveProxyChanged?.Invoke(this, EventArgs.Empty);
     }
 

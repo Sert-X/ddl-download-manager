@@ -23,15 +23,11 @@ namespace DownloadManager.ViewModels;
 /// </summary>
 public partial class DownloadTabViewModel : ViewModelBase
 {
-    private readonly IAnimeWorldService _animeWorldService;
-    private readonly IAnimeSaturnService _animeSaturnService;
-    private readonly AnimeProviderRegistry _registry;
     private readonly DownloadQueueService _queueService;
     private readonly FileNameBuilder _fileNameBuilder;
     private readonly SettingsService _settings;
     private readonly SharedState _shared;
     private readonly ILogger<DownloadTabViewModel> _logger;
-    private Episode? _currentEpisode;
     private CancellationTokenSource? _batchCts;
     private readonly DispatcherTimer _statsTimer;
     private readonly HashSet<SeriesGroup> _activeGroupsLastTick = new();
@@ -85,6 +81,13 @@ public partial class DownloadTabViewModel : ViewModelBase
 
     public ObservableCollection<string> SearchHistory { get; } = new();
     public ObservableCollection<SeriesGroup> SeriesGroups { get; } = new();
+    /// <summary>
+    /// Accodamento a blocchi: un primo blocco piccolo fa partire subito i download,
+    /// poi blocchi grandi (ogni blocco ha un costo fisso di apertura pagina sul provider).
+    /// </summary>
+    private const int FirstEnqueueChunkSize = 10;
+    private const int EnqueueChunkSize = 100;
+
     private readonly ObservableCollection<DownloadItem> _downloads = new();
     public ObservableCollection<DownloadItem> Downloads => _downloads;
 
@@ -248,8 +251,6 @@ public partial class DownloadTabViewModel : ViewModelBase
     // ============================================================
 
     public DownloadTabViewModel(
-        IAnimeWorldService animeWorldService,
-        IAnimeSaturnService animeSaturnService,
         AnimeProviderRegistry registry,
         DownloadQueueService queueService,
         FileNameBuilder fileNameBuilder,
@@ -257,9 +258,6 @@ public partial class DownloadTabViewModel : ViewModelBase
         ILogger<DownloadTabViewModel> logger,
         SharedState shared)
     {
-        _animeWorldService = animeWorldService;
-        _animeSaturnService = animeSaturnService;
-        _registry = registry;
         _queueService = queueService;
         _fileNameBuilder = fileNameBuilder;
         _settings = settings;
@@ -267,12 +265,12 @@ public partial class DownloadTabViewModel : ViewModelBase
         _shared = shared;
 
         foreach (var p in registry.Names.Select(n => registry.Get(n)!))
-        AvailableProviders.Add(p);
+            AvailableProviders.Add(p);
 
         SelectedProvider = AvailableProviders.FirstOrDefault()!;
 
         MaxConcurrency = _settings.Current.MaxConcurrency;
-        _queueService.MaxConcurrency = MaxConcurrency;
+        _queueService.SetMaxConcurrency("anime", MaxConcurrency);
 
         NamingPattern = _settings.Current.NamingPattern;
 
@@ -427,7 +425,7 @@ public partial class DownloadTabViewModel : ViewModelBase
 
     partial void OnMaxConcurrencyChanged(int value)
     {
-        if (_queueService != null) _queueService.MaxConcurrency = value;
+        _queueService?.SetMaxConcurrency("anime", value);
         if (_settings != null) { _settings.Current.MaxConcurrency = value; _settings.Save(); }
     }
 
@@ -599,8 +597,6 @@ public partial class DownloadTabViewModel : ViewModelBase
 
     private async Task DownloadEpisodeInternalAsync(Episode episode, CancellationToken ct = default)
     {
-        _currentEpisode = episode;
-
         ct.ThrowIfCancellationRequested();
         var videoUrl = await SelectedProvider!.GetVideoUrlAsync(episode.Link);
 
@@ -621,18 +617,18 @@ public partial class DownloadTabViewModel : ViewModelBase
 
         var item = new DownloadItem
         {
-            Url = videoUrl,
+            Url = videoUrl, // L'URL è già stato estratto, quindi è corretto
             SeriesName = seriesName,
             EpisodeNumber = episodeNumber,
             EpisodeTitle = episode.Title,
             Status = DownloadStatus.Pending,
             Category = "anime",
 
-            // === NUOVI: per coerenza col sistema rewire (futuro) ===
             ProviderKey = SelectedProvider?.Name ?? "",
             ContentLink = episode.Link
         };
 
+        // Genera il nome definitivo usando l'URL appena estratto
         item.DestinationPath = _fileNameBuilder.BuildDestinationPath(item, videoUrl, episode.Title);
         return item;
     }
@@ -654,7 +650,7 @@ public partial class DownloadTabViewModel : ViewModelBase
         {
             var seriesName = SelectedAnime?.Name ?? "";
 
-            // === OTTIMIZZAZIONE: UNA sola scansione della coda invece di N ===
+            // UNA sola scansione della coda
             var existingKeys = _queueService.SnapshotExistingEpisodeKeys("anime", seriesName);
 
             var toDownload = new List<Episode>();
@@ -671,33 +667,41 @@ public partial class DownloadTabViewModel : ViewModelBase
                 return;
             }
 
-            StatusMessage = $"Recupero URL di {toDownload.Count} episodi...";
-            var urls = await SelectedProvider!.GetVideoUrlsBatchAsync(toDownload, token);
+            // Recupero URL e accodamento a blocchi: i primi episodi partono subito
+            // invece di aspettare che siano risolti gli URL di tutta la serie.
+            var provider = SelectedProvider!;
+            int queued = 0;
+            var chunks = new List<Episode[]> { toDownload.Take(FirstEnqueueChunkSize).ToArray() };
+            chunks.AddRange(toDownload.Skip(FirstEnqueueChunkSize).Chunk(EnqueueChunkSize));
 
-            // === OTTIMIZZAZIONE: costruisci TUTTI gli item in memoria (nessuna I/O) ===
-            var items = new List<DownloadItem>(toDownload.Count);
-            foreach (var episode in toDownload)
+            foreach (var chunk in chunks.Where(c => c.Length > 0))
             {
                 token.ThrowIfCancellationRequested();
+                StatusMessage = $"Recupero URL episodi {queued + errors + 1}-{queued + errors + chunk.Length} di {toDownload.Count}...";
 
-                if (!urls.TryGetValue(episode.Link, out var videoUrl) || string.IsNullOrEmpty(videoUrl))
-                { errors++; continue; }
+                var urls = await provider.GetVideoUrlsBatchAsync(chunk.ToList(), token);
 
-                var item = BuildDownloadItem(episode, videoUrl, seriesName);
-                items.Add(item);
+                var items = new List<DownloadItem>(chunk.Length);
+                foreach (var episode in chunk)
+                {
+                    if (!urls.TryGetValue(episode.Link, out var videoUrl) || string.IsNullOrEmpty(videoUrl))
+                    { errors++; continue; }
+
+                    // L'URL è già noto: l'item nasce col nome definitivo
+                    items.Add(BuildDownloadItem(episode, videoUrl, seriesName));
+                }
+
+                await _queueService.EnqueueManyAsync(items);
+                queued += items.Count;
             }
 
-            if (items.Count == 0)
+            if (queued == 0)
             {
                 StatusMessage = $"Nessun episodio da accodare ({errors} errori).";
                 return;
             }
 
-            // === OTTIMIZZAZIONE: UN SOLO INSERT SQLite + UNA notifica UI ===
-            StatusMessage = $"Accodamento di {items.Count} episodi...";
-            await _queueService.EnqueueManyAsync(items);
-
-            var msg = $"{items.Count} episodi accodati";
+            var msg = $"{queued} episodi accodati";
             if (skipped > 0) msg += $", {skipped} già in coda";
             if (errors > 0) msg += $", {errors} falliti";
             StatusMessage = msg + ".";
@@ -729,19 +733,9 @@ public partial class DownloadTabViewModel : ViewModelBase
     // ============================================================
 
     [RelayCommand]
-    private async Task DeleteAllAsync()
-    {
-        _batchCts?.Cancel();
-        await Task.Delay(300);
-        var count = _queueService.AllItems.Count;
-        if (count == 0) { StatusMessage = "La lista è già vuota."; return; }
-        await _queueService.DeleteAllAsync();
-        StatusMessage = $"Rimossi {count} download.";
-    }
-
-    [RelayCommand]
     private void StartAll()
     {
+
         var count = _queueService.AllItems.Count(i =>
             i.Category == "anime" &&
             (i.Status == DownloadStatus.Pending ||
@@ -823,8 +817,12 @@ public partial class DownloadTabViewModel : ViewModelBase
 
     public async Task RemoveGroupPublicAsync(SeriesGroup group)
     {
-        foreach (var item in group.Items.ToList())
-            await _queueService.RemoveItemAsync(item);
+        // Prendi tutti gli item della serie
+        var items = group.Items.ToList();
+        if (items.Count == 0) return;
+
+        // Usa il nuovo metodo ottimizzato
+        await _queueService.RemoveManyAsync(items);
     }
 
     // ============================================================
@@ -875,6 +873,8 @@ public partial class DownloadTabViewModel : ViewModelBase
         if (e.OldItems != null)
             foreach (DownloadItem item in e.OldItems)
                 RemoveFromGroup(item);
+
+        OnPropertyChanged(nameof(SeriesSummaryText));
     }
 
     private void AddToGroup(DownloadItem item)
@@ -891,9 +891,10 @@ public partial class DownloadTabViewModel : ViewModelBase
         }
 
         if (!group.Items.Contains(item))
+        {
             group.Items.Add(item);
             item.PropertyChanged += OnDownloadItemPropertyChanged;
-        OnPropertyChanged(nameof(SeriesSummaryText));
+        }
     }
 
     private void RemoveFromGroup(DownloadItem item)
@@ -908,6 +909,5 @@ public partial class DownloadTabViewModel : ViewModelBase
             if (group.Items.Count == 0)
                 SeriesGroups.Remove(group);
         }
-        OnPropertyChanged(nameof(SeriesSummaryText));
     }
 }

@@ -256,7 +256,7 @@ public partial class ProxyTabViewModel : ViewModelBase
             await _proxyService.SaveAsync(SelectedProxy);
             ProxyStatusMessage = $"Proxy '{SelectedProxy.Name}' salvato.";
             _shared.NotifyActiveProxyChanged();
-            await NotifyAllProvidersAsync();
+            NotifyAllProvidersInBackground();
         }
         catch (Exception ex) { ProxyStatusMessage = $"Errore: {ex.Message}"; }
         finally { IsProxyBusy = false; }
@@ -271,15 +271,11 @@ public partial class ProxyTabViewModel : ViewModelBase
         IsProxyBusy = true;
         try
         {
-            foreach (var p in failed) { try { await _proxyService.DeleteAsync(p); } catch { } }
+            await _proxyService.DeleteManyAsync(failed);
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                foreach (var p in failed)
-                {
-                    Proxies.Remove(p);
-                    VisibleProxies.Remove(p);
-                }
+                RemoveFromLists(failed);
                 if (SelectedProxy != null && failed.Contains(SelectedProxy))
                     SelectedProxy = VisibleProxies.FirstOrDefault();
             });
@@ -313,21 +309,11 @@ public partial class ProxyTabViewModel : ViewModelBase
         IsProxyBusy = true;
         try
         {
-            var gate = new SemaphoreSlim(8);
-            await Task.WhenAll(targets.Select(async p =>
-            {
-                await gate.WaitAsync();
-                try { await _proxyService.DeleteAsync(p); } catch { }
-                finally { gate.Release(); }
-            }));
+            await _proxyService.DeleteManyAsync(targets);
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                foreach (var p in targets)
-                {
-                    Proxies.Remove(p);
-                    VisibleProxies.Remove(p);
-                }
+                RemoveFromLists(targets);
                 if (SelectedProxy != null && targets.Contains(SelectedProxy))
                     SelectedProxy = VisibleProxies.FirstOrDefault();
             });
@@ -345,13 +331,7 @@ public partial class ProxyTabViewModel : ViewModelBase
         IsProxyBusy = true;
         try
         {
-            var gate = new SemaphoreSlim(8);
-            await Task.WhenAll(snapshot.Select(async p =>
-            {
-                await gate.WaitAsync();
-                try { await _proxyService.DeleteAsync(p); } catch { }
-                finally { gate.Release(); }
-            }));
+            await _proxyService.DeleteManyAsync(snapshot);
 
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
@@ -393,8 +373,8 @@ public partial class ProxyTabViewModel : ViewModelBase
             ProxyService.SetManuallyDisabledFor(p, key, false);
             p.RemovedFromProviders.Add(key);
             if (key == SelectedTestProvider) p.TestResult = "";
-            await _proxyService.SaveAsync(p);
         }
+        await _proxyService.SaveManyAsync(targets);
 
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
@@ -403,15 +383,13 @@ public partial class ProxyTabViewModel : ViewModelBase
         });
 
         _shared.NotifyActiveProxyChanged();
-        await NotifyAllProvidersAsync();
+        NotifyAllProvidersInBackground();
 
         OnPropertyChanged(nameof(CanActivateForProvider));
         OnPropertyChanged(nameof(CanDeactivateForProvider));
         OnPropertyChanged(nameof(CanRotateForProvider));
 
-        var dbg = string.Join(",", targets[0].RemovedFromProviders);
-        ProxyStatusMessage = $"Rimossi {targets.Count} da {key}. Set del primo: [{dbg}]. " +
-                            $"Visibili ora: {VisibleProxies.Count}/{Proxies.Count}";
+        ProxyStatusMessage = $"Rimossi {targets.Count} proxy dalla lista {key}. Visibili: {VisibleProxies.Count}/{Proxies.Count}.";
     }
 
     [RelayCommand]
@@ -442,8 +420,8 @@ public partial class ProxyTabViewModel : ViewModelBase
             ProxyService.SetManuallyDisabledFor(p, key, false);
             p.RemovedFromProviders.Add(key);
             if (key == SelectedTestProvider) p.TestResult = "";
-            await _proxyService.SaveAsync(p);
         }
+        await _proxyService.SaveManyAsync(failed);
 
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
@@ -452,7 +430,7 @@ public partial class ProxyTabViewModel : ViewModelBase
         });
 
         _shared.NotifyActiveProxyChanged();
-        await NotifyAllProvidersAsync();
+        NotifyAllProvidersInBackground();
 
         OnPropertyChanged(nameof(CanActivateForProvider));
         OnPropertyChanged(nameof(CanDeactivateForProvider));
@@ -560,7 +538,7 @@ public partial class ProxyTabViewModel : ViewModelBase
             if (!token.IsCancellationRequested)
             {
                 ProxyStatusMessage = $"Test {label} completato: {okCount}/{total} funzionanti.";
-                await NotifyAllProvidersAsync();
+                NotifyAllProvidersInBackground();
                 RefreshActiveForSelectedProvider();
 
                 OnPropertyChanged(nameof(CanActivateForProvider));
@@ -659,15 +637,17 @@ public partial class ProxyTabViewModel : ViewModelBase
             }
         }
 
-        foreach (var p in Proxies) ProxyService.SetEnabledFor(p, key, false);
+        // Si salvano solo i proxy effettivamente cambiati, in un'unica transazione.
+        var changed = Proxies.Where(p => p != SelectedProxy && ProxyService.IsEnabledFor(p, key)).ToList();
+        foreach (var p in changed) ProxyService.SetEnabledFor(p, key, false);
         ProxyService.SetEnabledFor(SelectedProxy, key, true);
         ProxyService.ClearManualDisabled(SelectedProxy, key);
+        changed.Add(SelectedProxy);
 
-        foreach (var p in Proxies)
-            await _proxyService.SaveAsync(p);
+        await _proxyService.SaveManyAsync(changed);
 
         _shared.NotifyActiveProxyChanged();
-        await NotifyAllProvidersAsync();
+        NotifyAllProvidersInBackground();
         RefreshActiveForSelectedProvider();
 
         OnPropertyChanged(nameof(CanActivateForProvider));
@@ -687,21 +667,18 @@ public partial class ProxyTabViewModel : ViewModelBase
         }
 
         var key = SelectedTestProvider;
-        bool changed = false;
+        var active = Proxies.Where(p => ProxyService.IsEnabledFor(p, key)).ToList();
+        bool changed = active.Count > 0;
 
-        foreach (var p in Proxies)
+        foreach (var p in active)
         {
-            if (ProxyService.IsEnabledFor(p, key))
-            {
-                ProxyService.SetEnabledFor(p, key, false);
-                ProxyService.SetManuallyDisabledFor(p, key, true);
-                await _proxyService.SaveAsync(p);
-                changed = true;
-            }
+            ProxyService.SetEnabledFor(p, key, false);
+            ProxyService.SetManuallyDisabledFor(p, key, true);
         }
+        await _proxyService.SaveManyAsync(active);
 
         _shared.NotifyActiveProxyChanged();
-        await NotifyAllProvidersAsync();
+        NotifyAllProvidersInBackground();
 
         RefreshActiveForSelectedProvider();
 
@@ -735,7 +712,7 @@ public partial class ProxyTabViewModel : ViewModelBase
             }
 
             _shared.NotifyActiveProxyChanged();
-            await NotifyAllProvidersAsync();
+            NotifyAllProvidersInBackground();
 
             RefreshActiveForSelectedProvider();
 
@@ -774,15 +751,32 @@ public partial class ProxyTabViewModel : ViewModelBase
         if (errors.Count > 0) msg += $" {errors.Count} righe ignorate.";
         ProxyStatusMessage = msg;
 
-        _ = Task.Run(async () =>
-        {
-            foreach (var p in parsed) { try { await _proxyService.SaveAsync(p); } catch { } }
-        });
+        _ = SaveImportedAsync(parsed);
     }
 
     // ============================================================
     //  HELPER
     // ============================================================
+
+    /// <summary>
+    /// Chiude i browser dei provider (ripartono col nuovo proxy alla prossima richiesta).
+    /// È lento, quindi gira in background per non bloccare la UI.
+    /// </summary>
+    private void NotifyAllProvidersInBackground() => _ = Task.Run(NotifyAllProvidersAsync);
+
+    private async Task SaveImportedAsync(List<ProxyConfig> imported)
+    {
+        try { await _proxyService.SaveManyAsync(imported); }
+        catch (Exception ex) { ProxyStatusMessage = $"Errore salvataggio import: {ex.Message}"; }
+    }
+
+    private void RemoveFromLists(ICollection<ProxyConfig> removed)
+    {
+        var set = removed.ToHashSet();
+        for (int i = Proxies.Count - 1; i >= 0; i--) if (set.Contains(Proxies[i])) Proxies.RemoveAt(i);
+        for (int i = VisibleProxies.Count - 1; i >= 0; i--) if (set.Contains(VisibleProxies[i])) VisibleProxies.RemoveAt(i);
+        OnPropertyChanged(nameof(VisibleCountText));
+    }
 
     private async Task NotifyAllProvidersAsync()
     {
@@ -795,11 +789,8 @@ public partial class ProxyTabViewModel : ViewModelBase
     {
         var affected = Proxies.Where(p => p.RemovedFromProviders.Count > 0).ToList();
 
-        foreach (var p in affected)
-        {
-            p.RemovedFromProviders.Clear();
-            await _proxyService.SaveAsync(p);
-        }
+        foreach (var p in affected) p.RemovedFromProviders.Clear();
+        await _proxyService.SaveManyAsync(affected);
 
         await Dispatcher.UIThread.InvokeAsync(() =>
         {

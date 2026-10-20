@@ -86,6 +86,9 @@ public abstract class SftpQueueServiceBase<TJob> where TJob : TransferJobBase
 
     public event Action? QueueChanged;
 
+    /// <summary>Sollevato quando un job termina con successo.</summary>
+    public event Action<TJob>? JobCompleted;
+
     /// <summary>Imposta la config SFTP. I figli possono override per pulire cache ausiliarie.</summary>
     public virtual void Configure(SftpConfig config)
     {
@@ -464,6 +467,8 @@ public abstract class SftpQueueServiceBase<TJob> where TJob : TransferJobBase
                     job.Status = SftpJobStatus.Completed;
                     job.SpeedBytesPerSecond = 0;
                 });
+
+                JobCompleted?.Invoke(job);
             }
             finally
             {

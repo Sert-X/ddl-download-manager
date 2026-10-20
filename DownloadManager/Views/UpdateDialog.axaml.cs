@@ -11,7 +11,6 @@ public partial class UpdateDialog : Window
 {
     private enum Phase { Confirm, Downloading, ReadyToRestart, Error }
 
-    private Phase _phase = Phase.Confirm;
     private string _newVersion = "";
     private long _totalBytes;
     private string _changelog = "";
@@ -19,7 +18,6 @@ public partial class UpdateDialog : Window
     private int _lastPercent;
     private int _baselinePercent = -1;
 
-    private DateTime _downloadStartTime;
     private DateTime _lastSampleTime;
 
     public UpdateChoice Choice { get; private set; } = UpdateChoice.Cancel;
@@ -58,7 +56,6 @@ public partial class UpdateDialog : Window
 
     private void ShowPhase(Phase phase)
     {
-        _phase = phase;
 
         ConfirmPanel.IsVisible = phase == Phase.Confirm;
         DownloadPanel.IsVisible = phase == Phase.Downloading;
@@ -163,7 +160,6 @@ public partial class UpdateDialog : Window
 
         _lastPercent = 0;
         _baselinePercent = -1;
-        _downloadStartTime = DateTime.UtcNow;
         _lastSampleTime = DateTime.UtcNow;
     }
 
