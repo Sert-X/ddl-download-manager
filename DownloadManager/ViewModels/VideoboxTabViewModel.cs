@@ -29,6 +29,8 @@ public partial class CategoryItem : ObservableObject
 {
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
+    /// <summary>Voce "Tutti i media" (Id 0): nella tendina ha un'icona diversa.</summary>
+    public bool IsAll => Id == 0;
 }
 
 public partial class EpisodeMappingItem : ObservableObject
@@ -124,6 +126,30 @@ public partial class VideoboxTabViewModel : ObservableObject
     [ObservableProperty] private string statusMessage = "Pronto.";
     [ObservableProperty] private bool isBusy;
 
+    // === Caricamenti annullabili (post / albero SFTP) ===
+    // Durante il caricamento i pulsanti "Carica" lasciano il posto a avanzamento + Stop.
+    [ObservableProperty] private bool isLoadingPosts;
+    [ObservableProperty] private string postsProgressText = string.Empty;
+    [ObservableProperty] private bool isLoadingTree;
+    [ObservableProperty] private string treeProgressText = string.Empty;
+    private CancellationTokenSource? _postsCts;
+    private CancellationTokenSource? _treeCts;
+    private int _treeFoldersRead;
+
+    [RelayCommand]
+    private void StopLoadingPosts()
+    {
+        _postsCts?.Cancel();
+        PostsProgressText = "Interruzione...";
+    }
+
+    [RelayCommand]
+    private void StopLoadingTree()
+    {
+        _treeCts?.Cancel();
+        TreeProgressText = "Interruzione...";
+    }
+
     public VideoboxTabViewModel(VideoboxApiService apiService, ISftpService sftpService, SettingsService settingsService, SftpUploadQueueService uploadQueue)
     {
         _apiService = apiService;
@@ -160,7 +186,7 @@ public partial class VideoboxTabViewModel : ObservableObject
         SecondaryDomains.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasSecondaryDomains));
 
         // Inizializza l'opzione "Tutti"
-        AvailableCategories.Add(new CategoryItem { Id = 0, Name = "🌟 Tutti i Media" });
+        AvailableCategories.Add(new CategoryItem { Id = 0, Name = "Tutti i media" });
         SelectedCategory = AvailableCategories[0];
         _ = LoadCategoriesAsync();
     }
@@ -194,7 +220,7 @@ public partial class VideoboxTabViewModel : ObservableObject
             var selectedId = SelectedCategory?.Id ?? 0;
             AvailableCategories.Clear();
             
-            AvailableCategories.Add(new CategoryItem { Id = 0, Name = "🌟 Tutti i Media" });
+            AvailableCategories.Add(new CategoryItem { Id = 0, Name = "Tutti i media" });
             
             // FILTRO: Solo "IPS\\videobox\\Category" e "perm_2" = "*"
             var filteredCats = cats
@@ -268,35 +294,50 @@ public partial class VideoboxTabViewModel : ObservableObject
     [RelayCommand]
     public async Task LoadCategoryAsync()
     {
+        if (IsLoadingPosts) return;
+        using var cts = _postsCts = new CancellationTokenSource();
         try
         {
             IsBusy = true;
+            IsLoadingPosts = true;
+            PostsProgressText = "Caricamento pagina 1...";
             _allPosts.Clear();
-            var pagedData = await _apiService.GetVideosByCategoryAsync(SelectedCategory?.Id, 1);
+            var pagedData = await _apiService.GetVideosByCategoryAsync(SelectedCategory?.Id, 1, cts.Token);
             ProcessPagedData(pagedData);
             _currentPage = 1;
             UpdateSftpTreeColors();
             StatusMessage = $"Caricata pagina 1.";
         }
+        catch (OperationCanceledException) { StatusMessage = "Caricamento dei post annullato."; }
         catch (Exception ex) { StatusMessage = $"Errore: {ex.Message}"; }
-        finally { IsBusy = false; }
+        finally
+        {
+            _postsCts = null;
+            IsLoadingPosts = false;
+            IsBusy = false;
+        }
     }
 
     [RelayCommand]
     public async Task LoadAllCategoryAsync()
     {
+        if (IsLoadingPosts) return;
+        using var cts = _postsCts = new CancellationTokenSource();
         try
         {
             IsBusy = true;
+            IsLoadingPosts = true;
+            PostsProgressText = "Caricamento pagina 1...";
             _allPosts.Clear();
-            var firstPage = await _apiService.GetVideosByCategoryAsync(SelectedCategory?.Id, 1);
+            var firstPage = await _apiService.GetVideosByCategoryAsync(SelectedCategory?.Id, 1, cts.Token);
             ProcessPagedData(firstPage);
 
             for (int i = 2; i <= firstPage.totalPages; i++)
             {
+                PostsProgressText = $"Pagina {i} di {firstPage.totalPages} · {_allPosts.Count} post";
                 StatusMessage = $"Caricamento pagina {i} di {firstPage.totalPages}...";
-                await Task.Delay(250); 
-                var pageData = await _apiService.GetVideosByCategoryAsync(SelectedCategory?.Id, i);
+                await Task.Delay(250, cts.Token);
+                var pageData = await _apiService.GetVideosByCategoryAsync(SelectedCategory?.Id, i, cts.Token);
                 ProcessPagedData(pageData);
             }
 
@@ -304,8 +345,20 @@ public partial class VideoboxTabViewModel : ObservableObject
             UpdateSftpTreeColors();
             StatusMessage = $"Caricati tutti i {_allPosts.Count} post.";
         }
+        catch (OperationCanceledException)
+        {
+            // Si tengono i post già scaricati: utili anche se il caricamento è stato fermato
+            _currentPage = 1;
+            UpdateSftpTreeColors();
+            StatusMessage = $"Caricamento fermato: {_allPosts.Count} post caricati.";
+        }
         catch (Exception ex) { StatusMessage = $"Errore di rete: {ex.Message}"; }
-        finally { IsBusy = false; }
+        finally
+        {
+            _postsCts = null;
+            IsLoadingPosts = false;
+            IsBusy = false;
+        }
     }
 
     private void ProcessPagedData(VideoboxPagedDto pagedData)
@@ -380,17 +433,33 @@ public partial class VideoboxTabViewModel : ObservableObject
     {
         if (!IsSftpConnected) { StatusMessage = "Connettiti prima all'SFTP."; return; }
         if (string.IsNullOrWhiteSpace(ConfigSftpBasePath)) { StatusMessage = "Configura il Base Path SFTP."; return; }
+        if (IsLoadingTree) return;
+        using var cts = _treeCts = new CancellationTokenSource();
         try
         {
-            IsBusy = true; StatusMessage = "Caricamento albero SFTP..."; SftpRootNodes.Clear();
-            var rootNodes = await BuildTreeRecursiveAsync(ConfigSftpBasePath, null);
+            IsBusy = true;
+            IsLoadingTree = true;
+            _treeFoldersRead = 0;
+            TreeProgressText = "Lettura cartelle...";
+            StatusMessage = "Caricamento albero SFTP..."; SftpRootNodes.Clear();
+            var rootNodes = await BuildTreeRecursiveAsync(ConfigSftpBasePath, null, cts.Token);
             foreach (var node in rootNodes) SftpRootNodes.Add(node);
 
             UpdateSftpTreeColors();
-            StatusMessage = "Albero SFTP caricato (aggiornamento automatico attivo).";
+            StatusMessage = $"Albero SFTP caricato: {_treeFoldersRead} cartelle (aggiornamento automatico attivo).";
+        }
+        catch (OperationCanceledException)
+        {
+            SftpRootNodes.Clear();   // un albero a metà darebbe colori sbagliati
+            StatusMessage = "Caricamento dell'albero SFTP annullato.";
         }
         catch (Exception ex) { StatusMessage = $"Errore SFTP: {ex.Message}"; }
-        finally { IsBusy = false; }
+        finally
+        {
+            _treeCts = null;
+            IsLoadingTree = false;
+            IsBusy = false;
+        }
     }
 
     /// <summary>Accoda il riallineamento di una cartella remota. Thread-safe.</summary>
@@ -577,6 +646,11 @@ public partial class VideoboxTabViewModel : ObservableObject
     private async Task<List<SftpRemoteEntry>> ListSortedEntriesAsync(string path, CancellationToken ct = default)
     {
         var entries = await _sftpService.ListDirectoryAsync(path, ct);
+        if (IsLoadingTree)
+        {
+            _treeFoldersRead++;
+            TreeProgressText = $"{_treeFoldersRead} cartelle lette";
+        }
         return entries
             .Where(e => !e.Name.StartsWith("."))
             .OrderByDescending(e => e.IsDirectory)
@@ -627,16 +701,27 @@ public partial class VideoboxTabViewModel : ObservableObject
 
             foreach (var post in _allPosts)
             {
-                if (post.Status != PostStatus.Valid) continue;
+                if (post.Status is not (PostStatus.Valid or PostStatus.Mixed)) continue;
 
                 var folder = FindFolderForPost(post, foldersByKey);
                 if (folder == null || !folder.IsDirectory) continue;
+
+                // Post giallo (alcuni link fuori dai domini impostati): anche la sua cartella,
+                // le sottocartelle e le cartelle superiori diventano gialle, per confronto.
+                if (post.Status == PostStatus.Mixed)
+                {
+                    folder.ApplyMixed();
+                    folder.RaiseAncestors(NodeStatus.Mixed);
+                    continue;
+                }
 
                 int totalFilesInFolder = GetAllFiles(folder).Count;
                 if (totalFilesInFolder > 0 && post.ValidLinkCount != totalFilesInFolder)
                 {
                     post.Status = PostStatus.Mismatch;
                     folder.ApplyMismatch();
+                    // Anche la cartella principale (es. "MAO" sopra "MAO/1") diventa viola
+                    folder.RaiseAncestors(NodeStatus.Mismatch);
                 }
             }
         }

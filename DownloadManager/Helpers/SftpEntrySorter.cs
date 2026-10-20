@@ -131,6 +131,7 @@ public static class SftpEntrySorter
         target.Modified = source.Modified;
         target.IsDirectory = source.IsDirectory;
         target.HasZeroByteIssue = source.HasZeroByteIssue;
+        if (!string.IsNullOrEmpty(source.ContentsInfo)) target.ContentsInfo = source.ContentsInfo;
     }
 
     public static void UpdateLocalEntryFromSource(LocalFileEntry target, LocalFileEntry source)

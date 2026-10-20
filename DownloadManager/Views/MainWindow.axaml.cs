@@ -2,6 +2,7 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 using Avalonia.Platform.Storage;
 using DownloadManager.Models;
 using DownloadManager.Services.Sftp;
@@ -83,6 +84,14 @@ public partial class MainWindow : Window
         DataContext = viewModel;
         _sftpService = sftpService;
 
+        // Clic destro su una riga di qualunque tabella: la seleziona prima che si apra
+        // il menu della tabella (i menu sono uno per tabella, non uno per riga).
+        AddHandler(PointerPressedEvent, (_, e) =>
+        {
+            if ((e.Source as Visual)?.FindAncestorOfType<DataGrid>(includeSelf: true) is { } grid)
+                SelectRowUnderPointer(grid, e);
+        }, RoutingStrategies.Tunnel, handledEventsToo: true);
+
         // Log: segue le voci nuove solo se l'utente è già in fondo (non lo strappa
         // via mentre sta leggendo righe più vecchie).
         viewModel.FilteredLogs.CollectionChanged += (_, e) =>
@@ -126,17 +135,47 @@ public partial class MainWindow : Window
     //  HELPER
     // ============================================================
 
-    private static T? ResolveItem<T>(object? sender) where T : class
-    {
-        if (sender is not MenuItem mi) return null;
-        if (mi.DataContext is T direct) return direct;
+    // Tabella e riga dell'ultimo clic destro: i menu sono uno per tabella, quindi
+    // l'elemento su cui agire si ricava da qui (non dal menu, che ha il DataContext
+    // del ViewModel e un PlacementTarget non affidabile).
+    private DataGrid? _contextGrid;
+    private object? _contextItem;
 
-        if (mi.Parent is ContextMenu cm)
-        {
-            if (cm.DataContext is T cmItem) return cmItem;
-            if (cm.PlacementTarget?.DataContext is T targetItem) return targetItem;
-        }
-        return null;
+    private T? ResolveItem<T>(object? sender) where T : class
+    {
+        if (sender is MenuItem { DataContext: T direct }) return direct;
+        if (_contextItem is T clicked) return clicked;
+        return _contextGrid?.SelectedItem as T;
+    }
+
+    /// <summary>
+    /// Elementi su cui agisce il menu: tutta la selezione se la riga cliccata ne fa parte
+    /// (es. più file selezionati), altrimenti solo la riga cliccata.
+    /// </summary>
+    private List<T> ResolveItems<T>(object? sender) where T : class
+    {
+        if (_contextGrid != null && _contextItem != null &&
+            _contextGrid.SelectedItems.Count > 1 && _contextGrid.SelectedItems.Contains(_contextItem))
+            return _contextGrid.SelectedItems.OfType<T>().ToList();
+
+        var one = ResolveItem<T>(sender);
+        return one != null ? new List<T> { one } : new List<T>();
+    }
+
+    /// <summary>
+    /// Clic destro su una riga: la ricorda per il menu e, se non fa già parte della
+    /// selezione, la seleziona da sola.
+    /// </summary>
+    private void SelectRowUnderPointer(DataGrid grid, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(grid).Properties.IsRightButtonPressed) return;
+
+        var row = (e.Source as Avalonia.Visual)?.FindAncestorOfType<DataGridRow>(includeSelf: true);
+        _contextGrid = grid;
+        _contextItem = row?.DataContext;
+
+        if (_contextItem != null && !grid.SelectedItems.Contains(_contextItem))
+            grid.SelectedItem = _contextItem;
     }
 
     private async Task<string?> PickFolderAsync(string title)
@@ -584,6 +623,30 @@ public partial class MainWindow : Window
     // ============================================================
     //  SFTP CRUD REMOTO
     // ============================================================
+
+    private async void OnLocalMoveClick(object? sender, RoutedEventArgs e)
+    {
+        var entries = ResolveItems<LocalFileEntry>(sender);
+        if (entries.Count == 0 || Vm == null) return;
+
+        var title = entries.Count == 1 ? $"Sposta '{entries[0].Name}' in..." : $"Sposta {entries.Count} elementi in...";
+        var dest = await PickFolderAsync(title);
+        if (string.IsNullOrEmpty(dest)) return;
+
+        await Vm.Sftp.SftpLocalMoveManyAsync(entries, dest);
+    }
+
+    private async void OnRemoteMoveClick(object? sender, RoutedEventArgs e)
+    {
+        var entries = ResolveItems<SftpRemoteEntry>(sender);
+        if (entries.Count == 0 || Vm == null) return;
+
+        var title = entries.Count == 1 ? $"Sposta '{entries[0].Name}' in..." : $"Sposta {entries.Count} elementi in...";
+        var dest = await PickRemoteFolderAsync(title);
+        if (string.IsNullOrEmpty(dest)) return;
+
+        await Vm.Sftp.SftpRemoteMoveManyAsync(entries, dest);
+    }
 
     private async void OnRemoteNewFolderClick(object? sender, RoutedEventArgs e)
     {

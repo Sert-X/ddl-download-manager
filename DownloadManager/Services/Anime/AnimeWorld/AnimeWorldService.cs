@@ -152,10 +152,13 @@ public class AnimeWorldService : IAnimeWorldService
                     throw new InvalidOperationException(
                         $"HTTP {navResponse.Status} {navResponse.StatusText}");
 
-                // Attende che compaiano i risultati
+                // I risultati veri stanno SOLO in div.film-list: la pagina contiene anche
+                // riquadri laterali (classifica, consigliati) con le stesse classe "item"/"name",
+                // che prima venivano presi come risultati anche per parole inesistenti.
+                // Senza risultati, nella lista compare un avviso "alert-danger".
                 try
                 {
-                    await page.WaitForSelectorAsync("div.item, a.name",
+                    await page.WaitForSelectorAsync("div.film-list div.item, div.film-list .alert",
                         new PageWaitForSelectorOptions { Timeout = 10000 });
                 }
                 catch
@@ -164,12 +167,15 @@ public class AnimeWorldService : IAnimeWorldService
                     return results;
                 }
 
-                // Cerca le tile (più generico possibile)
-                var anchors = await page.QuerySelectorAllAsync("div.item > div.inner > a.name");
+                if (await page.QuerySelectorAsync("div.film-list div.item") == null)
+                {
+                    _logger.LogInformation("[AW] Nessun risultato per '{Query}'", query);
+                    return results;
+                }
+
+                var anchors = await page.QuerySelectorAllAsync("div.film-list div.item > div.inner > a.name");
                 if (anchors == null || anchors.Count == 0)
-                    anchors = await page.QuerySelectorAllAsync("a.name");
-                if (anchors == null || anchors.Count == 0)
-                    anchors = await page.QuerySelectorAllAsync("div.item a");
+                    anchors = await page.QuerySelectorAllAsync("div.film-list div.item a.name");
 
                 _logger.LogInformation("[AW] Trovati {N} anchor", anchors?.Count ?? 0);
 

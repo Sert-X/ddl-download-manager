@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.1.4] — 2026-10-20
+
+### ☁ SFTP
+- Nuova funzione **"Sposta in..."** nel menu del clic destro, per file locali e remoti: scegli la cartella di destinazione, funziona anche con più elementi selezionati.
+- **Scorrimento più fluido** nelle tabelle (file locali, remoti, code di upload e download): il menu del clic destro ora è uno per tabella invece di essere ricreato per ogni riga mentre si scorre, causa dei blocchi scorrendo velocemente.
+- Il clic destro seleziona la riga sotto il mouse; se fa parte di una selezione multipla, il menu agisce su tutta la selezione.
+- **Zero-Byte Checker di nuovo visibile**: file a 0 byte e cartelle che li contengono tornano evidenziati in rosso (lo stile della riga era andato perso), anche al passaggio del mouse e da selezionati.
+- Il pallino della tab non resta più **rosso** dopo aver eliminato i trasferimenti falliti.
+- La colonna "Contenuto" delle cartelle si aggiorna correttamente quando si ricarica la lista.
+
+### 🧰 Videobox Corrector
+- Post **gialli** (alcuni link fuori dai domini impostati): ora diventano gialle anche la loro cartella, le sottocartelle e le cartelle superiori nell'albero SFTP, per un confronto immediato.
+- Il **viola** (mismatch tra numero di link e numero di file) arriva fino alla cartella principale della serie: es. con "MAO/1" diventano viola sia "1" che "MAO". Ogni cartella mostra il problema più grave tra le sue sottocartelle (verde < giallo < rosso < viola).
+- Caricamento di post e albero SFTP con **avanzamento e pulsante Stop**: durante il caricamento i pulsanti "Carica" lasciano il posto a barra di avanzamento, conteggio (pagine e post / cartelle lette) e Stop, poi tornano. Fermando "Carica Tutti" i post già scaricati restano.
+- "Tutti i media" e le categorie hanno icone vettoriali al posto dell'emoji.
+
+### 🎬 Film/Serie Download
+- Menu **Audio** e **Sottotitoli** ridisegnati nello stile delle tendine dell'app: pannello arrotondato con titolo e contatore delle selezioni, righe evidenziate al passaggio del mouse, codice lingua in un badge (e "forzati" dove serve), pulsanti **Tutte / Nessuna**, elenco scorrevole per i sottotitoli.
+
+### 🏠 Anime Download
+- **Ricerca AnimeWorld corretta**: con una parola inesistente non compaiono più risultati a caso. Prima venivano presi gli anime dei riquadri laterali della pagina (classifica, consigliati); ora si leggono solo i risultati veri e si riconosce l'avviso "nessun risultato".
+
 ## [1.1.3] — 2026-10-20
 
 ### 🎬 Film/Serie: scelta di lingue e sottotitoli (nuovo)

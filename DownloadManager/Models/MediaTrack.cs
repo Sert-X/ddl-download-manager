@@ -32,6 +32,10 @@ public partial class MediaTrack : ObservableObject
         }
     }
 
+    /// <summary>Nome mostrato nella riga (il codice lingua va nel badge a parte).</summary>
+    public string Label => string.IsNullOrWhiteSpace(Name) ? Language : Name;
+    public bool HasLanguage => !string.IsNullOrWhiteSpace(Language);
+
     /// <summary>true se la traccia è in italiano (lingua "it"/"ita" o nome che lo dice).</summary>
     public bool IsItalian =>
         Language.StartsWith("it", StringComparison.OrdinalIgnoreCase) ||

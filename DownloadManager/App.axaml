@@ -867,6 +867,22 @@
             <Setter Property="Opacity" Value="1"/>
         </Style>
 
+        <!-- Zero-Byte Checker: file a 0 byte e cartelle che li contengono (classe .zeroByte
+             impostata dalla riga in base a HasZeroByteIssue). Il rosso resta visibile anche
+             al passaggio del mouse e da selezionata. -->
+        <Style Selector="DataGridRow.zeroByte">
+            <Setter Property="Background" Value="{DynamicResource AppZeroByteHighlightBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppDangerBrush}"/>
+        </Style>
+        <Style Selector="DataGridRow.zeroByte:pointerover /template/ Rectangle#BackgroundRectangle">
+            <Setter Property="Fill" Value="{DynamicResource AppZeroByteHighlightBrush}"/>
+            <Setter Property="Opacity" Value="1"/>
+        </Style>
+        <Style Selector="DataGridRow.zeroByte:selected /template/ Rectangle#BackgroundRectangle">
+            <Setter Property="Fill" Value="{DynamicResource AppZeroByteHighlightBorderBrush}"/>
+            <Setter Property="Opacity" Value="1"/>
+        </Style>
+
         <!-- PROGRESSBAR / SLIDER / ALTRO -->
         <Style Selector="ProgressBar">
             <Setter Property="Background" Value="{DynamicResource AppBorderBrush}"/>
@@ -973,6 +989,59 @@
         <Style Selector="ContextMenu">
             <Setter Property="CornerRadius" Value="10"/>
             <Setter Property="Padding" Value="4"/>
+        </Style>
+
+        <!-- SCELTA TRACCE (audio / sottotitoli): stesso aspetto delle ComboBox -->
+        <Style Selector="DropDownButton.trackPicker">
+            <Setter Property="Background" Value="{DynamicResource AppInputBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="14"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="MinHeight" Value="34"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        </Style>
+        <Style Selector="DropDownButton.trackPicker:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppHoverBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
+        <Style Selector="DropDownButton.trackPicker:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppSelectedBrush}"/>
+        </Style>
+        <Style Selector="FlyoutPresenter.trackFlyout">
+            <Setter Property="Background" Value="{DynamicResource ComboBoxDropDownBackground}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ComboBoxDropDownBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Padding" Value="8"/>
+            <Setter Property="MaxWidth" Value="420"/>
+        </Style>
+        <Style Selector="Border.trackRow">
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="8,1"/>
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="Border.trackRow:pointerover">
+            <Setter Property="Background" Value="{DynamicResource ComboBoxItemBackgroundPointerOver}"/>
+        </Style>
+        <Style Selector="Border.trackBadge">
+            <Setter Property="Background" Value="{DynamicResource AppAccentSoftBrush}"/>
+            <Setter Property="CornerRadius" Value="999"/>
+            <Setter Property="Padding" Value="7,1"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Border.trackBadge > TextBlock">
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
+        <Style Selector="Border.trackBadge.warn">
+            <Setter Property="Background" Value="{DynamicResource AppWarningSoftBrush}"/>
+        </Style>
+        <Style Selector="Border.trackBadge.warn > TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource AppWarningBrush}"/>
         </Style>
         <!-- LOG GLOBALE -->
         <Style Selector="Border.logRow:pointerover">

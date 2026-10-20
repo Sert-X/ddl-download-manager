@@ -44,7 +44,7 @@ public class VideoboxApiService
     }
 
     // Ripristinato int? (nullable) per far funzionare la selezione "Tutti i Media" (che passa null/0)
-    public async Task<VideoboxPagedDto> GetVideosByCategoryAsync(int? categoryId, int page = 1)
+    public async Task<VideoboxPagedDto> GetVideosByCategoryAsync(int? categoryId, int page = 1, CancellationToken ct = default)
     {
         ConfigureAuth();
         var settings = _settingsService.Current;
@@ -53,10 +53,10 @@ public class VideoboxApiService
         string catFilter = (categoryId.HasValue && categoryId.Value > 0) ? $"categories={categoryId.Value}&" : "";
         var url = $"{settings.IpsBaseUrl.TrimEnd('/')}/api/videobox/videos?{catFilter}page={page}&perPage=50";
         
-        var response = await _httpClient.GetAsync(url);
+        var response = await _httpClient.GetAsync(url, ct);
         response.EnsureSuccessStatusCode();
         
-        return await response.Content.ReadFromJsonAsync<VideoboxPagedDto>() ?? new VideoboxPagedDto();
+        return await response.Content.ReadFromJsonAsync<VideoboxPagedDto>(ct) ?? new VideoboxPagedDto();
     }
 
     // Metodo GetCategoriesAsync ripristinato (era stato eliminato per sbaglio)

@@ -730,8 +730,23 @@ public partial class StreamingTabViewModel : ViewModelBase
         NotifyTracksChanged();
     }
 
+    public string AudioCountText => $"{AudioTracks.Count(t => t.IsSelected)} di {AudioTracks.Count}";
+    public string SubtitleCountText => $"{SubtitleTracks.Count(t => t.IsSelected)} di {SubtitleTracks.Count}";
+
+    [RelayCommand] private void SelectAllAudio() => SetAll(AudioTracks, true);
+    [RelayCommand] private void SelectNoAudio() => SetAll(AudioTracks, false);
+    [RelayCommand] private void SelectAllSubtitles() => SetAll(SubtitleTracks, true);
+    [RelayCommand] private void SelectNoSubtitles() => SetAll(SubtitleTracks, false);
+
+    private static void SetAll(IEnumerable<MediaTrack> tracks, bool value)
+    {
+        foreach (var t in tracks) t.IsSelected = value;
+    }
+
     private void NotifyTracksChanged()
     {
+        OnPropertyChanged(nameof(AudioCountText));
+        OnPropertyChanged(nameof(SubtitleCountText));
         OnPropertyChanged(nameof(HasAudioTracks));
         OnPropertyChanged(nameof(HasSubtitleTracks));
         OnPropertyChanged(nameof(AudioSelectionText));

@@ -459,6 +459,14 @@ public partial class SftpTabViewModel : ViewModelBase
         HasActiveDownloads = _sftpDownloadQueue.AllJobs.Any(j =>
             j.Status == SftpJobStatus.Downloading || j.Status == SftpJobStatus.Pending);
 
+        // Il pallino va ricalcolato a ogni cambio della coda: prima si aggiornava solo se
+        // cambiava "attivo/non attivo", quindi eliminando i falliti restava rosso.
+        OnPropertyChanged(nameof(HasFailedSftpItems));
+        OnPropertyChanged(nameof(HasActiveSftpItems));
+        OnPropertyChanged(nameof(ShowSftpRed));
+        OnPropertyChanged(nameof(ShowSftpYellow));
+        OnPropertyChanged(nameof(ShowSftpGreen));
+
         UpdateUploadQueueStats();
         UpdateDownloadQueueStats();
     }
@@ -1141,6 +1149,79 @@ public partial class SftpTabViewModel : ViewModelBase
             InvalidateZeroByteCacheRecursive(SftpCurrentRemotePath);
         }
         catch (Exception ex) { SftpStatusMessage = $"Errore: {ex.Message}"; }
+    }
+
+    /// <summary>Sposta file/cartelle locali in un'altra cartella (stesso nome).</summary>
+    public async Task SftpLocalMoveManyAsync(IReadOnlyList<LocalFileEntry> entries, string destinationFolder)
+    {
+        if (entries.Count == 0 || string.IsNullOrWhiteSpace(destinationFolder)) return;
+
+        int moved = 0;
+        var errors = new List<string>();
+        foreach (var entry in entries)
+        {
+            try
+            {
+                var target = Path.Combine(destinationFolder, entry.Name);
+                if (string.Equals(Path.GetFullPath(target), Path.GetFullPath(entry.FullPath), StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (entry.IsDirectory && (destinationFolder + Path.DirectorySeparatorChar)
+                        .StartsWith(entry.FullPath + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                    throw new IOException("non si può spostare una cartella dentro sé stessa");
+                if (File.Exists(target) || Directory.Exists(target))
+                    throw new IOException("esiste già un elemento con lo stesso nome nella destinazione");
+
+                await Task.Run(() =>
+                {
+                    if (entry.IsDirectory) Directory.Move(entry.FullPath, target);
+                    else File.Move(entry.FullPath, target);
+                });
+                moved++;
+            }
+            catch (Exception ex) { errors.Add($"{entry.Name}: {ex.Message}"); }
+        }
+
+        SftpStatusMessage = errors.Count == 0
+            ? $"Spostati {moved} elementi in {destinationFolder}"
+            : $"Spostati {moved} elementi, {errors.Count} errori: {string.Join("; ", errors.Take(3))}";
+        _logger.LogInformation("[SFTP] Spostamento locale: {Moved} ok, {Err} errori → {Dest}", moved, errors.Count, destinationFolder);
+        await SftpRefreshLocalAsync();
+    }
+
+    /// <summary>Sposta file/cartelle remoti in un'altra cartella del server (rinomina di percorso).</summary>
+    public async Task SftpRemoteMoveManyAsync(IReadOnlyList<SftpRemoteEntry> entries, string destinationFolder)
+    {
+        if (!IsSftpConnected) { SftpStatusMessage = "Non connesso."; return; }
+        if (entries.Count == 0 || string.IsNullOrWhiteSpace(destinationFolder)) return;
+
+        var dest = destinationFolder.Replace('\\', '/').TrimEnd('/');
+        if (dest.Length == 0) dest = "";
+
+        int moved = 0;
+        var errors = new List<string>();
+        foreach (var entry in entries)
+        {
+            try
+            {
+                var target = $"{dest}/{entry.Name}";
+                if (target == entry.FullPath) continue;
+                if (entry.IsDirectory && (dest + "/").StartsWith(entry.FullPath.TrimEnd('/') + "/", StringComparison.Ordinal))
+                    throw new InvalidOperationException("non si può spostare una cartella dentro sé stessa");
+
+                await _sftpService.RenameAsync(entry.FullPath, target);
+                moved++;
+            }
+            catch (Exception ex) { errors.Add($"{entry.Name}: {ex.Message}"); }
+        }
+
+        SftpStatusMessage = errors.Count == 0
+            ? $"Spostati {moved} elementi in {(dest.Length == 0 ? "/" : dest)}"
+            : $"Spostati {moved} elementi, {errors.Count} errori: {string.Join("; ", errors.Take(3))}";
+        _logger.LogInformation("[SFTP] Spostamento remoto: {Moved} ok, {Err} errori → {Dest}", moved, errors.Count, dest);
+
+        InvalidateZeroByteCacheRecursive(SftpCurrentRemotePath);
+        InvalidateZeroByteCacheRecursive(dest.Length == 0 ? "/" : dest);
+        await SftpRefreshAsync();
     }
 
     public async Task SftpRemoteRenameAsync(SftpRemoteEntry entry, string newName)
