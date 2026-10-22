@@ -18,6 +18,9 @@ public class FileOrganizerService : IFileOrganizerService
         ".mp4", ".mkv", ".avi", ".mov", ".webm", ".flv", ".m4v"
     };
 
+    /// <summary>File video considerato da riordina/unisci/dividi.</summary>
+    public static bool IsVideoFile(string fileName) => VideoExtensions.Contains(Path.GetExtension(fileName));
+
     private static readonly Regex EpisodeMarkerRegex = new(
         @"(?:^|[\s_\-\(\[\._])(?:Ep|Episode|E|Puntata|P)[\s_\-\.]*(\d{1,4}(?:[\-\._]\d{1,4})*)(?:[\s_\-\.\)\]]|$)",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);

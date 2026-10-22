@@ -121,7 +121,9 @@ public partial class MainWindowViewModel : ViewModelBase
         ILogger<StreamingTabViewModel> streamingLogger,
         IStreamingCommunityService streamingCommunityService,
         AccountTabViewModel accountVm,
-        VideoboxTabViewModel videobox)
+        VideoboxTabViewModel videobox,
+        SftpRelayQueueService sftpRelayQueue,
+        ILoggerFactory loggerFactory)
     {
         Shared = new SharedState();
         _animeWorldService = animeWorldService;
@@ -199,8 +201,10 @@ public partial class MainWindowViewModel : ViewModelBase
             _sftpUploadQueue,
             _sftpDownloadQueue,
             zeroByteChecker,
-            _sftpLogger, 
-            Shared);
+            _sftpLogger,
+            Shared,
+            sftpRelayQueue,
+            loggerFactory);
 
             Domains = new DomainsTabViewModel(
             domainsResolver,
@@ -376,24 +380,7 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             var text = string.Join(Environment.NewLine, FilteredLogs.Select(FormatLogLine));
 
-            // clip.exe di Windows: sempre presente. Il testo va in UTF-16 con BOM,
-            // altrimenti viene letto nella codepage OEM e gli accenti si rovinano.
-            var psi = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "clip.exe",
-                RedirectStandardInput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-
-            using var proc = System.Diagnostics.Process.Start(psi);
-            if (proc == null) return;
-
-            var stdin = proc.StandardInput.BaseStream;
-            await stdin.WriteAsync(System.Text.Encoding.Unicode.GetPreamble());
-            await stdin.WriteAsync(System.Text.Encoding.Unicode.GetBytes(text));
-            stdin.Close();
-            await proc.WaitForExitAsync();
+            await DownloadManager.Helpers.ClipboardHelper.SetTextAsync(text);
 
             LogStatus("Generale", $"Copiate {FilteredLogs.Count} righe di log negli appunti.");
         }

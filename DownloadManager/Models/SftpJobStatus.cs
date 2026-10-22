@@ -8,5 +8,7 @@ public enum SftpJobStatus
     Paused,
     Completed,
     Failed,
-    Cancelled
+    Cancelled,
+    /// <summary>Copia da un server SFTP a un altro in corso.</summary>
+    Transferring
 }

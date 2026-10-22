@@ -7,6 +7,9 @@ public interface ISftpService
     bool IsConnected { get; }
     string CurrentRemotePath { get; }
 
+    /// <summary>Server a cui si è connessi (host:porta:utente), null se disconnessi.</summary>
+    string? ServerKey { get; }
+
     /// <summary>Sollevato dopo ogni modifica riuscita al filesystem remoto.</summary>
     event Action<SftpRemoteChange>? RemoteChanged;
 
@@ -46,6 +49,9 @@ public interface ISftpService
         IProgress<SftpProgress>? progress = null,
         CancellationToken ct = default);
     void AbortCurrentOperation();
+
+    /// <summary>Segnala una modifica fatta da fuori (es. copia da un altro server), così chi ascolta si aggiorna.</summary>
+    void NotifyRemoteChanged(SftpRemoteChange change);
 }
 
 /// <summary>

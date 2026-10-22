@@ -1,5 +1,41 @@
 # Changelog
 
+## [1.1.5] — 2026-10-22
+
+### ☁ SFTP: copia da server a server (nuovo)
+- Il pannello di sinistra del Browser passa da **Locale** a **Server 2**: scegli un profilo e premi Connetti. È una connessione separata, quella principale (destra) resta com'è.
+- Pulsanti **Copia →** e **← Copia** al centro (e voci nel clic destro) per copiare file e cartelle intere nella cartella aperta dall'altra parte.
+- I dati passano dal PC **in streaming**, letti da un server e scritti sull'altro nello stesso momento: nessun file temporaneo su disco.
+- Nuova coda **"Server ↔ Server"** con avanzamento, velocità, copie parallele, pausa, ripresa e annulla. Una copia messa in pausa riparte dall'inizio del file.
+- Sul secondo server si può navigare, creare cartelle ed eliminare (anche col tasto Canc); i pannelli si aggiornano da soli a copia finita.
+
+### 🧰 Videobox Corrector
+- **Più sorgenti SFTP insieme**, anche su server diversi: in "Impostazioni e Domini" ogni sorgente ha nome, connessione (un profilo della tab SFTP o la connessione della tab), cartella sul server, dominio e percorso pubblico, con anteprima del link. La configurazione precedente diventa da sola la prima sorgente.
+- Menu **Sorgenti** sopra l'albero per scegliere quali caricare; la scelta è ricordata per ogni categoria. Ogni sorgente è una radice dell'albero; se un server non risponde lo dice sulla sua radice e le altre si caricano lo stesso.
+- Le sorgenti con profilo dedicato usano una **connessione propria**: la tab SFTP non deve più essere connessa (tolto l'avviso rosso "Tab SFTP disconnessa").
+- L'albero **si aggiorna subito** anche per le sorgenti con un profilo dedicato, quando la tab SFTP è connessa allo stesso server (eliminazioni, rinomine, nuove cartelle, upload).
+- **Filtro per colore** dei post al posto di "Nascondi OK": verde, giallo, rosso, viola e grigio si mostrano o nascondono a piacere, ognuno con il numero di post; scorciatoie **"Da sistemare"** e **"Tutti"**.
+- **Post aggiornati in tempo reale**: i post visibili si riallineano col forum ogni 90 secondi, quando li selezioni e dopo "Applica", senza ricaricare tutto.
+- **Mappatura di un singolo file** (film): seleziona il file nell'albero invece della cartella.
+- **Copia col clic destro**: titolo, indirizzo e link dei post; nome, percorso e link pubblico (anche di tutti i file) dall'albero; URL e nomi dalla tabella di mappatura.
+- "Carica" non duplica più le cartelle dell'albero se un aggiornamento automatico era in corso.
+- Il campo "Connessione SFTP" delle sorgenti non resta più vuoto quando l'elenco dei profili si ricarica.
+
+### 📝 Testi lunghi e pattern
+- **Testo che scorre**: passando il mouse su un testo tagliato con "…" il testo scorre fino alla fine e poi ricomincia; resta anche il tooltip con il testo completo. Vale in tutta l'app.
+- I nomi lunghi nell'albero di Videobox ora si accorciano con "…" invece di uscire dal pannello.
+- **Legenda dei pattern**: un pulsante **"?"** accanto a ogni campo pattern (Anime, Film/Serie, cartella stagione, Organizza file) spiega ogni segnaposto con un esempio; cliccandolo viene aggiunto al pattern.
+- Il segnaposto **{Season}** ora funziona: "S{Season:D2}E{Episode:D2}" diventa ad esempio S01E05 (prima restava scritto così nel nome del file).
+
+### ⚡ Anime Download
+- **Accodamento più veloce** con AnimeWorld: la pagina del sito usata per ottenere i link resta aperta e viene riusata, senza scaricare immagini e pubblicità; prima ogni accodamento, anche di un solo episodio, ricaricava tutta la home e aspettava qualche secondo in più. Anche il download del singolo episodio usa questa via.
+
+### 🗂 Organizza file
+- **Unisci cartelle**: accanto a ogni cartella compare il numero di video (prima era sempre 0), sia in locale che sul server; si aggiorna dopo l'unione.
+
+### 🧹 Varie
+- Copia negli appunti senza caratteri invisibili all'inizio del testo.
+
 ## [1.1.4] — 2026-10-20
 
 ### ☁ SFTP

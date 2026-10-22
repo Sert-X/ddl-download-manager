@@ -598,7 +598,12 @@ public partial class DownloadTabViewModel : ViewModelBase
     private async Task DownloadEpisodeInternalAsync(Episode episode, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
-        var videoUrl = await SelectedProvider!.GetVideoUrlAsync(episode.Link);
+        // Via veloce (API del sito su una pagina già aperta); se non trova l'URL si apre la pagina dell'episodio
+        var provider = SelectedProvider!;
+        var urls = await provider.GetVideoUrlsBatchAsync(new List<Episode> { episode }, ct);
+        var videoUrl = urls.TryGetValue(episode.Link, out var fast) && !string.IsNullOrEmpty(fast)
+            ? fast
+            : await provider.GetVideoUrlAsync(episode.Link, ct);
 
         if (string.IsNullOrEmpty(videoUrl)) return;
         ct.ThrowIfCancellationRequested();

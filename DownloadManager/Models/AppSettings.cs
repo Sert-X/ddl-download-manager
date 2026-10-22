@@ -45,9 +45,17 @@ public class AppSettings
     public string SftpBasePath { get; set; } = "/var/www/html/media";
     public string VideoboxPublicPath { get; set; } = "Anime SUB.ITA"; 
 
-    public IEnumerable<string> AllValidStorageDomains => 
-        new[] { PrimaryStorageUrl }
+    /// <summary>Sorgenti SFTP di Videobox Corrector (vuoto = si crea dalla vecchia configurazione singola).</summary>
+    public List<VideoboxSourceConfig> VideoboxSources { get; set; } = new();
+    /// <summary>Sorgenti da caricare per ogni categoria (chiave = Id categoria). Assente = tutte.</summary>
+    public Dictionary<string, List<string>> VideoboxCategorySources { get; set; } = new();
+
+    /// <summary>Domini considerati validi: quelli delle sorgenti, il primario storico e i secondari.</summary>
+    public IEnumerable<string> AllValidStorageDomains =>
+        VideoboxSources.Select(s => s.Domain)
+        .Append(PrimaryStorageUrl)
         .Concat(SecondaryStorageUrlsRaw?.Split(',', System.StringSplitOptions.RemoveEmptyEntries) ?? System.Array.Empty<string>())
-        .Select(d => d.Trim())
-        .Where(d => !string.IsNullOrWhiteSpace(d));
+        .Select(d => (d ?? "").Trim())
+        .Where(d => !string.IsNullOrWhiteSpace(d))
+        .Distinct(System.StringComparer.OrdinalIgnoreCase);
 }

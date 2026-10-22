@@ -20,4 +20,7 @@ public class SftpConfig
     /// Se vuota, WinSCP accetta qualsiasi host key.
     /// </summary>
     public string SshHostKeyFingerprint { get; set; } = string.Empty;
+
+    /// <summary>Identità del server (host:porta:utente): due profili uguali puntano allo stesso server.</summary>
+    public string ServerKey => $"{Host.Trim().ToLowerInvariant()}:{Port}:{Username.Trim()}";
 }

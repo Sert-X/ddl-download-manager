@@ -53,6 +53,18 @@ public abstract class SftpQueueServiceBase<TJob> where TJob : TransferJobBase
     /// <summary>Esegue il trasferimento vero e proprio (PutFiles / GetFileToDirectory + verifica/rename).</summary>
     protected abstract Task ExecuteTransferAsync(Session session, TJob job, CancellationToken ct);
 
+    /// <summary>Server a cui si collega la sessione del job (di norma quello configurato).</summary>
+    protected virtual SftpConfig? GetSessionConfig(TJob job) => _currentConfig;
+
+    /// <summary>La coda può partire (c'è una configurazione).</summary>
+    protected virtual bool IsConfigured => _currentConfig != null;
+
+    /// <summary>
+    /// true: l'avanzamento arriva dagli eventi di WinSCP della sessione. false: lo
+    /// aggiorna il figlio (es. copia tra server in streaming, dove WinSCP non lo conosce).
+    /// </summary>
+    protected virtual bool UsesSessionProgress => true;
+
     protected readonly SftpSessionLimiter _sessionLimiter;
 
     protected SftpQueueServiceBase(ILogger logger, SftpSessionLimiter sessionLimiter)
@@ -367,7 +379,7 @@ public abstract class SftpQueueServiceBase<TJob> where TJob : TransferJobBase
                         if (!_isRunning) return;
                         if (_isPaused) return;
                         if (_active.Count >= _maxConcurrency) return;
-                        if (_currentConfig == null) return;
+                        if (!IsConfigured) return;
                         if (!_pending.TryDequeue(out job)) return;
 
                         _pendingIds.Remove(job.Id);
@@ -435,7 +447,7 @@ public abstract class SftpQueueServiceBase<TJob> where TJob : TransferJobBase
                 });
             }
 
-            session.FileTransferProgress += OnFileTransferProgress;
+            if (UsesSessionProgress) session.FileTransferProgress += OnFileTransferProgress;
 
             lock (_queueLock) { _activeSessions[job.Id] = session; }
 
@@ -445,7 +457,9 @@ public abstract class SftpQueueServiceBase<TJob> where TJob : TransferJobBase
                 await _sessionLimiter.AcquireAsync(cts.Token);
                 holdsSlot = true;
 
-                var options = CreateSessionOptions(_currentConfig!);
+                var config = GetSessionConfig(job)
+                             ?? throw new InvalidOperationException("Nessuna configurazione SFTP impostata.");
+                var options = CreateSessionOptions(config);
                 var opened = await TryOpenWithRetryAsync(session, options, cts.Token);
                 if (!opened)
                     throw new InvalidOperationException("Impossibile connettersi al server dopo diversi tentativi.");

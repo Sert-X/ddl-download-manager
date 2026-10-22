@@ -267,6 +267,7 @@
             <StreamGeometry x:Key="IconClose">M 18,6 L 6,18 M 6,6 L 18,18</StreamGeometry>
             <StreamGeometry x:Key="IconCheck">M 20,6 L 9,17 L 4,12</StreamGeometry>
             <StreamGeometry x:Key="IconArrowLeft">M 19,12 L 5,12 M 12,19 L 5,12 L 12,5</StreamGeometry>
+            <StreamGeometry x:Key="IconArrowRight">M 5,12 L 19,12 M 12,5 L 19,12 L 12,19</StreamGeometry>
             <StreamGeometry x:Key="IconArrowUp">M 12,19 L 12,5 M 5,12 L 12,5 L 19,12</StreamGeometry>
             <StreamGeometry x:Key="IconArrowDown">M 12,5 L 12,19 M 19,12 L 12,19 L 5,12</StreamGeometry>
             <StreamGeometry x:Key="IconHome">M 3,10 L 12,3 L 21,10 L 21,20 A 1,1 0 0 1 20,21 L 15,21 L 15,14 L 9,14 L 9,21 L 4,21 A 1,1 0 0 1 3,20 Z</StreamGeometry>
@@ -859,6 +860,10 @@
         <Style Selector="DataGridRow">
             <Setter Property="Background" Value="Transparent"/>
         </Style>
+        <!-- Testo lungo nelle celle: "…" e testo completo nel tooltip (TrimmedTextToolTip) -->
+        <Style Selector="DataGridCell TextBlock">
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
         <Style Selector="DataGridRow:pointerover /template/ Rectangle#BackgroundRectangle">
             <Setter Property="Fill" Value="{DynamicResource AppHoverBrush}"/>
         </Style>
@@ -1017,6 +1022,47 @@
             <Setter Property="CornerRadius" Value="12"/>
             <Setter Property="Padding" Value="8"/>
             <Setter Property="MaxWidth" Value="420"/>
+        </Style>
+        <!-- Filtri a chip (Videobox): spenti = attenuati -->
+        <Style Selector="ToggleButton.statusChip">
+            <Setter Property="Padding" Value="9,3"/>
+            <Setter Property="MinWidth" Value="0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Opacity" Value="0.4"/>
+        </Style>
+        <Style Selector="ToggleButton.statusChip:checked">
+            <Setter Property="Opacity" Value="1"/>
+        </Style>
+        <Style Selector="ToggleButton.statusChip /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppSurface2Brush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+        </Style>
+        <Style Selector="ToggleButton.statusChip:checked /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppSurface2Brush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+        </Style>
+        <Style Selector="ToggleButton.statusChip:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppSurface2Brush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+        </Style>
+        <Style Selector="ToggleButton.statusChip:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppSurface2Brush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+        </Style>
+        <Style Selector="FlyoutPresenter.legendFlyout">
+            <Setter Property="Background" Value="{DynamicResource ComboBoxDropDownBackground}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ComboBoxDropDownBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Padding" Value="8"/>
+            <Setter Property="MaxWidth" Value="620"/>
         </Style>
         <Style Selector="Border.trackRow">
             <Setter Property="CornerRadius" Value="8"/>

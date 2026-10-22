@@ -188,7 +188,7 @@ public partial class StreamingTabViewModel : ViewModelBase
             try
             {
                 var preview = FileNameBuilder.ApplyPattern(
-                    SeriesNamingPattern, "Nome Serie", 5, "Titolo Ep", "file");
+                    SeriesNamingPattern, "Nome Serie", 5, "Titolo Ep", "file", season: 1);
                 return preview + ".mp4";
             }
             catch { return "(pattern non valido)"; }

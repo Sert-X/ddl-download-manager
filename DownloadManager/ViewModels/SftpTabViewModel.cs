@@ -119,13 +119,16 @@ public partial class SftpTabViewModel : ViewModelBase
 
     public bool HasFailedSftpItems =>
         _sftpUploadQueue.AllJobs.Any(j => j.Status == SftpJobStatus.Failed) ||
-        _sftpDownloadQueue.AllJobs.Any(j => j.Status == SftpJobStatus.Failed);
+        _sftpDownloadQueue.AllJobs.Any(j => j.Status == SftpJobStatus.Failed) ||
+        _relayQueue.AllJobs.Any(j => j.Status == SftpJobStatus.Failed);
 
     public bool HasActiveSftpItems =>
         _sftpUploadQueue.AllJobs.Any(j =>
             j.Status == SftpJobStatus.Uploading || j.Status == SftpJobStatus.Pending) ||
         _sftpDownloadQueue.AllJobs.Any(j =>
-            j.Status == SftpJobStatus.Downloading || j.Status == SftpJobStatus.Pending);
+            j.Status == SftpJobStatus.Downloading || j.Status == SftpJobStatus.Pending) ||
+        _relayQueue.AllJobs.Any(j =>
+            j.Status == SftpJobStatus.Transferring || j.Status == SftpJobStatus.Pending);
 
     // Pallino della tab: grigio se disconnesso, altrimenti rosso (errori) / giallo (attività) / verde.
     public bool ShowSftpGray => !IsSftpConnected;
@@ -163,7 +166,9 @@ public partial class SftpTabViewModel : ViewModelBase
         SftpDownloadQueueService sftpDownloadQueue,
         ZeroByteCheckerService zeroByteChecker,
         ILogger<SftpTabViewModel> logger,
-        SharedState shared)
+        SharedState shared,
+        SftpRelayQueueService relayQueue,
+        ILoggerFactory loggerFactory)
     {
         _sftpService = sftpService;
         _sftpRepository = sftpRepository;
@@ -172,6 +177,7 @@ public partial class SftpTabViewModel : ViewModelBase
         _zeroByteChecker = zeroByteChecker;
         _logger = logger;
         _shared = shared;
+        InitRelay(relayQueue, loggerFactory);
 
         LocalSortOption = SortOptions[0];
         RemoteSortOption = SortOptions[0];
@@ -469,6 +475,7 @@ public partial class SftpTabViewModel : ViewModelBase
 
         UpdateUploadQueueStats();
         UpdateDownloadQueueStats();
+        UpdateRelayQueueStats();
     }
 
     private void UpdateRemoteBrowserStats()
@@ -1486,5 +1493,6 @@ public partial class SftpTabViewModel : ViewModelBase
     {
         StopLocalWatcher();
         _localWatcherDebounce?.Stop();
+        DisposeRelay();
     }
 }

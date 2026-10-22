@@ -13,6 +13,12 @@ public partial class SftpNode : ObservableObject
     public bool IsDirectory { get; set; }
     public ObservableCollection<SftpNode> Children { get; set; } = new();
     public SftpNode? Parent { get; set; }
+    /// <summary>Sorgente (server + cartella) a cui appartiene il nodo.</summary>
+    public DownloadManager.Models.VideoboxSource? Source { get; set; }
+    /// <summary>Radice di una sorgente nell'albero (il suo nome indica sorgente e server).</summary>
+    public bool IsSourceRoot { get; set; }
+    /// <summary>Radice di una sorgente che non è stato possibile leggere (server o cartella non raggiungibili).</summary>
+    public bool HasLoadError { get; set; }
 
     /// <summary>Stato calcolato solo dal match con i link (mai Mismatch).</summary>
     public NodeStatus BaseStatus { get; set; } = NodeStatus.None;

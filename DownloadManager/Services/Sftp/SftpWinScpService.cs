@@ -28,8 +28,13 @@ public class SftpWinScpService : ISftpService, IDisposable
     /// <summary>Sollevato dopo ogni modifica riuscita al filesystem remoto (creazione, eliminazione, rinomina, upload).</summary>
     public event Action<SftpRemoteChange>? RemoteChanged;
 
+    public void NotifyRemoteChanged(SftpRemoteChange change) => RemoteChanged?.Invoke(change);
+
     public bool IsConnected => _session?.Opened == true;
     public string CurrentRemotePath { get; private set; } = "/";
+
+    private SftpConfig? _connectedConfig;
+    public string? ServerKey => IsConnected ? _connectedConfig?.ServerKey : null;
 
     // ============================================================
     //  ABORT (usato dal ZeroByteCheckerService quando una cartella
@@ -67,6 +72,7 @@ public class SftpWinScpService : ISftpService, IDisposable
             try
             {
                 _currentOptions = BuildSessionOptions(config);
+                _connectedConfig = config;
                 _session = new Session();
 
                 _logger.LogInformation("Connessione WinSCP a {Host}:{Port}...", config.Host, config.Port);

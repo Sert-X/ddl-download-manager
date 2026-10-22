@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:h="using:DownloadManager.Helpers"
         xmlns:vm="using:DownloadManager.ViewModels"
         xmlns:models="using:DownloadManager.Models"
         xmlns:services="using:DownloadManager.Services.Anime"
@@ -266,8 +267,8 @@
 
                         <Border Classes="cardElevated" Margin="0,0,0,12">
                             <Grid ColumnDefinitions="Auto, *, Auto, Auto, Auto" RowDefinitions="Auto, Auto">
-                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Pattern" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,10,0" ToolTip.Tip="Usa {OriginalFileName} per mantenere il nome originale, o {Episode} per rinominare"/>
-                                <ComboBox Grid.Row="0" Grid.Column="1" IsEditable="True" ItemsSource="{Binding NamingPresets}" Text="{Binding NamingPattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,0,10,0"/>
+                                <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0"><TextBlock Text="Pattern" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="Anime" Target="{Binding #AnimePatternBox}"/></StackPanel>
+                                <ComboBox x:Name="AnimePatternBox" Grid.Row="0" Grid.Column="1" IsEditable="True" ItemsSource="{Binding NamingPresets}" Text="{Binding NamingPattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,0,10,0"/>
                                 <Border Grid.Row="0" Grid.Column="2" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,0,10,0" MaxWidth="380">
                                     <TextBlock Text="{Binding PatternPreview}" FontFamily="Consolas,Menlo,monospace" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                 </Border>
@@ -556,14 +557,14 @@
 
                         <Border Classes="cardElevated" Margin="0,0,0,12">
                             <Grid ColumnDefinitions="Auto, *, Auto, Auto, Auto" RowDefinitions="Auto, Auto, Auto, Auto">
-                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Pattern Film" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,10,0" ToolTip.Tip="Come verrà rinominato il file del film (es. {Series} ({Anno}))"/>
-                                <ComboBox Grid.Row="0" Grid.Column="1" IsEditable="True" ItemsSource="{Binding MovieNamingPresets}" Text="{Binding MovieNamingPattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,0,10,0"/>
+                                <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0"><TextBlock Text="Pattern Film" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="Movie" Target="{Binding #MoviePatternBox}"/></StackPanel>
+                                <ComboBox x:Name="MoviePatternBox" Grid.Row="0" Grid.Column="1" IsEditable="True" ItemsSource="{Binding MovieNamingPresets}" Text="{Binding MovieNamingPattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,0,10,0"/>
                                 <Border Grid.Row="0" Grid.Column="2" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,0,10,0" MaxWidth="380">
                                     <TextBlock Text="{Binding MoviePatternPreview}" FontFamily="Consolas,Menlo,monospace" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                 </Border>
 
-                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Pattern Serie" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,10,10,0" ToolTip.Tip="Come verranno rinominati gli episodi (es. {Episode} o S{Season}E{Episode})"/>
-                                <ComboBox Grid.Row="1" Grid.Column="1" IsEditable="True" ItemsSource="{Binding SeriesNamingPresets}" Text="{Binding SeriesNamingPattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,10,10,0"/>
+                                <StackPanel Grid.Row="1" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,10,4,0"><TextBlock Text="Pattern Serie" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="Series" Target="{Binding #SeriesPatternBox}"/></StackPanel>
+                                <ComboBox x:Name="SeriesPatternBox" Grid.Row="1" Grid.Column="1" IsEditable="True" ItemsSource="{Binding SeriesNamingPresets}" Text="{Binding SeriesNamingPattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,10,10,0"/>
                                 <Border Grid.Row="1" Grid.Column="2" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,10,10,0" MaxWidth="380">
                                     <TextBlock Text="{Binding SeriesPatternPreview}" FontFamily="Consolas,Menlo,monospace" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                 </Border>
@@ -575,8 +576,8 @@
                                 </Button>
                                 <CheckBox ToolTip.Tip="Salva ogni serie in una sottocartella con il suo nome dentro la cartella base" Grid.Row="2" Grid.Column="4" Content="Crea sottocartella per serie" IsChecked="{Binding CreateSeriesFolder, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,10,0,0"/>
 
-                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Sottocartella stagione" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,10,10,0" ToolTip.Tip="Pattern per le cartelle delle stagioni (es. 'Stagione {number}'). Lascia vuoto per non creare sottocartelle."/>
-                                <TextBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding SeasonFolderPattern}" PlaceholderText="Stagione {number} (vuoto = nessuna)" Margin="0,10,10,0"/>
+                                <StackPanel Grid.Row="3" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,10,4,0"><TextBlock Text="Sottocartella stagione" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="SeasonFolder" Target="{Binding #SeasonFolderBox}"/></StackPanel>
+                                <TextBox x:Name="SeasonFolderBox" Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding SeasonFolderPattern}" PlaceholderText="Stagione {number} (vuoto = nessuna)" Margin="0,10,10,0"/>
                             </Grid>
                         </Border>
 
@@ -1057,8 +1058,8 @@
                                                 </Grid>
 
                                                 <Grid ColumnDefinitions="Auto, *, Auto">
-                                                    <TextBlock Grid.Column="0" Text="Pattern" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,10,0" ToolTip.Tip="Usa {Number} per il numero sequenziale o {OriginalName} per il nome originale"/>
-                                                    <ComboBox Grid.Column="1" IsEditable="True" ItemsSource="{Binding OrganizePatterns}" Text="{Binding OrganizePattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,0,10,0"/>
+                                                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0"><TextBlock Text="Pattern" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="Organize" Target="{Binding #OrganizePatternBox}"/></StackPanel>
+                                                    <ComboBox x:Name="OrganizePatternBox" Grid.Column="1" IsEditable="True" ItemsSource="{Binding OrganizePatterns}" Text="{Binding OrganizePattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,0,10,0"/>
                                                     <Border Grid.Column="2" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1" CornerRadius="6" Padding="10,4" MaxWidth="380">
                                                         <TextBlock Text="{Binding OrganizePatternPreview}" FontFamily="Consolas,Menlo,monospace" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                                     </Border>
@@ -1123,7 +1124,7 @@
                                                                     <Grid ColumnDefinitions="Auto, *, Auto">
                                                                         <TextBlock Grid.Column="0" Text="{Binding Priority, StringFormat='[{0}] '}" FontWeight="Bold" VerticalAlignment="Center" Foreground="{DynamicResource AppAccentBrush}"/>
                                                                         <TextBlock Grid.Column="1" Text="{Binding Path}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                                                        <TextBlock Grid.Column="2" Text="{Binding FileCount, StringFormat=' ({0} file)'}" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center"/>
+                                                                        <TextBlock Grid.Column="2" Text="{Binding FileCount, StringFormat=' ({0} video)'}" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center"/>
                                                                     </Grid>
                                                                 </DataTemplate>
                                                             </ListBox.ItemTemplate>
@@ -1148,8 +1149,8 @@
                                                 </Grid>
 
                                                 <Grid ColumnDefinitions="Auto, *, Auto">
-                                                    <TextBlock Grid.Column="0" Text="Pattern" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,10,0"/>
-                                                    <ComboBox Grid.Column="1" IsEditable="True" ItemsSource="{Binding OrganizePatterns}" Text="{Binding MergePattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,0,10,0"/>
+                                                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0"><TextBlock Text="Pattern" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="Organize" Target="{Binding #MergePatternBox}"/></StackPanel>
+                                                    <ComboBox x:Name="MergePatternBox" Grid.Column="1" IsEditable="True" ItemsSource="{Binding OrganizePatterns}" Text="{Binding MergePattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,0,10,0"/>
                                                     <Border Grid.Column="2" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1" CornerRadius="6" Padding="10,4" MaxWidth="380">
                                                         <TextBlock Text="{Binding MergePatternPreview}" FontFamily="Consolas,Menlo,monospace" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                                     </Border>
@@ -1268,19 +1269,18 @@
                                                 </StackPanel>
 
                                                 <Grid ColumnDefinitions="Auto, *, Auto">
-                                                    <TextBlock Grid.Column="0" Text="Pattern file" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,10,0"/>
-                                                    <ComboBox Grid.Column="1" IsEditable="True" ItemsSource="{Binding OrganizePatterns}" Text="{Binding SplitFilePattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,0,10,0"/>
+                                                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0"><TextBlock Text="Pattern file" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="Organize" Target="{Binding #SplitFilePatternBox}"/></StackPanel>
+                                                    <ComboBox x:Name="SplitFilePatternBox" Grid.Column="1" IsEditable="True" ItemsSource="{Binding OrganizePatterns}" Text="{Binding SplitFilePattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,0,10,0"/>
                                                     <Border Grid.Column="2" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1" CornerRadius="6" Padding="10,4" MaxWidth="380">
                                                         <TextBlock Text="{Binding SplitFilePatternPreview}" FontFamily="Consolas,Menlo,monospace" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                                     </Border>
                                                 </Grid>
 
                                                 <Grid ColumnDefinitions="Auto, *">
-                                                    <TextBlock Grid.Column="0" Text="Nome sottocartella" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,10,0"/>
-                                                    <ComboBox Grid.Column="1" IsEditable="True" ItemsSource="{Binding SplitFolderPatterns}" Text="{Binding SplitFolderPattern, Mode=TwoWay}" HorizontalAlignment="Stretch"/>
+                                                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0"><TextBlock Text="Nome sottocartella" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="SplitFolder" Target="{Binding #SplitFolderPatternBox}"/></StackPanel>
+                                                    <ComboBox x:Name="SplitFolderPatternBox" Grid.Column="1" IsEditable="True" ItemsSource="{Binding SplitFolderPatterns}" Text="{Binding SplitFolderPattern, Mode=TwoWay}" HorizontalAlignment="Stretch"/>
                                                 </Grid>
 
-                                                <TextBlock Foreground="{DynamicResource AppTextMutedBrush}" FontStyle="Italic" FontSize="11" Text="Placeholder: {Number} {Number:D2} {Start} {End}"/>
 
                                                 <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="6">
                                                     <Button ToolTip.Tip="Calcola la suddivisione in sottocartelle senza modificare nulla: controlla la tabella prima di applicare" Classes="info" Command="{Binding PreviewSplitCommand}" IsEnabled="{Binding !IsSplitBusy}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconEye}"/><TextBlock Text="Anteprima split"/></StackPanel></Button>
@@ -1356,6 +1356,11 @@
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Code Upload e Download</Run><LineBreak/>
                                         Ogni trasferimento va in coda con avanzamento e velocità. Puoi metterlo in pausa, riprenderlo (riparte da dove era arrivato) o annullarlo. Il numero di trasferimenti simultanei si regola nella coda.<LineBreak/>
+                                        <LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Copia da server a server</Run><LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Server 2:</Run> nel Browser premi "Server 2" sopra il pannello di sinistra, scegli un profilo e premi Connetti: è una connessione separata, quella principale (destra) resta com'è.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Copia:</Run> seleziona file o cartelle e usa le frecce al centro (oppure clic destro, "Copia sul…"). I file vanno nella cartella aperta dall'altra parte, cartelle comprese.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Come funziona:</Run> i dati passano dal PC in streaming (letti da un server e scritti sull'altro insieme), senza file temporanei. Le copie si seguono nella coda "Server ↔ Server"; una copia messa in pausa riparte dall'inizio del file.<LineBreak/>
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Zero-Byte Checker</Run><LineBreak/>
                                         Cerca file vuoti (0 byte) nelle cartelle remote, di solito upload interrotti. Le cartelle che ne contengono vengono evidenziate in rosso.<LineBreak/>
@@ -1467,6 +1472,17 @@
                                         </StackPanel>
                                     </TabItem.Header>
                                 </TabItem>
+
+                                <!-- ===== SERVER ↔ SERVER ===== -->
+                                <TabItem>
+                                    <TabItem.Header>
+                                        <StackPanel Classes="bi">
+                                            <Path Classes="icon" Data="{StaticResource IconRepeat}"/>
+                                            <TextBlock Text="Server ↔ Server" VerticalAlignment="Center"/>
+                                            <Border Width="9" Height="9" CornerRadius="5" Background="{DynamicResource AppAccentBrush}" IsVisible="{Binding HasActiveRelays}" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </TabItem.Header>
+                                </TabItem>
                             </TabControl>
                             <!-- Contenuti sempre nel visual tree: cambiando tab restano scroll e stato -->
                             <Panel ClipToBounds="True">
@@ -1476,10 +1492,94 @@
                                         <!-- FILE LOCALI -->
                                         <Border Grid.Column="0" Classes="cardElevated" Margin="0,0,6,0">
                                             <DockPanel>
-                                                <StackPanel DockPanel.Dock="Top" Classes="bi" Margin="0,0,0,10">
-                                                    <Path Classes="icon accent" Data="{StaticResource IconMonitor}"/>
-                                                    <TextBlock Text="File locali" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
-                                                </StackPanel>
+                                                <Grid DockPanel.Dock="Top" ColumnDefinitions="*, Auto" Margin="0,0,0,10">
+                                                    <StackPanel Classes="bi">
+                                                        <Path Classes="icon accent" Data="{StaticResource IconMonitor}" IsVisible="{Binding IsLocalMode}"/>
+                                                        <Path Classes="icon accent" Data="{StaticResource IconCloud}" IsVisible="{Binding IsServer2Mode}"/>
+                                                        <TextBlock Text="File locali" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" IsVisible="{Binding IsLocalMode}"/>
+                                                        <TextBlock Text="{Binding Server2Name}" FontWeight="Bold" FontSize="14" VerticalAlignment="Center" IsVisible="{Binding IsServer2Mode}" TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                    <!-- Cosa mostra il pannello: PC oppure un secondo server SFTP -->
+                                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                                                        <Button Padding="10,4" FontSize="12" Classes.accent="{Binding IsLocalMode}" Command="{Binding ShowLocalPaneCommand}" ToolTip.Tip="Mostra i file del PC (upload e download)">
+                                                            <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconMonitor}"/><TextBlock Text="Locale"/></StackPanel>
+                                                        </Button>
+                                                        <Button Padding="10,4" FontSize="12" Classes.accent="{Binding IsServer2Mode}" Command="{Binding ShowServer2PaneCommand}" ToolTip.Tip="Mostra un secondo server SFTP per copiare file da un server all'altro">
+                                                            <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCloud}"/><TextBlock Text="Server 2"/></StackPanel>
+                                                        </Button>
+                                                    </StackPanel>
+                                                </Grid>
+
+                                                <!-- ===== SECONDO SERVER: connessione ===== -->
+                                                <Border DockPanel.Dock="Top" IsVisible="{Binding ShowServer2Connect}" Background="{DynamicResource AppInputBrush}" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" CornerRadius="12" Padding="14">
+                                                    <StackPanel Spacing="10">
+                                                        <TextBlock Text="Collegati a un secondo server per copiare file tra i due server: seleziona i file e usa le frecce al centro. I dati passano dal PC in streaming, senza occupare spazio su disco." FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                                        <Grid ColumnDefinitions="*, Auto">
+                                                            <ComboBox HorizontalAlignment="Stretch" ItemsSource="{Binding SftpProfiles}" SelectedItem="{Binding Server2Profile, Mode=TwoWay}" PlaceholderText="Profilo del secondo server" ToolTip.Tip="Profili salvati nella configurazione SFTP qui sopra">
+                                                                <ComboBox.ItemTemplate>
+                                                                    <DataTemplate x:DataType="models:SftpConfig">
+                                                                        <StackPanel Spacing="1">
+                                                                            <TextBlock Text="{Binding Name}"/>
+                                                                            <TextBlock Text="{Binding Host}" FontSize="10" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                                                        </StackPanel>
+                                                                    </DataTemplate>
+                                                                </ComboBox.ItemTemplate>
+                                                            </ComboBox>
+                                                            <Button Grid.Column="1" Classes="success" Margin="8,0,0,0" Command="{Binding Server2ConnectCommand}" IsEnabled="{Binding !IsServer2Busy}" ToolTip.Tip="Apre una connessione separata verso il secondo server">
+                                                                <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconPlug}"/><TextBlock Text="Connetti"/></StackPanel>
+                                                            </Button>
+                                                        </Grid>
+                                                        <ProgressBar IsIndeterminate="True" Height="4" MinWidth="0" IsVisible="{Binding IsServer2Busy}"/>
+                                                    </StackPanel>
+                                                </Border>
+
+                                                <!-- ===== SECONDO SERVER: file ===== -->
+                                                <DockPanel IsVisible="{Binding ShowServer2Browser}">
+                                                    <Grid DockPanel.Dock="Top" RowDefinitions="Auto,Auto" Margin="0,0,0,8">
+                                                        <Grid Grid.Row="0" ColumnDefinitions="Auto, Auto, *, Auto, Auto, Auto">
+                                                            <Button Grid.Column="0" Classes="iconCircle" Command="{Binding Server2GoUpCommand}" Margin="0,0,6,0" ToolTip.Tip="Indietro"><Path Classes="icon" Data="{StaticResource IconArrowLeft}"/></Button>
+                                                            <Button Grid.Column="1" Classes="iconCircle" Command="{Binding Server2GoHomeCommand}" Margin="0,0,6,0" ToolTip.Tip="Home"><Path Classes="icon" Data="{StaticResource IconHome}"/></Button>
+                                                            <TextBox Grid.Column="2" Text="{Binding Server2Path}" Margin="0,0,6,0" KeyDown="OnServer2PathKeyDown" ToolTip.Tip="Percorso sul secondo server (Invio per aprirlo)"/>
+                                                            <Button Grid.Column="3" Classes="iconCircle" Command="{Binding Server2RefreshCommand}" Margin="0,0,6,0" ToolTip.Tip="Aggiorna"><Path Classes="icon" Data="{StaticResource IconRefresh}"/></Button>
+                                                            <Button Grid.Column="4" Classes="iconCircle" Click="OnServer2NewFolderClick" Margin="0,0,6,0" ToolTip.Tip="Nuova cartella"><Path Classes="icon" Data="{StaticResource IconPlus}"/></Button>
+                                                            <Button Grid.Column="5" Classes="iconCircle danger" Command="{Binding Server2DisconnectCommand}" ToolTip.Tip="Disconnetti il secondo server"><Path Classes="icon" Data="{StaticResource IconBoltOff}"/></Button>
+                                                        </Grid>
+                                                        <TextBlock Grid.Row="1" Text="{Binding Server2Stats}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,6,0,0" HorizontalAlignment="Left"/>
+                                                    </Grid>
+                                                    <DataGrid Name="Server2FilesGrid" MinHeight="200" ItemsSource="{Binding Server2Entries}" ScrollViewer.HorizontalScrollBarVisibility="Auto" SelectedItem="{Binding SelectedServer2Entry, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" SelectionChanged="OnServer2SelectionChanged" DoubleTapped="OnServer2DoubleTapped" KeyDown="OnServer2GridKeyDown" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False">
+                                                        <DataGrid.Styles>
+                                                            <Style Selector="DataGridRow" x:DataType="models:SftpRemoteEntry">
+                                                                <Setter Property="Classes.zeroByte" Value="{Binding HasZeroByteIssue}"/>
+                                                            </Style>
+                                                        </DataGrid.Styles>
+                                                        <DataGrid.ContextMenu>
+                                                            <ContextMenu>
+                                                                <MenuItem Header="Apri" Click="OnServer2OpenClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconFolder}"/></MenuItem.Icon></MenuItem>
+                                                                <MenuItem Header="Copia sul server principale" Click="OnServer2CopyToMainClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconArrowRight}"/></MenuItem.Icon></MenuItem>
+                                                                <Separator/>
+                                                                <MenuItem Header="Elimina" Click="OnServer2DeleteClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconTrash}"/></MenuItem.Icon></MenuItem>
+                                                            </ContextMenu>
+                                                        </DataGrid.ContextMenu>
+                                                        <DataGrid.Columns>
+                                                            <DataGridTemplateColumn Header=" " Width="40" CanUserResize="False">
+                                                                <DataGridTemplateColumn.CellTemplate>
+                                                                    <DataTemplate x:DataType="models:SftpRemoteEntry">
+                                                                        <Panel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                                            <Path Classes="icon" Data="{StaticResource IconFolder}" Stroke="{DynamicResource AppWarningBrush}" IsVisible="{Binding IsDirectory}"/>
+                                                                            <Path Classes="icon" Data="{StaticResource IconFile}" Stroke="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding !IsDirectory}"/>
+                                                                        </Panel>
+                                                                    </DataTemplate>
+                                                                </DataGridTemplateColumn.CellTemplate>
+                                                            </DataGridTemplateColumn>
+                                                            <DataGridTextColumn Header="Nome" Binding="{Binding Name}" Width="*" MinWidth="150"/>
+                                                            <DataGridTextColumn Header="Dim." Binding="{Binding SizeText}" Width="Auto" MinWidth="70"/>
+                                                            <DataGridTextColumn Header="Ultima modifica" Binding="{Binding Modified, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" Width="Auto" MinWidth="120"/>
+                                                        </DataGrid.Columns>
+                                                    </DataGrid>
+                                                </DockPanel>
+
+                                                <!-- ===== FILE LOCALI ===== -->
+                                                <DockPanel IsVisible="{Binding IsLocalMode}">
                                                 <Grid DockPanel.Dock="Top" RowDefinitions="Auto,Auto" Margin="0,0,0,8">
                                                     <Grid Grid.Row="0" ColumnDefinitions="Auto, Auto, *, Auto, Auto, Auto, Auto">
                                                         <Button Grid.Column="0" Classes="iconCircle" Command="{Binding SftpLocalGoUpCommand}" Margin="0,0,6,0" ToolTip.Tip="Indietro"><Path Classes="icon" Data="{StaticResource IconArrowLeft}"/></Button>
@@ -1526,16 +1626,26 @@
                                                         <DataGridTextColumn Header="Ultima modifica" Binding="{Binding Modified, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" Width="Auto" MinWidth="120"/>
                                                     </DataGrid.Columns>
                                                 </DataGrid>
+                                                </DockPanel>
                                             </DockPanel>
                                         </Border>
 
                                         <!-- UPLOAD / DOWNLOAD -->
-                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="12" Width="130" Margin="10,0">
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="12" Width="130" Margin="10,0" IsVisible="{Binding IsLocalMode}">
                                             <Button Classes="success" Command="{Binding SftpUploadSelectedCommand}" Height="46" ToolTip.Tip="Carica i file/cartelle selezionate (o trascina)">
                                                 <StackPanel Classes="bi" HorizontalAlignment="Center"><Path Classes="icon" Data="{StaticResource IconUpload}"/><TextBlock Text="Upload"/></StackPanel>
                                             </Button>
                                             <Button Classes="info" Command="{Binding SftpDownloadSelectedCommand}" Height="46" ToolTip.Tip="Scarica i file/cartelle selezionate (o trascina)">
                                                 <StackPanel Classes="bi" HorizontalAlignment="Center"><Path Classes="icon" Data="{StaticResource IconDownload}"/><TextBlock Text="Download"/></StackPanel>
+                                            </Button>
+                                        </StackPanel>
+                                        <!-- SERVER ↔ SERVER -->
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="12" Width="130" Margin="10,0" IsVisible="{Binding IsServer2Mode}">
+                                            <Button Classes="success" Command="{Binding CopyServer2ToMainCommand}" IsEnabled="{Binding IsServer2Connected}" Height="46" ToolTip.Tip="Copia i file/cartelle selezionati a sinistra nella cartella aperta del server principale (destra)">
+                                                <StackPanel Classes="bi" HorizontalAlignment="Center"><TextBlock Text="Copia"/><Path Classes="icon" Data="{StaticResource IconArrowRight}"/></StackPanel>
+                                            </Button>
+                                            <Button Classes="info" Command="{Binding CopyMainToServer2Command}" IsEnabled="{Binding IsServer2Connected}" Height="46" ToolTip.Tip="Copia i file/cartelle selezionati a destra nella cartella aperta del secondo server (sinistra)">
+                                                <StackPanel Classes="bi" HorizontalAlignment="Center"><Path Classes="icon" Data="{StaticResource IconArrowLeft}"/><TextBlock Text="Copia"/></StackPanel>
                                             </Button>
                                         </StackPanel>
 
@@ -1592,6 +1702,7 @@
                                                             <Separator/>
                                                             <MenuItem Header="Rinomina" Click="OnRemoteRenameClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconEdit}"/></MenuItem.Icon></MenuItem>
                                                             <MenuItem Header="Sposta in..." Click="OnRemoteMoveClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconArrowLeft}"/></MenuItem.Icon></MenuItem>
+                                                            <MenuItem Header="Copia sul secondo server" Click="OnRemoteCopyToServer2Click" IsVisible="{Binding IsServer2Connected}"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconRepeat}"/></MenuItem.Icon></MenuItem>
                                                             <MenuItem Header="Elimina" Click="OnRemoteDeleteClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconTrash}"/></MenuItem.Icon></MenuItem>
                                                         </ContextMenu>
                                                     </DataGrid.ContextMenu>
@@ -1739,6 +1850,61 @@
                                         </Border>
                                     </DockPanel>
                                 </Panel>
+                                <Panel IsVisible="{Binding #SftpTabs.SelectedIndex, Converter={x:Static vm:IndexEqualsConverter.Default}, ConverterParameter=3}">
+                                    <DockPanel Margin="0,10,0,0">
+                                        <Border DockPanel.Dock="Top" Classes="cardElevated" Margin="0,0,0,12">
+                                            <StackPanel Spacing="10">
+                                                <TextBlock Text="Copie da un server SFTP a un altro. In Browser passa il pannello di sinistra su &quot;Server 2&quot;, seleziona i file e usa le frecce al centro. I dati passano dal PC in streaming (letti da un server e scritti sull'altro insieme): niente file temporanei, ma la velocità dipende dalla tua connessione." FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                                    <TextBlock Text="Copie parallele:" VerticalAlignment="Center"/>
+                                                    <Slider Value="{Binding SftpMaxRelayConcurrency}" Minimum="1" Maximum="8" Width="140" TickFrequency="1" IsSnapToTickEnabled="True"/>
+                                                    <TextBlock Text="{Binding SftpMaxRelayConcurrency}" Width="28" VerticalAlignment="Center" FontWeight="Bold" Foreground="{DynamicResource AppAccentBrush}"/>
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding RelayQueueStats}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" FontStyle="Italic"/>
+                                                <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="6">
+                                                    <Button ToolTip.Tip="Avvia tutte le copie in attesa, in pausa o fallite" Classes="success" Command="{Binding RelayQueueStartAllCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconPlay}"/><TextBlock Text="Avvia tutti"/></StackPanel></Button>
+                                                    <Button ToolTip.Tip="Mette in pausa tutte le copie (ripartono dall'inizio del file)" Classes="warning" Command="{Binding RelayQueuePauseAllCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconPause}"/><TextBlock Text="Pausa tutti"/></StackPanel></Button>
+                                                    <Button ToolTip.Tip="Annulla tutte le copie non ancora completate" Classes="danger" Command="{Binding RelayQueueCancelAllCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconClose}"/><TextBlock Text="Annulla tutti"/></StackPanel></Button>
+                                                    <Button ToolTip.Tip="Rimuove dalla lista le copie completate" Command="{Binding RelayQueueClearCompletedCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCheckCircle}"/><TextBlock Text="Completati"/></StackPanel></Button>
+                                                    <Button ToolTip.Tip="Rimuove dalla lista le copie annullate" Command="{Binding RelayQueueClearCancelledCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconBan}"/><TextBlock Text="Annullati"/></StackPanel></Button>
+                                                    <Button ToolTip.Tip="Rimuove dalla lista le copie fallite" Command="{Binding RelayQueueClearFailedCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconAlertCircle}"/><TextBlock Text="Failed"/></StackPanel></Button>
+                                                </WrapPanel>
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Classes="cardElevated">
+                                            <DataGrid MinHeight="200" ItemsSource="{Binding SftpRelayJobs}" AutoGenerateColumns="False" IsReadOnly="True" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False">
+                                                <DataGrid.ContextMenu>
+                                                    <ContextMenu>
+                                                        <MenuItem Header="Avvia / Riprendi" Click="OnRelayJobResumeClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconPlay}"/></MenuItem.Icon></MenuItem>
+                                                        <MenuItem Header="Pausa" Click="OnRelayJobPauseClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconPause}"/></MenuItem.Icon></MenuItem>
+                                                        <MenuItem Header="Annulla" Click="OnRelayJobCancelClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconClose}"/></MenuItem.Icon></MenuItem>
+                                                        <Separator/>
+                                                        <MenuItem Header="Rimuovi" Click="OnRelayJobRemoveClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconTrash}"/></MenuItem.Icon></MenuItem>
+                                                    </ContextMenu>
+                                                </DataGrid.ContextMenu>
+                                                <DataGrid.Columns>
+                                                    <DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="2*"/>
+                                                    <DataGridTextColumn Header="Da" Binding="{Binding SourceFolder}" Width="2*"/>
+                                                    <DataGridTextColumn Header="A" Binding="{Binding DestinationFolder}" Width="2*"/>
+                                                    <DataGridTextColumn Header="Stato" Binding="{Binding Status}" Width="100"/>
+                                                    <DataGridTemplateColumn Header="Progresso" Width="2*">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <Grid ColumnDefinitions="*, Auto" Margin="2">
+                                                                    <ProgressBar Grid.Column="0" Value="{Binding Percentage}" Minimum="0" Maximum="100" Height="14"/>
+                                                                    <TextBlock Grid.Column="1" Text="{Binding Percentage, StringFormat={}{0:F0}%}" Margin="8,0,0,0" VerticalAlignment="Center" FontSize="11"/>
+                                                                </Grid>
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                    </DataGridTemplateColumn>
+                                                    <DataGridTextColumn Header="Dimensione" Binding="{Binding SizeText}" Width="150"/>
+                                                    <DataGridTextColumn Header="Velocità" Binding="{Binding SpeedText}" Width="100"/>
+                                                    <DataGridTextColumn Header="ETA" Binding="{Binding EtaText}" Width="100"/>
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+                                        </Border>
+                                    </DockPanel>
+                                </Panel>
                             </Panel>
                         </DockPanel>
                     </DockPanel>
@@ -1767,10 +1933,10 @@
                                         Corregge i link video dei post del forum (Invision Community): confronta i link di ogni post con i file presenti sul server SFTP e genera i nuovi link sul dominio corretto.<LineBreak/>
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Come si usa</Run><LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 1. Configura:</Run> apri "Impostazioni e Domini", compila URL e API Key del forum, la cartella base SFTP, il dominio primario e il percorso pubblico, poi salva. L'anteprima mostra il link che verrà generato.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 2. Carica i post:</Run> scegli una categoria: "Carica Pag." carica 50 post, "Carica Tutti" li carica tutti a blocchi. Con la ricerca e "Nascondi OK" restano solo i post da sistemare.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 3. Carica l'albero:</Run> con l'SFTP connesso premi "Carica" sull'albero. Dopo il primo caricamento l'albero si aggiorna da solo: subito per le modifiche fatte dall'app, ogni minuto per quelle esterne.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 4. Mappa:</Run> seleziona un post, clicca la cartella che contiene i suoi episodi e premi "Mappa": ogni link vecchio viene abbinato a un file, in ordine naturale.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 1. Configura:</Run> apri "Impostazioni e Domini", compila URL e API Key del forum e aggiungi le <Run FontWeight="SemiBold">sorgenti SFTP</Run>: per ognuna la connessione (un profilo della tab SFTP, anche su server diversi), la cartella sul server, il dominio e il percorso pubblico. L'anteprima mostra il link che verrà generato. Salva.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 2. Carica i post:</Run> scegli una categoria: "Carica Pag." carica 50 post, "Carica Tutti" li carica tutti a blocchi. Con la ricerca e i filtri colorati sotto (clic su un colore per mostrarlo o nasconderlo, "Da sistemare" nasconde i verdi) restano solo i post che ti interessano.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 3. Carica l'albero:</Run> scegli dal menu <Run FontWeight="SemiBold">Sorgenti</Run> quali caricare (la scelta è ricordata per ogni categoria) e premi "Carica": ogni sorgente compare come radice dell'albero, e i colori confrontano i post con i file di tutte. Dopo il caricamento l'albero si aggiorna da solo.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 4. Mappa:</Run> seleziona un post, clicca la cartella con i suoi episodi (o un singolo file, per i film) e premi "Mappa": i link vengono abbinati ai file in ordine naturale, col dominio della sorgente del file. Col clic destro puoi copiare titoli, percorsi e link.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 5. Controlla e applica:</Run> nella tabella puoi scambiare gli abbinamenti e togliere la spunta alle righe da non toccare; "Applica" invia i nuovi link al forum.<LineBreak/>
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Significato dei colori</Run><LineBreak/>
@@ -1795,75 +1961,109 @@
                                     </Grid>
                                 </ToggleButton>
 
-                                <ScrollViewer IsVisible="{Binding #ToggleSettingsVideobox.IsChecked}" MaxHeight="430" VerticalScrollBarVisibility="Auto">
+                                <ScrollViewer IsVisible="{Binding #ToggleSettingsVideobox.IsChecked}" MaxHeight="560" VerticalScrollBarVisibility="Auto">
                                     <StackPanel x:Name="SettingsBodyVideobox" Spacing="12" Margin="16,0,16,16">
 
-                                        <Grid ColumnDefinitions="*, 12, *">
-                                            <!-- FORUM IPS + SFTP -->
-                                            <Border Grid.Column="0" Classes="card">
-                                                <StackPanel Spacing="12">
-                                                    <StackPanel Spacing="2">
-                                                        <StackPanel Classes="bi">
-                                                            <Path Classes="icon accent" Data="{StaticResource IconPlug}"/>
-                                                            <TextBlock Text="Connessione" FontWeight="Bold" FontSize="13"/>
-                                                        </StackPanel>
-                                                        <TextBlock Text="Dove leggere i post (forum IPS) e dove si trovano i file (server SFTP)." FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                        <!-- FORUM IPS -->
+                                        <Border Classes="card">
+                                            <StackPanel Spacing="12">
+                                                <StackPanel Spacing="2">
+                                                    <StackPanel Classes="bi">
+                                                        <Path Classes="icon accent" Data="{StaticResource IconPlug}"/>
+                                                        <TextBlock Text="Forum IPS" FontWeight="Bold" FontSize="13"/>
                                                     </StackPanel>
-
-                                                    <StackPanel Spacing="4">
+                                                    <TextBlock Text="Dove leggere e aggiornare i post." FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                                </StackPanel>
+                                                <Grid ColumnDefinitions="*, 12, *">
+                                                    <StackPanel Grid.Column="0" Spacing="4">
                                                         <TextBlock Text="URL del forum IPS" FontSize="12" FontWeight="SemiBold"/>
                                                         <TextBox Text="{Binding ConfigIpsBaseUrl, Mode=TwoWay}" PlaceholderText="https://ddlstreamitaly.cc" ToolTip.Tip="Indirizzo base del forum Invision Community, senza /api"/>
                                                     </StackPanel>
-
-                                                    <StackPanel Spacing="4">
+                                                    <StackPanel Grid.Column="2" Spacing="4">
                                                         <TextBlock Text="API Key" FontSize="12" FontWeight="SemiBold"/>
-                                                        <TextBox Text="{Binding ConfigIpsApiKey, Mode=TwoWay}" PasswordChar="•" PlaceholderText="Chiave REST API" ToolTip.Tip="Chiave REST API del forum: serve per leggere e aggiornare i post"/>
-                                                        <TextBlock Text="AdminCP → Sistema → REST &amp; OAuth → Chiavi API" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                                        <TextBox Text="{Binding ConfigIpsApiKey, Mode=TwoWay}" PasswordChar="•" PlaceholderText="Chiave REST API" ToolTip.Tip="Chiave REST API del forum (AdminCP → Sistema → REST &amp; OAuth → Chiavi API)"/>
                                                     </StackPanel>
+                                                </Grid>
+                                            </StackPanel>
+                                        </Border>
 
-                                                    <StackPanel Spacing="4">
-                                                        <TextBlock Text="Cartella base SFTP" FontSize="12" FontWeight="SemiBold"/>
-                                                        <TextBox Text="{Binding ConfigSftpBasePath, Mode=TwoWay}" PlaceholderText="/media/Anime SUB.ITA" ToolTip.Tip="Radice dell'albero SFTP: viene caricata nell'albero e tolta dal percorso per creare l'URL pubblico"/>
-                                                        <TextBlock Text="Radice dell'albero SFTP; viene tolta dal percorso quando si genera il link." FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource AppTextMutedBrush}"/>
-                                                    </StackPanel>
-                                                </StackPanel>
-                                            </Border>
-
-                                            <!-- GENERAZIONE LINK -->
-                                            <Border Grid.Column="2" Classes="card">
-                                                <StackPanel Spacing="12">
+                                        <!-- SORGENTI SFTP -->
+                                        <Border Classes="card">
+                                            <StackPanel Spacing="12">
+                                                <Grid ColumnDefinitions="*, Auto">
                                                     <StackPanel Spacing="2">
                                                         <StackPanel Classes="bi">
-                                                            <Path Classes="icon accent" Data="{StaticResource IconGlobe}"/>
-                                                            <TextBlock Text="Generazione link" FontWeight="Bold" FontSize="13"/>
+                                                            <Path Classes="icon accent" Data="{StaticResource IconCloud}"/>
+                                                            <TextBlock Text="Sorgenti SFTP" FontWeight="Bold" FontSize="13"/>
                                                         </StackPanel>
-                                                        <TextBlock Text="Come vengono costruiti i nuovi link a partire dal percorso del file." FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                                        <TextBlock Text="Cartelle (anche su server diversi) caricate insieme nell'albero. Ogni sorgente ha il suo dominio e percorso pubblico per generare i link." FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource AppTextMutedBrush}"/>
                                                     </StackPanel>
+                                                    <Button Grid.Column="1" Classes="info" Command="{Binding AddSourceCommand}" VerticalAlignment="Center" ToolTip.Tip="Aggiunge una nuova sorgente (cartella su un server SFTP)">
+                                                        <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconPlus}"/><TextBlock Text="Aggiungi sorgente"/></StackPanel>
+                                                    </Button>
+                                                </Grid>
 
-                                                    <StackPanel Spacing="4">
-                                                        <TextBlock Text="Dominio primario" FontSize="12" FontWeight="SemiBold"/>
-                                                        <TextBox Text="{Binding ConfigPrimaryStorageUrl, Mode=TwoWay}" PlaceholderText="https://ichigolink.top" ToolTip.Tip="Dominio con cui vengono generati i NUOVI link (è anche considerato valido)"/>
-                                                    </StackPanel>
+                                                <TextBlock Text="Nessuna sorgente: aggiungine una per caricare l'albero SFTP." FontSize="12" FontStyle="Italic" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding !HasSources}"/>
 
-                                                    <StackPanel Spacing="4">
-                                                        <TextBlock Text="Percorso pubblico" FontSize="12" FontWeight="SemiBold"/>
-                                                        <TextBox Text="{Binding ConfigPublicPath, Mode=TwoWay}" PlaceholderText="Anime SUB.ITA" ToolTip.Tip="Cartella pubblica sul web, inserita subito dopo il dominio (può essere vuota)"/>
-                                                    </StackPanel>
-
-                                                    <Border Background="{DynamicResource AppInputBrush}" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="12,10">
-                                                        <StackPanel Spacing="4">
-                                                            <StackPanel Classes="bi">
-                                                                <Path Classes="icon" Data="{StaticResource IconEye}"/>
-                                                                <TextBlock Text="Anteprima" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AppTextMutedBrush}"/>
-                                                            </StackPanel>
-                                                            <TextBlock Text="{Binding UrlPreviewSource}" FontFamily="Consolas, Cascadia Mono, monospace" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource AppTextMutedBrush}"/>
-                                                            <Path Classes="icon" Data="{StaticResource IconArrowDown}" HorizontalAlignment="Left" Margin="2,0,0,0"/>
-                                                            <SelectableTextBlock Text="{Binding UrlPreview}" FontFamily="Consolas, Cascadia Mono, monospace" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource AppAccentBrush}"/>
-                                                        </StackPanel>
-                                                    </Border>
-                                                </StackPanel>
-                                            </Border>
-                                        </Grid>
+                                                <ItemsControl ItemsSource="{Binding Sources}">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate><StackPanel Spacing="10"/></ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="models:VideoboxSource">
+                                                            <Border Background="{DynamicResource AppInputBrush}" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" CornerRadius="12" Padding="12">
+                                                                <StackPanel Spacing="10">
+                                                                    <Grid ColumnDefinitions="*, 12, *, Auto">
+                                                                        <StackPanel Grid.Column="0" Spacing="4">
+                                                                            <TextBlock Text="Nome" FontSize="12" FontWeight="SemiBold"/>
+                                                                            <TextBox Text="{Binding Name, Mode=TwoWay}" PlaceholderText="Es. Anime server A" ToolTip.Tip="Nome mostrato nell'albero"/>
+                                                                        </StackPanel>
+                                                                        <StackPanel Grid.Column="2" Spacing="4">
+                                                                            <TextBlock Text="Connessione SFTP" FontSize="12" FontWeight="SemiBold"/>
+                                                                            <ComboBox HorizontalAlignment="Stretch"
+                                                                                      ItemsSource="{Binding $parent[ItemsControl].((vm:VideoboxTabViewModel)DataContext).SftpProfiles}"
+                                                                                      SelectedItem="{Binding Profile, Mode=TwoWay}"
+                                                                                      PlaceholderText="Scegli la connessione"
+                                                                                      ToolTip.Tip="Profilo salvato nella tab SFTP (connessione dedicata, indipendente) oppure la connessione già aperta nella tab SFTP">
+                                                                                <ComboBox.ItemTemplate>
+                                                                                    <DataTemplate x:DataType="models:SftpProfileOption">
+                                                                                        <TextBlock Text="{Binding Name}"/>
+                                                                                    </DataTemplate>
+                                                                                </ComboBox.ItemTemplate>
+                                                                            </ComboBox>
+                                                                        </StackPanel>
+                                                                        <Button Grid.Column="3" Classes="iconCircle danger" Width="32" Height="32" Margin="10,18,0,0" VerticalAlignment="Top" ToolTip.Tip="Rimuovi sorgente"
+                                                                                Command="{Binding $parent[ItemsControl].((vm:VideoboxTabViewModel)DataContext).RemoveSourceCommand}" CommandParameter="{Binding}">
+                                                                            <Path Classes="icon" Data="{StaticResource IconClose}"/>
+                                                                        </Button>
+                                                                    </Grid>
+                                                                    <Grid ColumnDefinitions="1.3*, 12, *, 12, *">
+                                                                        <StackPanel Grid.Column="0" Spacing="4">
+                                                                            <TextBlock Text="Cartella sul server" FontSize="12" FontWeight="SemiBold"/>
+                                                                            <TextBox Text="{Binding RootPath, Mode=TwoWay}" PlaceholderText="/media/Anime SUB.ITA" ToolTip.Tip="Cartella caricata nell'albero; viene tolta dal percorso quando si genera il link"/>
+                                                                        </StackPanel>
+                                                                        <StackPanel Grid.Column="2" Spacing="4">
+                                                                            <TextBlock Text="Dominio" FontSize="12" FontWeight="SemiBold"/>
+                                                                            <TextBox Text="{Binding Domain, Mode=TwoWay}" PlaceholderText="https://ichigolink.top" ToolTip.Tip="Dominio dei link generati per i file di questa sorgente (è anche considerato valido)"/>
+                                                                        </StackPanel>
+                                                                        <StackPanel Grid.Column="4" Spacing="4">
+                                                                            <TextBlock Text="Percorso pubblico" FontSize="12" FontWeight="SemiBold"/>
+                                                                            <TextBox Text="{Binding PublicPath, Mode=TwoWay}" PlaceholderText="Anime SUB.ITA" ToolTip.Tip="Cartella pubblica sul web, subito dopo il dominio (può essere vuota)"/>
+                                                                        </StackPanel>
+                                                                    </Grid>
+                                                                    <StackPanel Classes="bi">
+                                                                        <Path Classes="icon" Data="{StaticResource IconEye}"/>
+                                                                        <TextBlock Text="{Binding UrlPreviewSource}" FontFamily="Consolas, Cascadia Mono, monospace" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" TextTrimming="CharacterEllipsis" MaxWidth="420"/>
+                                                                        <TextBlock Text="→" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                                                        <SelectableTextBlock Text="{Binding UrlPreview}" FontFamily="Consolas, Cascadia Mono, monospace" FontSize="11" Foreground="{DynamicResource AppAccentBrush}" TextWrapping="Wrap"/>
+                                                                    </StackPanel>
+                                                                </StackPanel>
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </Border>
 
                                         <!-- DOMINI SECONDARI -->
                                         <Border Classes="card">
@@ -1962,7 +2162,43 @@
 
                                         <StackPanel Spacing="5">
                                             <TextBlock Text="{Binding TotalPostsText}" FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                            <CheckBox Content="Nascondi OK" HorizontalAlignment="Center" IsChecked="{Binding HideOkPosts, Mode=TwoWay}" FontSize="12" ToolTip.Tip="Nasconde i post che hanno già tutti i link corretti (pallino verde)"/>
+                                            <!-- Filtro per colore: ogni chip mostra/nasconde i post di quel colore -->
+                                            <WrapPanel HorizontalAlignment="Center" ItemSpacing="4" LineSpacing="4">
+                                                <ToggleButton Classes="statusChip" IsChecked="{Binding ShowValidPosts, Mode=TwoWay}" ToolTip.Tip="Verdi: tutti i link corretti. Clic per mostrarli o nasconderli">
+                                                    <StackPanel Orientation="Horizontal" Spacing="5">
+                                                        <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="LimeGreen"/>
+                                                        <TextBlock Text="{Binding CountValidPosts}" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </ToggleButton>
+                                                <ToggleButton Classes="statusChip" IsChecked="{Binding ShowMixedPosts, Mode=TwoWay}" ToolTip.Tip="Gialli: solo alcuni link puntano ai domini impostati. Clic per mostrarli o nasconderli">
+                                                    <StackPanel Orientation="Horizontal" Spacing="5">
+                                                        <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="Gold"/>
+                                                        <TextBlock Text="{Binding CountMixedPosts}" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </ToggleButton>
+                                                <ToggleButton Classes="statusChip" IsChecked="{Binding ShowInvalidPosts, Mode=TwoWay}" ToolTip.Tip="Rossi: nessun link punta ai domini impostati. Clic per mostrarli o nasconderli">
+                                                    <StackPanel Orientation="Horizontal" Spacing="5">
+                                                        <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="OrangeRed"/>
+                                                        <TextBlock Text="{Binding CountInvalidPosts}" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </ToggleButton>
+                                                <ToggleButton Classes="statusChip" IsChecked="{Binding ShowMismatchPosts, Mode=TwoWay}" ToolTip.Tip="Viola: il numero di link è diverso dal numero di file nella cartella. Clic per mostrarli o nasconderli">
+                                                    <StackPanel Orientation="Horizontal" Spacing="5">
+                                                        <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="MediumPurple"/>
+                                                        <TextBlock Text="{Binding CountMismatchPosts}" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </ToggleButton>
+                                                <ToggleButton Classes="statusChip" IsChecked="{Binding ShowUnknownPosts, Mode=TwoWay}" ToolTip.Tip="Grigi: post senza link video. Clic per mostrarli o nasconderli">
+                                                    <StackPanel Orientation="Horizontal" Spacing="5">
+                                                        <Ellipse Width="9" Height="9" VerticalAlignment="Center" Fill="Gray"/>
+                                                        <TextBlock Text="{Binding CountUnknownPosts}" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </ToggleButton>
+                                            </WrapPanel>
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="4">
+                                                <Button Classes="ghost" Padding="8,2" FontSize="11" Command="{Binding ShowPostsToFixCommand}" ToolTip.Tip="Nasconde i verdi: restano solo i post da sistemare">Da sistemare</Button>
+                                                <Button Classes="ghost" Padding="8,2" FontSize="11" Command="{Binding ShowAllPostsCommand}" ToolTip.Tip="Mostra i post di tutti i colori">Tutti</Button>
+                                            </StackPanel>
                                         </StackPanel>
 
                                         <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
@@ -1981,6 +2217,15 @@
 
                                 <Border Grid.Row="2" Classes="cardElevated">
                                     <ListBox ItemsSource="{Binding CategoryPosts}" SelectedItem="{Binding SelectedPost, Mode=TwoWay}">
+                                        <ListBox.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="Copia titolo" Click="OnVbCopyPostTitleClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconCopy}"/></MenuItem.Icon></MenuItem>
+                                                <MenuItem Header="Copia indirizzo del post" Click="OnVbCopyPostUrlClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconGlobe}"/></MenuItem.Icon></MenuItem>
+                                                <MenuItem Header="Copia tutti i link video" Click="OnVbCopyPostLinksClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconList}"/></MenuItem.Icon></MenuItem>
+                                                <Separator/>
+                                                <MenuItem Header="Apri nel browser" Click="OnVbOpenPostClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconGlobe}"/></MenuItem.Icon></MenuItem>
+                                            </ContextMenu>
+                                        </ListBox.ContextMenu>
                                         <ListBox.ItemTemplate>
                                             <DataTemplate>
                                                 <Grid ColumnDefinitions="Auto, *, Auto, Auto">
@@ -2015,23 +2260,70 @@
                                         <ProgressBar IsIndeterminate="True" Height="4" MinWidth="0"/>
                                     </StackPanel>
 
-                                    <Border DockPanel.Dock="Top" IsVisible="{Binding !IsSftpConnected}" Background="{DynamicResource AppDangerSoftBrush}" BorderBrush="{DynamicResource AppDangerBrush}" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,10">
-                                        <StackPanel Spacing="5" HorizontalAlignment="Center">
-                                            <StackPanel Classes="bi" HorizontalAlignment="Center">
-                                                <Path Classes="icon" Stroke="{DynamicResource AppDangerBrush}" Data="{StaticResource IconBoltOff}"/>
-                                                <TextBlock Text="SFTP Disconnesso" FontWeight="Bold" Foreground="{DynamicResource AppDangerBrush}"/>
-                                            </StackPanel>
-                                            <TextBlock Text="Riconnettiti e ricarica l'albero." FontSize="11" TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center"/>
+                                    <!-- Sorgenti da caricare (scelta ricordata per categoria) -->
+                                    <DropDownButton DockPanel.Dock="Top" Classes="trackPicker" HorizontalAlignment="Stretch" Margin="0,0,0,10" IsVisible="{Binding HasSources}"
+                                                    ToolTip.Tip="Sorgenti da caricare nell'albero. La scelta viene ricordata per ogni categoria.">
+                                        <StackPanel Classes="bi">
+                                            <Path Classes="icon accent" Data="{StaticResource IconLayers}"/>
+                                            <TextBlock Text="{Binding SourcesSelectionText}"/>
                                         </StackPanel>
-                                    </Border>
-
-                                    <TreeView ItemsSource="{Binding SftpRootNodes}" SelectedItem="{Binding SelectedSftpNode, Mode=TwoWay}" Background="Transparent" IsEnabled="{Binding IsSftpConnected}">
-                                        <TreeView.ItemTemplate>
-                                            <TreeDataTemplate ItemsSource="{Binding Children}">
-                                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                                    <Ellipse Width="10" Height="10" VerticalAlignment="Center" Fill="{Binding Status, Converter={x:Static vm:NodeStatusToBrushConverter.Default}}"/>
-                                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                        <DropDownButton.Flyout>
+                                            <Flyout Placement="BottomEdgeAlignedLeft" FlyoutPresenterClasses="trackFlyout">
+                                                <StackPanel Spacing="6" Width="300">
+                                                    <Grid ColumnDefinitions="*, Auto" Margin="4,2,4,2">
+                                                        <StackPanel Classes="bi">
+                                                            <Path Classes="icon accent" Data="{StaticResource IconLayers}"/>
+                                                            <TextBlock Text="Sorgenti" FontWeight="Bold"/>
+                                                        </StackPanel>
+                                                        <TextBlock Grid.Column="1" Text="{Binding SelectedCategory.Name}" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource AppTextMutedBrush}" MaxWidth="140" TextTrimming="CharacterEllipsis"/>
+                                                    </Grid>
+                                                    <Border Height="1" Background="{DynamicResource AppBorderBrush}"/>
+                                                    <ItemsControl ItemsSource="{Binding Sources}">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate x:DataType="models:VideoboxSource">
+                                                                <Border Classes="trackRow">
+                                                                    <CheckBox IsChecked="{Binding IsEnabled, Mode=TwoWay}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                                                        <StackPanel Spacing="1">
+                                                                            <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis"/>
+                                                                            <TextBlock Text="{Binding RootPath}" FontSize="10" Foreground="{DynamicResource AppTextMutedBrush}" TextTrimming="CharacterEllipsis"/>
+                                                                        </StackPanel>
+                                                                    </CheckBox>
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                    <Border Height="1" Background="{DynamicResource AppBorderBrush}"/>
+                                                    <Grid ColumnDefinitions="*, Auto, Auto" Margin="4,0,0,0">
+                                                        <TextBlock Text="Poi premi Carica" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                                        <Button Grid.Column="1" Classes="ghost" Padding="10,4" FontSize="11" Command="{Binding EnableAllSourcesCommand}">Tutte</Button>
+                                                        <Button Grid.Column="2" Classes="ghost" Padding="10,4" FontSize="11" Command="{Binding EnableNoSourcesCommand}">Nessuna</Button>
+                                                    </Grid>
                                                 </StackPanel>
+                                            </Flyout>
+                                        </DropDownButton.Flyout>
+                                    </DropDownButton>
+
+                                    <TreeView ItemsSource="{Binding SftpRootNodes}" SelectedItem="{Binding SelectedSftpNode, Mode=TwoWay}" Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                        <TreeView.Styles>
+                                            <Style Selector="TextBlock.sourceRoot"><Setter Property="FontWeight" Value="Bold"/></Style>
+                                        </TreeView.Styles>
+                                        <TreeView.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="Copia nome" Click="OnVbCopyNodeNameClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconCopy}"/></MenuItem.Icon></MenuItem>
+                                                <MenuItem Header="Copia percorso SFTP" Click="OnVbCopyNodePathClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconFolder}"/></MenuItem.Icon></MenuItem>
+                                                <MenuItem Header="Copia link pubblico" Click="OnVbCopyNodeUrlClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconGlobe}"/></MenuItem.Icon></MenuItem>
+                                                <MenuItem Header="Copia link di tutti i file" Click="OnVbCopyNodeAllUrlsClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconList}"/></MenuItem.Icon></MenuItem>
+                                            </ContextMenu>
+                                        </TreeView.ContextMenu>
+                                        <TreeView.ItemTemplate>
+                                            <TreeDataTemplate ItemsSource="{Binding Children}" x:DataType="vm:SftpNode">
+                                                <!-- Grid (non StackPanel): il nome ha una larghezza massima, quindi i nomi lunghi
+                                                     si accorciano con "…" e scorrono passandoci sopra col mouse -->
+                                                <Grid ColumnDefinitions="Auto, Auto, *">
+                                                    <Ellipse Width="10" Height="10" VerticalAlignment="Center" Margin="0,0,6,0" Fill="{Binding Status, Converter={x:Static vm:NodeStatusToBrushConverter.Default}}"/>
+                                                    <Path Grid.Column="1" Classes="icon accent" Margin="0,0,6,0" Data="{StaticResource IconCloud}" IsVisible="{Binding IsSourceRoot}"/>
+                                                    <TextBlock Grid.Column="2" Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Classes.sourceRoot="{Binding IsSourceRoot}"/>
+                                                </Grid>
                                             </TreeDataTemplate>
                                         </TreeView.ItemTemplate>
                                     </TreeView>
@@ -2043,8 +2335,8 @@
                                     <StackPanel Spacing="10">
                                         <TextBlock Text="{Binding CurrentPostTitle}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AppAccentBrush}" TextWrapping="Wrap"/>
                                         <Grid ColumnDefinitions="*, Auto">
-                                            <TextBox Grid.Column="0" Text="{Binding SftpPathInput, Mode=TwoWay}" Margin="0,0,10,0" PlaceholderText="Seleziona cartella dall'albero..." ToolTip.Tip="Percorso della cartella SFTP contenente i file di questo post"/>
-                                            <Button Grid.Column="1" Classes="info" Command="{Binding MapSftpFolderAsync}" ToolTip.Tip="Abbina i file della cartella selezionata ai link del post"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconLayers}"/><TextBlock Text="Mappa"/></StackPanel></Button>
+                                            <TextBox Grid.Column="0" Text="{Binding SftpPathInput, Mode=TwoWay}" Margin="0,0,10,0" PlaceholderText="Seleziona una cartella o un file dall'albero..." ToolTip.Tip="Cartella SFTP con i file del post (serie) oppure un singolo file (film)"/>
+                                            <Button Grid.Column="1" Classes="info" Command="{Binding MapSftpFolderAsync}" ToolTip.Tip="Cartella: abbina i suoi file ai link del post, in ordine. File: lo abbina alla riga selezionata nella tabella (o alla prima da mappare)"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconLayers}"/><TextBlock Text="Mappa"/></StackPanel></Button>
                                         </Grid>
                                     </StackPanel>
                                 </Border>
@@ -2058,6 +2350,7 @@
 
                                         <DataGrid MinHeight="200"
                                                   ItemsSource="{Binding MappingItems}"
+                                                  SelectedItem="{Binding SelectedMappingItem, Mode=TwoWay}"
                                                   AutoGenerateColumns="False"
                                                   IsReadOnly="False"
                                                   CanUserResizeColumns="True"
@@ -2065,6 +2358,16 @@
                                                   CanUserSortColumns="False"
                                                   HorizontalScrollBarVisibility="Auto"
                                                   VerticalScrollBarVisibility="Auto">
+                                            <DataGrid.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="Copia vecchio URL" Click="OnVbCopyOldUrlClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconCopy}"/></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="Copia nuovo URL" Click="OnVbCopyNewUrlClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconCopy}"/></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="Copia nome file SFTP" Click="OnVbCopyFileNameClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconFile}"/></MenuItem.Icon></MenuItem>
+                                                    <Separator/>
+                                                    <MenuItem Header="Copia tutti i vecchi URL" Click="OnVbCopyAllOldUrlsClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconList}"/></MenuItem.Icon></MenuItem>
+                                                    <MenuItem Header="Copia tutti i nuovi URL" Click="OnVbCopyAllNewUrlsClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconList}"/></MenuItem.Icon></MenuItem>
+                                                </ContextMenu>
+                                            </DataGrid.ContextMenu>
                                             <DataGrid.Columns>
                                                 <DataGridCheckBoxColumn Header="Usa" Binding="{Binding IsSelectedForUpdate}" Width="50"/>
                                                 <DataGridTemplateColumn Header="Stato" Width="50" IsReadOnly="True">

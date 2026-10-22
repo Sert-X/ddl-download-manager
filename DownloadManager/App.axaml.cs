@@ -33,6 +33,8 @@ public partial class App : Application
     {
         AvaloniaXamlLoader.Load(this);
         DownloadManager.Helpers.IconCentering.Install();
+        DownloadManager.Helpers.TrimmedTextToolTip.Install();
+        DownloadManager.Helpers.MarqueeText.Install();
     }
 
     /// <summary>
@@ -104,6 +106,7 @@ public partial class App : Application
         services.AddSingleton<ISftpService, SftpWinScpService>();
         services.AddSingleton<SftpUploadQueueService>();
         services.AddSingleton<SftpDownloadQueueService>();
+        services.AddSingleton<SftpRelayQueueService>();
 
         services.AddSingleton<ProxyConfigRepository>();
         services.AddSingleton<ProxyService>();
@@ -122,6 +125,7 @@ public partial class App : Application
 
         // Registra VideoboxApiService e VideoboxTabViewModel
         services.AddSingleton<VideoboxApiService>();
+        services.AddSingleton<VideoboxSftpPool>();
         services.AddTransient<VideoboxTabViewModel>();
 
         services.AddTransient<MainWindowViewModel>();
@@ -375,6 +379,9 @@ public partial class App : Application
                 var queue = Services!.GetRequiredService<DownloadQueueService>();
                 queue.CancelAll("anime");
                 queue.CancelAll("streaming");
+
+                // Connessioni dedicate di Videobox Corrector
+                try { Services!.GetRequiredService<VideoboxSftpPool>().Dispose(); } catch { }
 
                 var sftpService = Services!.GetRequiredService<ISftpService>();
                 var t1 = sftpService.DisconnectAsync();

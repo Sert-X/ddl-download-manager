@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using Avalonia.Platform.Storage;
+using DownloadManager.Helpers;
 using DownloadManager.Models;
 using DownloadManager.Services.Sftp;
 using DownloadManager.ViewModels;
@@ -88,8 +89,23 @@ public partial class MainWindow : Window
         // il menu della tabella (i menu sono uno per tabella, non uno per riga).
         AddHandler(PointerPressedEvent, (_, e) =>
         {
-            if ((e.Source as Visual)?.FindAncestorOfType<DataGrid>(includeSelf: true) is { } grid)
+            var source = e.Source as Visual;
+            if (source?.FindAncestorOfType<DataGrid>(includeSelf: true) is { } grid)
+            {
                 SelectRowUnderPointer(grid, e);
+                return;
+            }
+
+            // Liste e albero: si ricorda l'elemento cliccato col destro ma NON lo si
+            // seleziona (in Videobox selezionare un post ricaricherebbe la mappatura).
+            if (!e.GetCurrentPoint(this).Properties.IsRightButtonPressed) return;
+            var item = (Control?)source?.FindAncestorOfType<ListBoxItem>(includeSelf: true)
+                       ?? source?.FindAncestorOfType<TreeViewItem>(includeSelf: true);
+            if (item != null)
+            {
+                _contextGrid = null;
+                _contextItem = item.DataContext;
+            }
         }, RoutingStrategies.Tunnel, handledEventsToo: true);
 
         // Log: segue le voci nuove solo se l'utente è già in fondo (non lo strappa
@@ -547,6 +563,83 @@ public partial class MainWindow : Window
         await Vm.Sftp.SftpLocalDeleteManyAsync(entries);
     }
 
+    // ============================================================
+    //  SECONDO SERVER (pannello di sinistra) E COPIE TRA SERVER
+    // ============================================================
+
+    private void OnServer2SelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (Vm == null || sender is not DataGrid grid) return;
+        Vm.Sftp.SelectedServer2Entries.Clear();
+        foreach (var item in grid.SelectedItems)
+            if (item is SftpRemoteEntry entry) Vm.Sftp.SelectedServer2Entries.Add(entry);
+    }
+
+    private async void OnServer2DoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is DataGrid { SelectedItem: SftpRemoteEntry entry } && Vm != null)
+            await Vm.Sftp.Server2OpenAsync(entry);
+    }
+
+    private async void OnServer2OpenClick(object? sender, RoutedEventArgs e)
+    {
+        if (Vm != null) await Vm.Sftp.Server2OpenAsync(ResolveItem<SftpRemoteEntry>(sender));
+    }
+
+    private void OnServer2PathKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        e.Handled = true;
+        Vm?.Sftp.Server2RefreshCommand.Execute(null);
+    }
+
+    private async void OnServer2NewFolderClick(object? sender, RoutedEventArgs e)
+    {
+        if (Vm == null) return;
+        var name = await InputDialog.ShowAsync(this, $"Nome della nuova cartella su '{Vm.Sftp.Server2Name}':", "Nuova cartella", "Nuova cartella");
+        if (!string.IsNullOrEmpty(name)) await Vm.Sftp.Server2CreateFolderAsync(name);
+    }
+
+    private void OnServer2CopyToMainClick(object? sender, RoutedEventArgs e) =>
+        Vm?.Sftp.CopyServer2ToMainCommand.Execute(null);
+
+    private void OnRemoteCopyToServer2Click(object? sender, RoutedEventArgs e) =>
+        Vm?.Sftp.CopyMainToServer2Command.Execute(null);
+
+    private async void OnServer2DeleteClick(object? sender, RoutedEventArgs e) =>
+        await ConfirmServer2DeleteAsync(ResolveItems<SftpRemoteEntry>(sender), sender);
+
+    private async void OnServer2GridKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Delete || Vm == null) return;
+        e.Handled = true;
+        var entries = Vm.Sftp.SelectedServer2Entries.ToList();
+        if (entries.Count == 0 && Vm.Sftp.SelectedServer2Entry != null) entries.Add(Vm.Sftp.SelectedServer2Entry);
+        await ConfirmServer2DeleteAsync(entries, sender);
+    }
+
+    private async Task ConfirmServer2DeleteAsync(List<SftpRemoteEntry> entries, object? sender)
+    {
+        if (entries.Count == 0 || Vm == null) return;
+
+        var server = Vm.Sftp.Server2Name;
+        var msg = entries.Count == 1
+            ? $"Eliminare '{entries[0].Name}' da '{server}'?"
+            : $"Eliminare {entries.Count} elementi da '{server}'?";
+        if (entries.Any(x => x.IsDirectory))
+            msg += "\n\nLe cartelle verranno eliminate con tutto il contenuto.";
+        msg += "\n\nQuesta azione non può essere annullata.";
+
+        var ok = await ConfirmDialog.ShowAsync(this, msg, "Conferma eliminazione");
+        if (sender is DataGrid g) g.Focus();
+        if (ok) await Vm.Sftp.Server2DeleteManyAsync(entries);
+    }
+
+    private void OnRelayJobResumeClick(object? sender, RoutedEventArgs e) { if (ResolveItem<SftpRelayJob>(sender) is { } j) Vm?.Sftp.ResumeRelayJob(j); }
+    private void OnRelayJobPauseClick(object? sender, RoutedEventArgs e) { if (ResolveItem<SftpRelayJob>(sender) is { } j) Vm?.Sftp.PauseRelayJob(j); }
+    private void OnRelayJobCancelClick(object? sender, RoutedEventArgs e) { if (ResolveItem<SftpRelayJob>(sender) is { } j) Vm?.Sftp.CancelRelayJob(j); }
+    private void OnRelayJobRemoveClick(object? sender, RoutedEventArgs e) { if (ResolveItem<SftpRelayJob>(sender) is { } j) Vm?.Sftp.RemoveRelayJob(j); }
+
     private async void OnRemoteGridKeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Key != Key.Delete) return;
@@ -623,6 +716,67 @@ public partial class MainWindow : Window
     // ============================================================
     //  SFTP CRUD REMOTO
     // ============================================================
+
+    // ============================================================
+    //  VIDEOBOX — copia negli appunti
+    // ============================================================
+
+    private async Task CopyAsync(string? text, string what)
+    {
+        if (Vm == null) return;
+        if (string.IsNullOrEmpty(text))
+        {
+            Vm.Videobox.StatusMessage = $"Niente da copiare ({what} vuoto).";
+            return;
+        }
+        try
+        {
+            await ClipboardHelper.SetTextAsync(text);
+            var lines = text.Split('\n').Length;
+            Vm.Videobox.StatusMessage = lines > 1 ? $"Copiati negli appunti: {lines} {what}." : $"Copiato negli appunti: {what}.";
+        }
+        catch (Exception ex) { Vm.Videobox.StatusMessage = $"Copia non riuscita: {ex.Message}"; }
+    }
+
+    private static string JoinLines(IEnumerable<string?> values) =>
+        string.Join(Environment.NewLine, values.Where(v => !string.IsNullOrWhiteSpace(v)));
+
+    private async void OnVbCopyPostTitleClick(object? sender, RoutedEventArgs e) =>
+        await CopyAsync(ResolveItem<VideoboxPostItem>(sender)?.Title, "titolo");
+    private async void OnVbCopyPostUrlClick(object? sender, RoutedEventArgs e) =>
+        await CopyAsync(ResolveItem<VideoboxPostItem>(sender)?.Url, "indirizzo del post");
+    private async void OnVbCopyPostLinksClick(object? sender, RoutedEventArgs e) =>
+        await CopyAsync(JoinLines(ResolveItem<VideoboxPostItem>(sender)?.Links ?? new List<string>()), "link");
+    private void OnVbOpenPostClick(object? sender, RoutedEventArgs e)
+    {
+        if (ResolveItem<VideoboxPostItem>(sender) is { } post) Vm?.Videobox.OpenPostUrl(post);
+    }
+
+    private async void OnVbCopyNodeNameClick(object? sender, RoutedEventArgs e) =>
+        await CopyAsync(ResolveItem<SftpNode>(sender)?.Name, "nome");
+    private async void OnVbCopyNodePathClick(object? sender, RoutedEventArgs e) =>
+        await CopyAsync(ResolveItem<SftpNode>(sender)?.FullPath, "percorso");
+    private async void OnVbCopyNodeUrlClick(object? sender, RoutedEventArgs e)
+    {
+        if (ResolveItem<SftpNode>(sender) is { } node && Vm != null)
+            await CopyAsync(Vm.Videobox.GetPublicUrl(node), "link pubblico");
+    }
+    private async void OnVbCopyNodeAllUrlsClick(object? sender, RoutedEventArgs e)
+    {
+        if (ResolveItem<SftpNode>(sender) is { } node && Vm != null)
+            await CopyAsync(JoinLines(Vm.Videobox.GetPublicUrlsUnder(node)), "link");
+    }
+
+    private async void OnVbCopyOldUrlClick(object? sender, RoutedEventArgs e) =>
+        await CopyAsync(ResolveItem<EpisodeMappingItem>(sender)?.OldUrl, "vecchio URL");
+    private async void OnVbCopyNewUrlClick(object? sender, RoutedEventArgs e) =>
+        await CopyAsync(ResolveItem<EpisodeMappingItem>(sender)?.NewUrl, "nuovo URL");
+    private async void OnVbCopyFileNameClick(object? sender, RoutedEventArgs e) =>
+        await CopyAsync(ResolveItem<EpisodeMappingItem>(sender)?.SftpFileName, "nome file");
+    private async void OnVbCopyAllOldUrlsClick(object? sender, RoutedEventArgs e) =>
+        await CopyAsync(JoinLines(Vm?.Videobox.MappingItems.Select(m => m.OldUrl) ?? Enumerable.Empty<string>()), "vecchi URL");
+    private async void OnVbCopyAllNewUrlsClick(object? sender, RoutedEventArgs e) =>
+        await CopyAsync(JoinLines(Vm?.Videobox.MappingItems.Select(m => m.NewUrl) ?? Enumerable.Empty<string>()), "nuovi URL");
 
     private async void OnLocalMoveClick(object? sender, RoutedEventArgs e)
     {

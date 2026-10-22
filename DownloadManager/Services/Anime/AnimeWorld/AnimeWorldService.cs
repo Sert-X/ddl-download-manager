@@ -438,18 +438,87 @@ public class AnimeWorldService : IAnimeWorldService
             }
 
             _logger.LogInformation("Batch: {Count} episodi da risolvere", ids.Count);
+            var idList = ids.Select(x => x.DataId).ToList();
 
-            var page = await _context.NewPageAsync();
             try
             {
-                await page.GotoAsync(BaseUrl);
-                await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-                await page.WaitForTimeoutAsync(1500);
+                // Pagina già aperta sul sito: niente caricamento della home a ogni accodamento
+                var page = await GetApiPageAsync(reload: false, ct);
+                var found = await ResolveIdsAsync(page, idList);
 
-                var idsJson = System.Text.Json.JsonSerializer.Serialize(
-                    ids.Select(x => x.DataId).ToList());
+                // Nessun risultato: il cookie di sicurezza del sito potrebbe non essere pronto.
+                // Si ricarica la pagina aspettando che il sito abbia finito e si riprova una volta.
+                if (found.Count == 0)
+                {
+                    _logger.LogInformation("Batch: nessun URL, ricarico la pagina del sito e riprovo");
+                    page = await GetApiPageAsync(reload: true, ct);
+                    found = await ResolveIdsAsync(page, idList);
+                }
 
-                var resultJson = await page.EvaluateAsync<string>(@"
+                foreach (var (ep, id) in ids)
+                    if (found.TryGetValue(id, out var url)) result[ep.Link] = url;
+
+                _logger.LogInformation("Batch completato: {Found}/{Total}", result.Count, ids.Count);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Errore durante il batch");
+                await CloseApiPageAsync();   // al prossimo giro si riparte da una pagina nuova
+            }
+
+            return result;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Pagina del sito tenuta aperta per chiamare l'API degli episodi (serve l'origine del sito
+    /// e i suoi cookie). Si apre una volta sola; immagini, video e font non vengono scaricati.
+    /// </summary>
+    private IPage? _apiPage;
+
+    private async Task<IPage> GetApiPageAsync(bool reload, CancellationToken ct)
+    {
+        if (_context == null) throw new InvalidOperationException("Servizio non inizializzato.");
+        ct.ThrowIfCancellationRequested();
+
+        bool fresh = _apiPage == null || _apiPage.IsClosed;
+        if (fresh)
+        {
+            _apiPage = await _context.NewPageAsync();
+            await _apiPage.RouteAsync("**/*", route =>
+                route.Request.ResourceType is "image" or "media" or "font"
+                    ? route.AbortAsync()
+                    : route.ContinueAsync());
+        }
+
+        if (fresh || reload || !_apiPage!.Url.StartsWith(BaseUrl, StringComparison.OrdinalIgnoreCase))
+        {
+            await _apiPage!.GotoAsync(BaseUrl, new PageGotoOptions
+            {
+                // Al primo giro basta la pagina pronta; se l'API non risponde si aspetta il sito intero
+                WaitUntil = reload ? WaitUntilState.NetworkIdle : WaitUntilState.DOMContentLoaded,
+                Timeout = 30000
+            });
+        }
+        return _apiPage!;
+    }
+
+    private async Task CloseApiPageAsync()
+    {
+        try { if (_apiPage != null) await _apiPage.CloseAsync(); } catch { }
+        _apiPage = null;
+    }
+
+    /// <summary>Chiama l'API del sito per ogni id (10 alla volta) e restituisce id → URL video.</summary>
+    private static async Task<Dictionary<string, string>> ResolveIdsAsync(IPage page, List<string> ids)
+    {
+        var idsJson = System.Text.Json.JsonSerializer.Serialize(ids);
+        var resultJson = await page.EvaluateAsync<string>(@"
                     async (idsJson) => {
                         const ids = JSON.parse(idsJson);
                         const results = {};
@@ -480,36 +549,16 @@ public class AnimeWorldService : IAnimeWorldService
                     }
                 ", idsJson);
 
-                using var doc = System.Text.Json.JsonDocument.Parse(resultJson);
-
-                foreach (var (ep, id) in ids)
-                {
-                    if (doc.RootElement.TryGetProperty(id, out var el) &&
-                        el.ValueKind == System.Text.Json.JsonValueKind.String)
-                    {
-                        var url = el.GetString();
-                        if (!string.IsNullOrEmpty(url))
-                            result[ep.Link] = url;
-                    }
-                }
-
-                _logger.LogInformation("Batch completato: {Found}/{Total}", result.Count, ids.Count);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Errore durante il batch");
-            }
-            finally
-            {
-                await page.CloseAsync();
-            }
-
-            return result;
-        }
-        finally
+        var found = new Dictionary<string, string>();
+        using var doc = System.Text.Json.JsonDocument.Parse(resultJson);
+        foreach (var id in ids)
         {
-            _gate.Release();
+            if (doc.RootElement.TryGetProperty(id, out var el) &&
+                el.ValueKind == System.Text.Json.JsonValueKind.String &&
+                el.GetString() is { Length: > 0 } url)
+                found[id] = url;
         }
+        return found;
     }
 
     private static string ExtractDataIdFromUrl(string url)
@@ -533,6 +582,7 @@ public class AnimeWorldService : IAnimeWorldService
         await _gate.WaitAsync();
         try
         {
+            _apiPage = null;   // chiusa insieme al contesto
             try { if (_context != null) await _context.DisposeAsync(); } catch { }
             try { if (_browser != null) await _browser.DisposeAsync(); } catch { }
             try { _playwright?.Dispose(); } catch { }

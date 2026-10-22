@@ -459,6 +459,38 @@ public partial class OrganizerTabViewModel : ViewModelBase
         var item = new MergeSourceFolder { Path = folder, Priority = MergeSourceFolders.Count };
         MergeSourceFolders.Add(item);
         RenumberPriorities();
+        _ = CountMergeFilesAsync(item);
+    }
+
+    /// <summary>Conta i video della cartella (gli stessi file che l'unione prende in considerazione).</summary>
+    private async Task CountMergeFilesAsync(MergeSourceFolder folder)
+    {
+        try
+        {
+            // Percorso locale (C:\..., \server\...) oppure cartella sul server SFTP
+            bool isLocal = folder.Path.Contains(':') || folder.Path.StartsWith(@"\\");
+            int count;
+            if (isLocal)
+            {
+                count = await Task.Run(() => Directory.Exists(folder.Path)
+                    ? Directory.EnumerateFiles(folder.Path).Count(FileOrganizerService.IsVideoFile)
+                    : 0);
+            }
+            else
+            {
+                if (!SharedIsSftpConnected) return;
+                var entries = await _sftpService.ListDirectoryAsync(folder.Path.TrimEnd('/'), CancellationToken.None);
+                count = entries.Count(e => !e.IsDirectory && FileOrganizerService.IsVideoFile(e.Name));
+            }
+            folder.FileCount = count;
+        }
+        catch { /* cartella non leggibile: resta il valore precedente */ }
+    }
+
+    /// <summary>Dopo un'unione i file si sono spostati: si ricontano tutte le cartelle.</summary>
+    private void RecountMergeFolders()
+    {
+        foreach (var folder in MergeSourceFolders.ToList()) _ = CountMergeFilesAsync(folder);
     }
 
     public void RemoveMergeFolder(MergeSourceFolder folder) { MergeSourceFolders.Remove(folder); RenumberPriorities(); }
@@ -535,6 +567,7 @@ public partial class OrganizerTabViewModel : ViewModelBase
             var count = await _fileOrganizer.ApplyAsync(MergePreviewOperations.ToList());
             MergeStatusMessage = $"Applicate {count} operazioni.";
             MergePreviewOperations.Clear();
+            RecountMergeFolders();
             await LoadHistoryAsync();
         }
         catch (Exception ex) { MergeStatusMessage = $"Errore: {ex.Message}"; }
@@ -584,6 +617,7 @@ public partial class OrganizerTabViewModel : ViewModelBase
             MergeStatusMessage = $"Applicate {count} operazioni.";
             MergePreviewOperations.Clear();
             _shared.RequestSftpRefresh?.Invoke();
+            RecountMergeFolders();
             await LoadHistoryAsync();
         }
         catch (Exception ex) { MergeStatusMessage = $"Errore: {ex.Message}"; }

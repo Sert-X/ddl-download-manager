@@ -69,7 +69,8 @@ public class FileNameBuilder
             episodeNumber: item.EpisodeNumber,
             title: episodeTitle,
             originalFileName: originalFileName,
-            year: item.Year);
+            year: item.Year,
+            season: item.SeasonNumber);
 
         fileNameWithoutExt = SanitizeFileName(fileNameWithoutExt);
 
@@ -127,7 +128,8 @@ public class FileNameBuilder
         int episodeNumber,
         string title,
         string originalFileName,
-        string year = "")
+        string year = "",
+        int season = 0)
     {
         return PlaceholderRegex.Replace(pattern, match =>
         {
@@ -141,6 +143,7 @@ public class FileNameBuilder
                 "Title"            => title ?? "",
                 "OriginalFileName" => originalFileName ?? "",
                 "Anno"             => year ?? "",
+                "Season"           => FormatNumber(Math.Max(season, 1), format),
                 _ => match.Value
             };
         });
