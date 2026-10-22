@@ -828,25 +828,14 @@ public partial class StreamingTabViewModel : ViewModelBase
 
         try
         {
-            StatusMessage = $"Recupero URL di '{movie.Title}'...";
-
-            var masterUrl = await _service.GetMovieStreamUrlAsync(movie.Link);
-
-            if (string.IsNullOrEmpty(masterUrl))
-            {
-                StatusMessage = "Impossibile recuperare l'URL del video.";
-                return;
-            }
-
-            if (masterUrl.Contains("type=video", StringComparison.OrdinalIgnoreCase) ||
-                masterUrl.Contains("rendition=", StringComparison.OrdinalIgnoreCase))
-            {
-                _logger.LogWarning(
-                    "[STREAMING-TAB] Master film contiene rendition: {Url}", masterUrl);
-            }
+            // Come per gli episodi: il film entra subito in coda e il link (che scade in
+            // pochi minuti) viene estratto all'avvio del download.
+            var link = movie.Link;
+            Func<CancellationToken, Task<string?>> extractor = _ => _service.GetMovieStreamUrlAsync(link);
 
             var item = BuildDownloadItem(
-                masterUrl, movie.Title, 1, movie.Title,
+                "", movie.Title, 1, movie.Title,
+                urlExtractor: extractor,
                 contentLink: movie.Link,
                 episodeId: 0,
                 isSeries: false,

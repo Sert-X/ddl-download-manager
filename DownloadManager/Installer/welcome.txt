@@ -1,0 +1,7 @@
+Questa procedura installerà DDL Download Manager sul computer.
+
+DDL Download Manager scarica anime, film e serie, gestisce i file sui server SFTP (anche copiandoli da un server all'altro) e corregge i link dei post del forum con Videobox Corrector.
+
+L'app si aggiorna da sola quando esce una nuova versione.
+
+Fai clic su Avanti per continuare.

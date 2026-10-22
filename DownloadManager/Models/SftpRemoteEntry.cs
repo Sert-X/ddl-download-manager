@@ -6,9 +6,28 @@ public partial class SftpRemoteEntry : ObservableObject
 {
     public string Name { get; set; } = string.Empty;
     public string FullPath { get; set; } = string.Empty;
-    public bool IsDirectory { get; set; }
-    public long Size { get; set; }
-    public DateTime Modified { get; set; }
+    // Notificano la UI: sostituendo un file (es. upload con lo stesso nome) dimensione e data
+    // cambiano sulla riga già mostrata; prima si vedevano solo uscendo e rientrando.
+    private bool _isDirectory;
+    public bool IsDirectory
+    {
+        get => _isDirectory;
+        set { if (SetProperty(ref _isDirectory, value)) { OnPropertyChanged(nameof(SizeText)); OnPropertyChanged(nameof(Icon)); } }
+    }
+
+    private long _size;
+    public long Size
+    {
+        get => _size;
+        set { if (SetProperty(ref _size, value)) OnPropertyChanged(nameof(SizeText)); }
+    }
+
+    private DateTime _modified;
+    public DateTime Modified
+    {
+        get => _modified;
+        set => SetProperty(ref _modified, value);
+    }
 
     [ObservableProperty] private bool _hasZeroByteIssue;
 

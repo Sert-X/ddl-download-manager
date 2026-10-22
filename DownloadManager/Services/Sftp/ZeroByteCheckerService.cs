@@ -161,8 +161,12 @@ public sealed class ZeroByteCheckerService
         lock (_cacheLock)
         {
             var parentKey = Normalize(parent);
-            if (_zeroFilesByFolder.TryGetValue(parentKey, out var files))
-                files.Remove(fileName);
+            // Senza l'elenco dei file a 0 byte della cartella non si può dire che sia
+            // "pulita": prima la si considerava tale e il rosso spariva anche con altri
+            // file a 0 byte ancora dentro. La rilettura della cartella sistemerà tutto.
+            if (!_zeroFilesByFolder.TryGetValue(parentKey, out var files))
+                return changed;
+            files.Remove(fileName);
 
             bool hadZero = _flagCache.TryGetValue(parentKey, out var prev) && prev;
             bool hasZero = ComputeHasZeroLocked(parentKey);
@@ -212,6 +216,69 @@ public sealed class ZeroByteCheckerService
         }
 
         return changed;
+    }
+
+    /// <summary>
+    /// La cartella è appena stata letta: si aggiornano i suoi file a 0 byte e le sottocartelle
+    /// segnalate (da ciò che si sa di loro), poi il rosso risale alle cartelle superiori.
+    /// Così dopo un upload, una sostituzione o un'eliminazione l'evidenziazione resta giusta
+    /// senza rifare il check.
+    /// </summary>
+    public void UpdateFromListing(string folderPath, IEnumerable<SftpRemoteEntry> entries)
+    {
+        if (string.IsNullOrEmpty(folderPath)) return;
+        var key = Normalize(folderPath);
+        var list = entries.ToList();
+
+        lock (_cacheLock)
+        {
+            _zeroFilesByFolder[key] = list.Where(e => !e.IsDirectory && e.Size == 0)
+                                          .Select(e => e.Name)
+                                          .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var subs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var dir in list.Where(e => e.IsDirectory))
+                if (_flagCache.TryGetValue(Normalize(dir.FullPath), out var flagged) && flagged)
+                    subs.Add(dir.Name);
+            _flaggedSubsByFolder[key] = subs;
+
+            PropagateLocked(key);
+        }
+    }
+
+    /// <summary>Ricalcola il flag della cartella e lo porta verso l'alto finché cambia qualcosa.</summary>
+    private void PropagateLocked(string key)
+    {
+        var current = key;
+        while (true)
+        {
+            bool has = ComputeHasZeroLocked(current);
+            bool known = _flagCache.TryGetValue(current, out var had);
+            _flagCache[current] = has;
+            if (known && had == has) break;           // sopra non cambia nulla
+            if (current.Length == 0) break;           // radice
+
+            var parentKey = Normalize(GetParent(current));
+            var leaf = GetLeaf(current);
+
+            if (!_flaggedSubsByFolder.TryGetValue(parentKey, out var parentSubs))
+            {
+                // Della cartella superiore non si sa nulla: si può solo accendere il rosso
+                if (!has) break;
+                parentSubs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                _flaggedSubsByFolder[parentKey] = parentSubs;
+            }
+            if (has) parentSubs.Add(leaf);
+            else
+            {
+                parentSubs.Remove(leaf);
+                // Senza i file diretti della cartella superiore non si può spegnerla
+                if (!_zeroFilesByFolder.ContainsKey(parentKey)) break;
+            }
+
+            if (parentKey == current) break;
+            current = parentKey;
+        }
     }
 
     private bool ComputeHasZeroLocked(string folderKey)

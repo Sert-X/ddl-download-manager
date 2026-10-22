@@ -692,7 +692,7 @@ public partial class MainWindow : Window
         var entry = ResolveItem<LocalFileEntry>(sender);
         if (entry == null || Vm == null) return;
 
-        var newName = await InputDialog.ShowAsync(this, $"Rinomina '{entry.Name}' in:", entry.Name, "Rinomina");
+        var newName = await InputDialog.ShowAsync(this, $"Rinomina '{entry.Name}' in:", entry.Name, "Rinomina", selectNameOnly: !entry.IsDirectory);
         if (string.IsNullOrEmpty(newName) || newName == entry.Name) return;
 
         await Vm.Sftp.SftpLocalRenameAsync(entry, newName);
@@ -824,10 +824,43 @@ public partial class MainWindow : Window
         var entry = ResolveItem<SftpRemoteEntry>(sender);
         if (entry == null || Vm == null) return;
 
-        var newName = await InputDialog.ShowAsync(this, $"Rinomina '{entry.Name}' in:", entry.Name, "Rinomina");
+        var newName = await InputDialog.ShowAsync(this, $"Rinomina '{entry.Name}' in:", entry.Name, "Rinomina", selectNameOnly: !entry.IsDirectory);
         if (string.IsNullOrEmpty(newName) || newName == entry.Name) return;
 
         await Vm.Sftp.SftpRemoteRenameAsync(entry, newName);
+    }
+
+    // ============================================================
+    //  DUPLICA (chiede il nome della copia)
+    // ============================================================
+
+    private async Task<string?> AskCopyNameAsync(string name, bool isDirectory, IEnumerable<string> existing)
+    {
+        var suggested = ViewModels.SftpTabViewModel.SuggestCopyName(name, isDirectory, existing);
+        var tipo = isDirectory ? "cartella" : "file";
+        var newName = await InputDialog.ShowAsync(this, $"Nome della copia del {tipo} '{name}':", suggested, "Duplica", selectNameOnly: !isDirectory);
+        return string.IsNullOrWhiteSpace(newName) || newName.Trim() == name ? null : newName.Trim();
+    }
+
+    private async void OnLocalDuplicateClick(object? sender, RoutedEventArgs e)
+    {
+        if (ResolveItem<LocalFileEntry>(sender) is not { } entry || Vm == null) return;
+        var name = await AskCopyNameAsync(entry.Name, entry.IsDirectory, Vm.Sftp.SftpLocalEntries.Select(x => x.Name));
+        if (name != null) await Vm.Sftp.SftpLocalDuplicateAsync(entry, name);
+    }
+
+    private async void OnRemoteDuplicateClick(object? sender, RoutedEventArgs e)
+    {
+        if (ResolveItem<SftpRemoteEntry>(sender) is not { } entry || Vm == null) return;
+        var name = await AskCopyNameAsync(entry.Name, entry.IsDirectory, Vm.Sftp.SftpRemoteEntries.Select(x => x.Name));
+        if (name != null) await Vm.Sftp.SftpRemoteDuplicateAsync(entry, name);
+    }
+
+    private async void OnServer2DuplicateClick(object? sender, RoutedEventArgs e)
+    {
+        if (ResolveItem<SftpRemoteEntry>(sender) is not { } entry || Vm == null) return;
+        var name = await AskCopyNameAsync(entry.Name, entry.IsDirectory, Vm.Sftp.Server2Entries.Select(x => x.Name));
+        if (name != null) await Vm.Sftp.Server2DuplicateAsync(entry, name);
     }
 
     private async void OnRemoteDeleteClick(object? sender, RoutedEventArgs e)
@@ -1408,6 +1441,92 @@ public partial class MainWindow : Window
     {
         if (sender is Button b && b.DataContext is DownloadItem it && Vm != null)
             await Vm.Streaming.RemoveItemPublicAsync(it);
+    }
+
+    // ============================================================
+    //  MENU DEI FILE: voci secondo l'elemento cliccato
+    // ============================================================
+
+    private static readonly HashSet<string> VideoExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".mp4", ".mkv", ".avi", ".mov", ".webm", ".flv", ".wmv", ".m4v", ".ts", ".m2ts"
+    };
+
+    public static bool IsVideoFile(string name) => VideoExtensions.Contains(Path.GetExtension(name));
+
+    /// <summary>
+    /// Prima di aprire il menu di una tabella di file: "Apri" (Tag="dir") solo su una cartella,
+    /// "Anteprima video" (Tag="video") solo su un file video; i separatori rimasti all'inizio,
+    /// alla fine o doppi vengono nascosti.
+    /// </summary>
+    private void OnFileMenuOpening(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (sender is not ContextMenu menu) return;
+
+        bool multiple = _contextGrid != null && _contextItem != null &&
+                        _contextGrid.SelectedItems.Count > 1 && _contextGrid.SelectedItems.Contains(_contextItem);
+        (bool isDir, string name)? item = _contextItem switch
+        {
+            LocalFileEntry l => (l.IsDirectory, l.Name),
+            SftpRemoteEntry r => (r.IsDirectory, r.Name),
+            _ => null
+        };
+
+        foreach (var mi in menu.Items.OfType<MenuItem>())
+        {
+            switch (mi.Tag as string)
+            {
+                case "dir": mi.IsVisible = !multiple && item is { isDir: true }; break;
+                case "video": mi.IsVisible = !multiple && item is { isDir: false } it && IsVideoFile(it.name); break;
+            }
+        }
+
+        // Separatori: nascosti se non hanno voci visibili prima e dopo
+        var controls = menu.Items.OfType<Control>().ToList();
+        bool seenItem = false;
+        Separator? pending = null;
+        foreach (var c in controls)
+        {
+            if (c is Separator sep)
+            {
+                sep.IsVisible = false;
+                if (seenItem && pending == null) pending = sep;
+            }
+            else if (c.IsVisible)
+            {
+                if (pending != null) { pending.IsVisible = true; pending = null; }
+                seenItem = true;
+            }
+        }
+    }
+
+    private void OnLocalPreviewClick(object? sender, RoutedEventArgs e)
+    {
+        if (ResolveItem<LocalFileEntry>(sender) is { IsDirectory: false } entry) Vm?.Sftp.PlayLocalFile(entry);
+    }
+
+    private void OnServer2PreviewClick(object? sender, RoutedEventArgs e)
+    {
+        if (ResolveItem<SftpRemoteEntry>(sender) is { IsDirectory: false } entry) Vm?.Sftp.PlayServer2File(entry);
+    }
+
+    private async void OnServer2RenameClick(object? sender, RoutedEventArgs e)
+    {
+        if (ResolveItem<SftpRemoteEntry>(sender) is not { } entry || Vm == null) return;
+        var newName = await InputDialog.ShowAsync(this, $"Rinomina '{entry.Name}' in:", entry.Name, "Rinomina", selectNameOnly: !entry.IsDirectory);
+        if (string.IsNullOrEmpty(newName) || newName == entry.Name) return;
+        await Vm.Sftp.Server2RenameAsync(entry, newName);
+    }
+
+    private async void OnServer2MoveClick(object? sender, RoutedEventArgs e)
+    {
+        var entries = ResolveItems<SftpRemoteEntry>(sender);
+        if (entries.Count == 0 || Vm == null || !Vm.Sftp.IsServer2Connected) return;
+
+        var title = entries.Count == 1 ? $"Sposta '{entries[0].Name}' in..." : $"Sposta {entries.Count} elementi in...";
+        var dest = await RemoteFolderPickerDialog.ShowAsync(this, Vm.Sftp.Server2Service, Vm.Sftp.Server2Path, title);
+        if (string.IsNullOrEmpty(dest)) return;
+        await Vm.Sftp.Server2MoveManyAsync(entries, dest);
     }
 
     private void OnRemotePreviewClick(object? sender, RoutedEventArgs e)

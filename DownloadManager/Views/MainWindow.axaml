@@ -1351,8 +1351,8 @@
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Browser</Run><LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Upload:</Run> trascina file o cartelle dal pannello locale (sinistra) a quello remoto (destra), oppure usa "Accoda cartella".<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Download:</Run> trascina dal pannello remoto a quello locale.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Gestione:</Run> clic destro su un elemento per aprirlo, rinominarlo o eliminarlo; doppio clic su una cartella per entrarci.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Anteprima video:</Run> clic destro su un video remoto, "Anteprima video": lo riproduce in streaming senza scaricarlo (Spazio play/pausa, frecce per spostarti e regolare il volume, F schermo intero).<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Gestione:</Run> clic destro su un elemento per aprirlo, rinominarlo, duplicarlo (la copia sul server viene fatta dal server stesso, senza passare dal PC), spostarlo o eliminarlo; doppio clic su una cartella per entrarci.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Anteprima video:</Run> clic destro su un video (remoto, del secondo server o locale), "Anteprima video": lo riproduce subito, i remoti in streaming senza scaricarli (Spazio play/pausa, frecce per spostarti e regolare il volume, F schermo intero).<LineBreak/>
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Code Upload e Download</Run><LineBreak/>
                                         Ogni trasferimento va in coda con avanzamento e velocità. Puoi metterlo in pausa, riprenderlo (riparte da dove era arrivato) o annullarlo. Il numero di trasferimenti simultanei si regola nella coda.<LineBreak/>
@@ -1553,8 +1553,13 @@
                                                             </Style>
                                                         </DataGrid.Styles>
                                                         <DataGrid.ContextMenu>
-                                                            <ContextMenu>
-                                                                <MenuItem Header="Apri" Click="OnServer2OpenClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconFolder}"/></MenuItem.Icon></MenuItem>
+                                                            <ContextMenu Opening="OnFileMenuOpening">
+                                                                <MenuItem Header="Apri" Tag="dir" Click="OnServer2OpenClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconFolder}"/></MenuItem.Icon></MenuItem>
+                                                                <MenuItem Header="Anteprima video" Tag="video" Click="OnServer2PreviewClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconPlayCircle}"/></MenuItem.Icon></MenuItem>
+                                                                <Separator/>
+                                                                <MenuItem Header="Rinomina" Click="OnServer2RenameClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconEdit}"/></MenuItem.Icon></MenuItem>
+                                                                <MenuItem Header="Duplica..." Click="OnServer2DuplicateClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconCopy}"/></MenuItem.Icon></MenuItem>
+                                                                <MenuItem Header="Sposta in..." Click="OnServer2MoveClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconArrowLeft}"/></MenuItem.Icon></MenuItem>
                                                                 <MenuItem Header="Copia sul server principale" Click="OnServer2CopyToMainClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconArrowRight}"/></MenuItem.Icon></MenuItem>
                                                                 <Separator/>
                                                                 <MenuItem Header="Elimina" Click="OnServer2DeleteClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconTrash}"/></MenuItem.Icon></MenuItem>
@@ -1602,10 +1607,12 @@
                                                     <!-- Un solo menu per tutta la tabella (prima uno per riga, ricreato a ogni riga
                                                          riciclata durante lo scorrimento: era la causa dei blocchi scorrendo veloce) -->
                                                     <DataGrid.ContextMenu>
-                                                        <ContextMenu>
-                                                            <MenuItem Header="Apri" Click="OnLocalOpenClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconFolder}"/></MenuItem.Icon></MenuItem>
+                                                        <ContextMenu Opening="OnFileMenuOpening">
+                                                            <MenuItem Header="Apri" Tag="dir" Click="OnLocalOpenClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconFolder}"/></MenuItem.Icon></MenuItem>
+                                                            <MenuItem Header="Anteprima video" Tag="video" Click="OnLocalPreviewClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconPlayCircle}"/></MenuItem.Icon></MenuItem>
                                                             <Separator/>
                                                             <MenuItem Header="Rinomina" Click="OnLocalRenameClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconEdit}"/></MenuItem.Icon></MenuItem>
+                                                            <MenuItem Header="Duplica..." Click="OnLocalDuplicateClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconCopy}"/></MenuItem.Icon></MenuItem>
                                                             <MenuItem Header="Sposta in..." Click="OnLocalMoveClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconArrowLeft}"/></MenuItem.Icon></MenuItem>
                                                             <MenuItem Header="Elimina" Click="OnLocalDeleteClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconTrash}"/></MenuItem.Icon></MenuItem>
                                                         </ContextMenu>
@@ -1696,11 +1703,12 @@
                                                         </Style>
                                                     </DataGrid.Styles>
                                                     <DataGrid.ContextMenu>
-                                                        <ContextMenu>
-                                                            <MenuItem Header="Apri" Click="OnRemoteOpenClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconFolder}"/></MenuItem.Icon></MenuItem>
-                                                            <MenuItem Header="Anteprima video" Click="OnRemotePreviewClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconPlayCircle}"/></MenuItem.Icon></MenuItem>
+                                                        <ContextMenu Opening="OnFileMenuOpening">
+                                                            <MenuItem Header="Apri" Tag="dir" Click="OnRemoteOpenClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconFolder}"/></MenuItem.Icon></MenuItem>
+                                                            <MenuItem Header="Anteprima video" Tag="video" Click="OnRemotePreviewClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconPlayCircle}"/></MenuItem.Icon></MenuItem>
                                                             <Separator/>
                                                             <MenuItem Header="Rinomina" Click="OnRemoteRenameClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconEdit}"/></MenuItem.Icon></MenuItem>
+                                                            <MenuItem Header="Duplica..." Click="OnRemoteDuplicateClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconCopy}"/></MenuItem.Icon></MenuItem>
                                                             <MenuItem Header="Sposta in..." Click="OnRemoteMoveClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconArrowLeft}"/></MenuItem.Icon></MenuItem>
                                                             <MenuItem Header="Copia sul secondo server" Click="OnRemoteCopyToServer2Click" IsVisible="{Binding IsServer2Connected}"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconRepeat}"/></MenuItem.Icon></MenuItem>
                                                             <MenuItem Header="Elimina" Click="OnRemoteDeleteClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconTrash}"/></MenuItem.Icon></MenuItem>
@@ -2257,7 +2265,8 @@
                                     </Grid>
                                     <StackPanel DockPanel.Dock="Top" Spacing="5" Margin="2,0,2,10" IsVisible="{Binding IsLoadingTree}">
                                         <TextBlock Text="{Binding TreeProgressText}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}"/>
-                                        <ProgressBar IsIndeterminate="True" Height="4" MinWidth="0"/>
+                                        <!-- Barra vera quando il totale è noto, altrimenti animata -->
+                                        <ProgressBar IsIndeterminate="{Binding !HasTreeTotal}" Minimum="0" Maximum="{Binding TreeFoldersTotal}" Value="{Binding TreeFoldersReadShown}" Height="4" MinWidth="0"/>
                                     </StackPanel>
 
                                     <!-- Sorgenti da caricare (scelta ricordata per categoria) -->

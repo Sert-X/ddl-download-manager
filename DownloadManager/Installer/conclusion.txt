@@ -1,0 +1,3 @@
+DDL Download Manager è stato installato.
+
+Lo trovi nel menu Start e sul desktop. Al primo avvio l'app scarica da sola i componenti che le servono: attendi qualche istante.

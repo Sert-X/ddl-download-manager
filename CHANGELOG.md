@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.1.6] — 2026-10-22
+
+### 📦 Installazione e aggiornamenti
+- **Installer rinnovato**: Setup.exe mostra una schermata grafica con logo e barra di avanzamento al posto della finestra predefinita.
+- Nuovo installer **.msi con procedura guidata** (Benvenuto → Installazione → Fine) con grafica e testi in italiano; installa per l'utente corrente come Setup.exe.
+- **Icona** dell'app in alta definizione (fino a 256×256): non è più sgranata su Setup.exe e collegamenti.
+- **Aggiornamento dall'app con le dimensioni**: prima di scaricare mostra quanto c'è da scaricare (anche "solo le parti cambiate"); durante il download indica MB scaricati su totali, MB rimanenti con tempo stimato e velocità, misurati sui file realmente scaricati.
+- "Annulla download" ora ferma davvero il download (prima chiudeva solo la finestra).
+
+### ☁ SFTP
+- **Duplica…** nel clic destro (locale, server principale e Server 2): chiede il nome della copia proponendo "Nome - copia"; sul server la copia la fa il server stesso, senza passare dal PC.
+- **Rinomina senza estensione**: è selezionato solo il nome, scrivendo l'estensione resta (anche in Duplica).
+- **Anteprima video anche in locale** e sul secondo server.
+- Menu del **Server 2** completo: Anteprima video, Rinomina, Duplica, Sposta in…
+- Menu più puliti: "Apri" solo sulle cartelle, "Anteprima video" solo sui file video.
+- **Messaggi di avanzamento** per le operazioni lunghe: "Spostamento in corso (12/40)…", "Eliminazione in corso…", "Rinomina in corso…", preparazione upload/download. Eliminare o spostare cartelle locali grandi non blocca più la finestra.
+- La cartella aperta **si aggiorna da sola dopo upload e copie tra server**, anche con decine di file in parallelo (al massimo una lettura ogni 1,5 secondi).
+- Sostituendo un file con uno dello stesso nome, **dimensione e data si aggiornano** senza uscire dalla cartella.
+- **Zero byte**: il rosso resta finché nella cartella c'è ancora un file vuoto (prima spariva dopo aver sostituito anche solo alcuni file); ogni lettura di una cartella aggiorna l'evidenziazione sua e delle cartelle superiori, senza rifare il check.
+
+### 🧰 Videobox Corrector
+- **Post dal più nuovo**: in cima ci sono i post più recenti ("Carica Pag." carica i 50 più recenti).
+- **Nuovi post del forum** aggiunti da soli in cima alla lista (controllo ogni 90 secondi), senza perdere selezione e mappatura.
+- **Caricamento albero con totale**: "250 cartelle lette su 1357 (18%)" con barra di avanzamento reale.
+- L'**albero si aggiorna** con le modifiche fatte da qualunque pannello della tab SFTP (anche dal Server 2 e dalle copie tra server) e quando premi **Aggiorna** dopo modifiche fatte fuori dall'app (es. WinSCP).
+- **Connessioni più robuste**: se una sorgente va in timeout la connessione viene riaperta da sola e un errore su una sorgente non blocca le altre; i colori vengono sempre ricalcolati (prima la radice poteva restare gialla dopo aver eliminato i file in più).
+- **Post con tantissimi link** (es. Detective Conan): avviso prima dell'invio e controllo dopo; se il forum ne salva meno (limite PHP `max_input_vars`, di solito 1000) lo segnala con la soluzione invece di "completato".
+
+### ⚡ Download
+- **AnimeSaturn: accodamento molto più veloce**: il link del video si ottiene con due richieste leggere invece di aprire due pagine nel browser per ogni episodio (resta il metodo precedente come riserva).
+- **Film di StreamingCommunity accodati all'istante**: il link viene estratto all'avvio del download, come per gli episodi.
+
 ## [1.1.5] — 2026-10-22
 
 ### ☁ SFTP: copia da server a server (nuovo)

@@ -51,7 +51,8 @@ public class VideoboxApiService
         
         // Se categoryId è 0 o null, omettiamo il parametro per caricare tutti i media
         string catFilter = (categoryId.HasValue && categoryId.Value > 0) ? $"categories={categoryId.Value}&" : "";
-        var url = $"{settings.IpsBaseUrl.TrimEnd('/')}/api/videobox/videos?{catFilter}page={page}&perPage=50";
+        // sortDir=desc: dal post più nuovo (di default il forum li dà dal più vecchio)
+        var url = $"{settings.IpsBaseUrl.TrimEnd('/')}/api/videobox/videos?{catFilter}page={page}&perPage=50&sortDir=desc";
         
         var response = await _httpClient.GetAsync(url, ct);
         response.EnsureSuccessStatusCode();

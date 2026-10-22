@@ -120,7 +120,7 @@ public partial class VideoboxTabViewModel : ObservableObject
     private CancellationTokenSource? _treeRefreshDebounceCts;
     private CancellationTokenSource? _fullTreeScanCts;
     private bool _isRefreshingTree;
-    /// <summary>Cartelle da riallineare (path → ricorsivo). Accesso solo dal thread UI.</summary>
+    /// <summary>Cartelle da riallineare ("server\npath" → ricorsivo). Accesso solo dal thread UI.</summary>
     private readonly Dictionary<string, bool> _pendingTreeDirs = new(StringComparer.Ordinal);
     private bool _pendingFullTreeScan;
 
@@ -189,6 +189,21 @@ public partial class VideoboxTabViewModel : ObservableObject
     private CancellationTokenSource? _postsCts;
     private CancellationTokenSource? _treeCts;
     private int _treeFoldersRead;
+    /// <summary>Totale delle cartelle da leggere (somma dei conteggi delle sorgenti); 0 = non noto.</summary>
+    [ObservableProperty] private int _treeFoldersTotal;
+    [ObservableProperty] private int _treeFoldersReadShown;
+    private int _treeCountsPending;
+    private bool _treeTotalUnknown;
+    public bool HasTreeTotal => TreeFoldersTotal > 0 && _treeCountsPending == 0 && !_treeTotalUnknown;
+
+    private void UpdateTreeProgressText()
+    {
+        TreeFoldersReadShown = _treeFoldersRead;
+        OnPropertyChanged(nameof(HasTreeTotal));
+        TreeProgressText = HasTreeTotal
+            ? $"{_treeFoldersRead} cartelle lette su {TreeFoldersTotal} ({Math.Min(100, _treeFoldersRead * 100 / TreeFoldersTotal)}%)"
+            : $"{_treeFoldersRead} cartelle lette";
+    }
 
     [RelayCommand]
     private void StopLoadingPosts()
@@ -214,8 +229,9 @@ public partial class VideoboxTabViewModel : ObservableObject
 
         // Modifiche fatte dall'app (tab SFTP, organizer, upload) → refresh immediato (con debounce).
         // Si aggiorna solo la cartella toccata, non tutto l'albero.
-        _sftpService.RemoteChanged += change => EnqueueTreeRefresh(change.DirectoryPath, change.Recursive);
-        uploadQueue.JobCompleted += job => EnqueueTreeRefresh(job.DestinationFolder, false);
+        // Modifiche fatte dall'app su qualsiasi server (tab SFTP, secondo server, copie tra server)
+        SftpChangeHub.Changed += (server, change) => EnqueueTreeRefresh(server, change.DirectoryPath, change.Recursive);
+        uploadQueue.JobCompleted += job => EnqueueTreeRefresh(_sftpService.ServerKey, job.DestinationFolder, false);
 
         // Modifiche esterne (altri client, server) → scansione completa periodica.
         _treePollTimer = new DispatcherTimer { Interval = TreePollInterval };
@@ -229,7 +245,11 @@ public partial class VideoboxTabViewModel : ObservableObject
         // Post modificati sul sito (titolo, link...): ogni tanto si rileggono quelli
         // visibili nella pagina e si aggiornano sul posto, senza ricaricare la lista.
         _postsRefreshTimer = new DispatcherTimer { Interval = PostsRefreshInterval };
-        _postsRefreshTimer.Tick += async (_, _) => await RefreshVisiblePostsAsync();
+        _postsRefreshTimer.Tick += async (_, _) =>
+        {
+            await RefreshVisiblePostsAsync();
+            await AddNewPostsAsync();
+        };
         _postsRefreshTimer.Start();
 
         var current = _settingsService.Current;
@@ -535,8 +555,10 @@ public partial class VideoboxTabViewModel : ObservableObject
             IsLoadingPosts = true;
             PostsProgressText = "Caricamento pagina 1...";
             _allPosts.Clear();
+            _forumMaxId = 0;
             var pagedData = await _apiService.GetVideosByCategoryAsync(SelectedCategory?.Id, 1, cts.Token);
             ProcessPagedData(pagedData);
+            try { _forumMaxId = await GetForumMaxIdAsync(SelectedCategory?.Id, pagedData, cts.Token); } catch (OperationCanceledException) { throw; } catch { }
             _currentPage = 1;
             UpdateSftpTreeColors();
             StatusMessage = $"Caricata pagina 1.";
@@ -564,8 +586,10 @@ public partial class VideoboxTabViewModel : ObservableObject
             IsLoadingPosts = true;
             PostsProgressText = "Caricamento pagina 1...";
             _allPosts.Clear();
+            _forumMaxId = 0;
             var firstPage = await _apiService.GetVideosByCategoryAsync(SelectedCategory?.Id, 1, cts.Token);
             ProcessPagedData(firstPage);
+            try { _forumMaxId = await GetForumMaxIdAsync(SelectedCategory?.Id, firstPage, cts.Token); } catch (OperationCanceledException) { throw; } catch { }
 
             for (int i = 2; i <= firstPage.totalPages; i++)
             {
@@ -624,6 +648,7 @@ public partial class VideoboxTabViewModel : ObservableObject
 
     partial void OnSelectedPostChanged(VideoboxPostItem? value)
     {
+        if (_restoringSelection) return;
         if (value != null) _ = LoadPostDetailsAsync(value.Id);
     }
 
@@ -713,6 +738,79 @@ public partial class VideoboxTabViewModel : ObservableObject
         finally { _refreshingPosts = false; }
     }
 
+    private bool _checkingNewPosts;
+    private bool _restoringSelection;
+    /// <summary>Numero del post più recente sul forum al momento del caricamento (0 = non noto).</summary>
+    private int _forumMaxId;
+
+    /// <summary>Numero del post più recente della categoria sul forum (l'API va dal più vecchio al più nuovo).</summary>
+    private async Task<int> GetForumMaxIdAsync(int? category, VideoboxPagedDto first, CancellationToken ct = default)
+    {
+        if (first.results.Count == 0) return 0;
+        bool ascending = first.results.Count < 2 || first.results[0].id < first.results[^1].id;
+        if (!ascending) return first.results.Max(r => r.id);
+        if (first.totalPages <= 1) return first.results.Max(r => r.id);
+        var last = await _apiService.GetVideosByCategoryAsync(category, first.totalPages, ct);
+        return last.results.Count > 0 ? last.results.Max(r => r.id) : first.results.Max(r => r.id);
+    }
+
+    /// <summary>
+    /// Post creati sul forum dopo il caricamento: si leggono la prima e l'ultima pagina
+    /// dell'API (i post nuovi finiscono in una delle due, secondo l'ordine del forum) e si
+    /// aggiungono quelli con un numero più alto di tutti i post già caricati.
+    /// </summary>
+    private async Task AddNewPostsAsync()
+    {
+        if (_checkingNewPosts || IsLoadingPosts || IsBusy || _allPosts.Count == 0 || _forumMaxId == 0) return;
+        _checkingNewPosts = true;
+        try
+        {
+            int maxKnownId = _forumMaxId;
+            var category = SelectedCategory?.Id;
+
+            VideoboxPagedDto first;
+            try { first = await _apiService.GetVideosByCategoryAsync(category, 1); }
+            catch { return; }
+
+            var candidates = first.results.ToList();
+            // Ordine crescente (i nuovi in fondo): serve anche l'ultima pagina
+            bool ascending = first.results.Count < 2 || first.results[0].id < first.results[^1].id;
+            if (ascending && first.totalPages > 1)
+            {
+                try { candidates.AddRange((await _apiService.GetVideosByCategoryAsync(category, first.totalPages)).results); }
+                catch { return; }
+            }
+
+            var fresh = candidates.Where(d => d.id > maxKnownId)
+                                  .GroupBy(d => d.id).Select(g => g.First())
+                                  .OrderBy(d => d.id)
+                                  .ToList();
+            if (fresh.Count == 0 || IsLoadingPosts || SelectedCategory?.Id != category) return;
+            _forumMaxId = fresh.Max(d => d.id);
+
+            foreach (var dto in fresh)
+            {
+                var item = new VideoboxPostItem { Id = dto.id, Title = dto.title, Url = dto.url, Links = VideoboxPostItem.ExtractLinks(dto) };
+                if (ascending) _allPosts.Add(item);
+                else _allPosts.Insert(0, item);
+            }
+
+            // Si ricostruisce la lista mostrata tenendo il post selezionato (senza ricaricarne la mappatura)
+            var selected = SelectedPost;
+            UpdateSftpTreeColors(repaginate: true);
+            if (selected != null && CategoryPosts.Contains(selected) && !ReferenceEquals(SelectedPost, selected))
+            {
+                _restoringSelection = true;
+                try { SelectedPost = selected; } finally { _restoringSelection = false; }
+            }
+
+            StatusMessage = fresh.Count == 1
+                ? $"Nuovo post dal sito: {fresh[0].title}"
+                : $"{fresh.Count} nuovi post dal sito ({DateTime.Now:HH:mm}).";
+        }
+        finally { _checkingNewPosts = false; }
+    }
+
     [RelayCommand]
     public async Task LoadSftpTreeAsync()
     {
@@ -725,6 +823,10 @@ public partial class VideoboxTabViewModel : ObservableObject
             IsBusy = true;
             IsLoadingTree = true;
             _treeFoldersRead = 0;
+            TreeFoldersTotal = 0;
+            _treeCountsPending = sources.Count;
+            _treeTotalUnknown = false;
+            OnPropertyChanged(nameof(HasTreeTotal));
             TreeProgressText = "Connessione alle sorgenti...";
             // Un aggiornamento automatico in corso scriverebbe nella lista mentre la si
             // ricarica (era la causa dei doppioni): lo si invalida e si interrompe.
@@ -778,6 +880,7 @@ public partial class VideoboxTabViewModel : ObservableObject
         try
         {
             var service = await _pool.GetAsync(source.ProfileId, ct);
+            _ = CountSourceFoldersAsync(service, source.RootPath, ct);   // totale per l'avanzamento
             foreach (var child in await BuildTreeRecursiveAsync(service, source, source.RootPath, root, ct))
                 root.Children.Add(child);
         }
@@ -790,16 +893,33 @@ public partial class VideoboxTabViewModel : ObservableObject
         return root;
     }
 
+    /// <summary>Conta le cartelle della sorgente (sul server) e le somma al totale da leggere.</summary>
+    private async Task CountSourceFoldersAsync(ISftpService service, string rootPath, CancellationToken ct)
+    {
+        int? count = null;
+        try { count = await service.CountDirectoriesAsync(rootPath, ct); }
+        catch { }
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!IsLoadingTree) return;
+            if (count is > 0) TreeFoldersTotal += count.Value;
+            else _treeTotalUnknown = true;
+            _treeCountsPending = Math.Max(0, _treeCountsPending - 1);
+            UpdateTreeProgressText();
+        });
+    }
+
     /// <summary>Prima riga di un messaggio d'errore (quelli del server SFTP sono su più righe).</summary>
     private static string FirstLine(string message) =>
         message.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim().TrimEnd('.') ?? message;
 
     /// <summary>Accoda il riallineamento di una cartella remota (dalla connessione della tab SFTP). Thread-safe.</summary>
-    private void EnqueueTreeRefresh(string directoryPath, bool recursive)
+    private void EnqueueTreeRefresh(string? serverKey, string directoryPath, bool recursive)
     {
+        if (string.IsNullOrEmpty(serverKey)) return;
         Dispatcher.UIThread.Post(() =>
         {
-            var path = NormalizeRemotePath(directoryPath);
+            var path = serverKey + "\n" + NormalizeRemotePath(directoryPath);
             _pendingTreeDirs[path] = recursive || (_pendingTreeDirs.TryGetValue(path, out var r) && r);
 
             // Una modifica nota ha la precedenza sulla scansione completa (lenta):
@@ -822,7 +942,8 @@ public partial class VideoboxTabViewModel : ObservableObject
 
     /// <summary>Radici dell'albero caricate e leggibili (sorgente con almeno il suo contenuto).</summary>
     private List<SftpNode> LoadedSourceRoots() =>
-        SftpRootNodes.Where(r => r.IsSourceRoot && !r.HasLoadError && r.Source != null && _pool.IsConnected(r.Source.ProfileId)).ToList();
+        SftpRootNodes.Where(r => r.IsSourceRoot && !r.HasLoadError && r.Source != null &&
+                                 (r.Source.ProfileId != VideoboxSftpPool.SharedProfileId || _pool.IsConnected(r.Source.ProfileId))).ToList();
 
     /// <summary>
     /// Esegue i refresh in coda fondendo i risultati nell'albero esistente,
@@ -849,12 +970,15 @@ public partial class VideoboxTabViewModel : ObservableObject
                 {
                     var dirs = _pendingTreeDirs.ToList();
                     _pendingTreeDirs.Clear();
-                    foreach (var (path, recursive) in dirs)
+                    foreach (var (key, recursive) in dirs)
                     {
-                        // Le modifiche arrivano dalla tab SFTP: riguardano le sorgenti sullo stesso
-                        // server (anche con un profilo dedicato) che contengono quel percorso.
-                        foreach (var root in LoadedSourceRoots().Where(r => _pool.SharesServerWithTab(r.Source!.ProfileId)))
-                            changed |= await RefreshTreeDirectoryAsync(root, path, recursive, _treeGeneration);
+                        // La modifica riguarda le sorgenti sullo stesso server (qualunque connessione
+                        // l'abbia fatta) che contengono quel percorso.
+                        var split = key.IndexOf('\n');
+                        var server = key[..split];
+                        var path = key[(split + 1)..];
+                        foreach (var root in LoadedSourceRoots().Where(r => _pool.ServerKeyOf(r.Source!.ProfileId) == server))
+                            changed |= await RefreshDirectoryWithRetryAsync(root, path, recursive);
                         if (IsLoadingTree) return;
                     }
                     continue;
@@ -878,6 +1002,8 @@ public partial class VideoboxTabViewModel : ObservableObject
                         catch (OperationCanceledException) { throw; }
                         catch (Exception ex)
                         {
+                            // Connessione probabilmente bloccata: si chiude, al prossimo giro si riapre
+                            await _pool.ResetAsync(source.ProfileId);
                             StatusMessage = $"Aggiornamento di '{source.DisplayName}' non riuscito: {FirstLine(ex.Message)}";
                         }
                     }
@@ -886,15 +1012,47 @@ public partial class VideoboxTabViewModel : ObservableObject
                 finally { _fullTreeScanCts = null; scanCts.Dispose(); }
             }
 
-            if (changed)
+        }
+        catch (Exception ex) { StatusMessage = $"Aggiornamento albero SFTP fallito: {FirstLine(ex.Message)}"; }
+        finally
+        {
+            // Anche se una sorgente è andata in errore, le altre possono essere già cambiate:
+            // i colori vanno ricalcolati comunque (prima restavano quelli vecchi, es. radice gialla).
+            if (changed && !IsLoadingTree)
             {
                 if (SelectedSftpNode != null && !IsInTree(SelectedSftpNode)) SelectedSftpNode = null;
                 UpdateSftpTreeColors(repaginate: false);
                 StatusMessage = $"Albero SFTP aggiornato ({DateTime.Now:HH:mm:ss}).";
             }
+            _isRefreshingTree = false;
         }
-        catch (Exception ex) { StatusMessage = $"Aggiornamento albero SFTP fallito: {FirstLine(ex.Message)}"; }
-        finally { _isRefreshingTree = false; }
+    }
+
+    /// <summary>
+    /// Riallinea una cartella; se la connessione della sorgente non risponde (es. timeout di
+    /// WinSCP) la si chiude, se ne apre una nuova e si riprova una volta. Un errore su una
+    /// sorgente non ferma le altre.
+    /// </summary>
+    private async Task<bool> RefreshDirectoryWithRetryAsync(SftpNode root, string path, bool recursive)
+    {
+        var source = root.Source!;
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return await RefreshTreeDirectoryAsync(root, path, recursive, _treeGeneration);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                await _pool.ResetAsync(source.ProfileId);
+                if (attempt >= 2 || source.ProfileId == VideoboxSftpPool.SharedProfileId)
+                {
+                    StatusMessage = $"Aggiornamento di '{source.DisplayName}' non riuscito: {FirstLine(ex.Message)}";
+                    return false;
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -1006,7 +1164,7 @@ public partial class VideoboxTabViewModel : ObservableObject
         if (IsLoadingTree)
         {
             _treeFoldersRead++;
-            TreeProgressText = $"{_treeFoldersRead} cartelle lette";
+            UpdateTreeProgressText();
         }
         return entries
             .Where(e => !e.Name.StartsWith("."))
@@ -1286,6 +1444,9 @@ public partial class VideoboxTabViewModel : ObservableObject
         item2.EvaluateStatus(_settingsService.Current.AllValidStorageDomains);
     }
 
+    /// <summary>Link oltre i quali il forum, con le impostazioni PHP predefinite, inizia a scartarne.</summary>
+    private const int MaxLinksPerRequest = 996;
+
     [RelayCommand]
     public async Task ApplyUpdatesAsync()
     {
@@ -1300,7 +1461,12 @@ public partial class VideoboxTabViewModel : ObservableObject
                         ? SelectedCategory.Id 
                         : _currentPostOriginalCategoryId;
 
-            // Chiamata pulita
+            // Il forum (PHP) accetta al massimo "max_input_vars" campi per richiesta, di
+            // solito 1000: titolo, categoria e autore + un campo per link. Oltre, i link in
+            // più vengono scartati senza errore: si avvisa prima e si controlla dopo.
+            if (finalUrls.Count > MaxLinksPerRequest)
+                StatusMessage = $"Invio di {finalUrls.Count} link: il forum potrebbe accettarne solo ~{MaxLinksPerRequest} (limite max_input_vars di PHP)...";
+
             await _apiService.UpdateVideoUrlsAsync(CurrentPostId, _currentServerId, CurrentPostTitle, catId, _currentPostAuthorId, finalUrls);
 
             foreach (var item in MappingItems)
@@ -1323,6 +1489,18 @@ public partial class VideoboxTabViewModel : ObservableObject
             ApplyFreshPostData(updatedPost, recolor: false);
 
             UpdateSftpTreeColors();
+
+            // Quanti link ha davvero salvato il forum
+            int saved = updatedPost.videos != null && updatedPost.videos.TryGetValue(_currentServerId, out var server)
+                ? server.online?.Count ?? 0
+                : updatedPost.videos?.Values.FirstOrDefault(v => v.id.ToString() == _currentServerId)?.online?.Count ?? -1;
+            if (saved >= 0 && saved < finalUrls.Count)
+            {
+                StatusMessage = $"ATTENZIONE: il forum ha salvato solo {saved} link su {finalUrls.Count}. " +
+                                "Il server del forum limita i campi per richiesta (PHP max_input_vars, di solito 1000): " +
+                                "va alzato nel php.ini del forum (es. max_input_vars = 10000) e poi riapplicato.";
+                return;
+            }
             StatusMessage = "Aggiornamento completato con successo!";
         }
         catch (Exception ex) 

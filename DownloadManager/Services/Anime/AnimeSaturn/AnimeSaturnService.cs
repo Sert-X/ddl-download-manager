@@ -378,8 +378,80 @@ public class AnimeSaturnService : IAnimeSaturnService
     {
         if (_context == null) throw new InvalidOperationException("Servizio non inizializzato.");
 
+        // Via veloce: due richieste leggere (pagina dell'episodio + playlist del player),
+        // senza aprire pagine nel browser. Se il sito cambia, si ripiega sul browser.
+        try
+        {
+            var fast = await GetVideoUrlFastAsync(episodePageUrl, ct);
+            if (!string.IsNullOrEmpty(fast)) return fast;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("[SATURN] Via veloce non riuscita ({Msg}), uso il browser", ex.Message);
+        }
+
+        return await GetVideoUrlViaBrowserAsync(episodePageUrl, ct);
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex EmbedRegex = new(
+        @"(https?:)?//(?<host>[a-z0-9.\-]+)/embed/(?<id>\d+)\?token=(?<token>[A-Za-z0-9]+)&(?:amp;)?expires=(?<exp>\d+)",
+        System.Text.RegularExpressions.RegexOptions.Compiled | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// Link del video senza browser: la pagina dell'episodio contiene l'indirizzo del player
+    /// (id, token, scadenza); il player chiede a "/embed/{id}/playlist" il link, cifrato in
+    /// base64 con XOR sul token. Le richieste passano dal contesto Playwright (stesso proxy,
+    /// cookie e user agent).
+    /// </summary>
+    private async Task<string?> GetVideoUrlFastAsync(string episodePageUrl, CancellationToken ct)
+    {
         var playerUrl = episodePageUrl.Replace("/episode/", "/anime/", StringComparison.OrdinalIgnoreCase);
-        _logger.LogInformation("[SATURN] Video da (player): {Url}", playerUrl);
+        var api = _context!.APIRequest;
+
+        var pageResponse = await api.GetAsync(playerUrl, new APIRequestContextOptions { Timeout = 15000 });
+        if (!pageResponse.Ok) return null;
+        var html = await pageResponse.TextAsync();
+        ct.ThrowIfCancellationRequested();
+
+        var m = EmbedRegex.Match(html);
+        if (!m.Success) return null;
+
+        var host = m.Groups["host"].Value;
+        var id = m.Groups["id"].Value;
+        var token = m.Groups["token"].Value;
+        var expires = m.Groups["exp"].Value;
+        var embedUrl = $"https://{host}/embed/{id}?token={token}&expires={expires}";
+
+        var playlist = await api.GetAsync($"https://{host}/embed/{id}/playlist?token={token}&expires={expires}",
+            new APIRequestContextOptions
+            {
+                Timeout = 15000,
+                Headers = new Dictionary<string, string> { ["Referer"] = embedUrl, ["X-Requested-With"] = "XMLHttpRequest" }
+            });
+        if (!playlist.Ok) return null;
+
+        using var doc = System.Text.Json.JsonDocument.Parse(await playlist.TextAsync());
+        if (!doc.RootElement.TryGetProperty("d", out var dataEl) || dataEl.GetString() is not { Length: > 0 } data)
+            return null;
+
+        var bytes = Convert.FromBase64String(data);
+        var chars = new char[bytes.Length];
+        for (int i = 0; i < bytes.Length; i++) chars[i] = (char)(bytes[i] ^ token[i % token.Length]);
+        var src = new string(chars);
+
+        // Episodi su YouTube o risposte inattese: li gestisce il browser
+        if (!src.StartsWith("http", StringComparison.OrdinalIgnoreCase)) return null;
+
+        _logger.LogInformation("[SATURN] ✅ Video (via veloce): {Url}", src);
+        return src;
+    }
+
+    private async Task<string?> GetVideoUrlViaBrowserAsync(string episodePageUrl, CancellationToken ct)
+    {
+        var playerUrl = episodePageUrl.Replace("/episode/", "/anime/", StringComparison.OrdinalIgnoreCase);
+        _logger.LogInformation("[SATURN] Video da (player, browser): {Url}", playerUrl);
+        if (_context == null) throw new InvalidOperationException("Servizio non inizializzato.");
 
         var page = await _context.NewPageAsync();
         try
@@ -647,7 +719,7 @@ public class AnimeSaturnService : IAnimeSaturnService
         if (episodes.Count == 0) return result;
 
         // === FIX: 5 paralleli invece di 3 ===
-        const int parallelism = 5;
+        const int parallelism = 8;   // la via veloce usa solo due richieste leggere per episodio
 
         _logger.LogInformation("[SATURN] Batch: {Count} episodi ({P} paralleli)",
             episodes.Count, parallelism);

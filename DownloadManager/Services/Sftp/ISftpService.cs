@@ -21,9 +21,15 @@ public interface ISftpService
 
     Task<List<SftpRemoteEntry>> ListDirectoryAsync(string remotePath, CancellationToken ct = default);
     Task CreateDirectoryAsync(string remotePath, CancellationToken ct = default);
+
+    /// <summary>Numero di cartelle sotto il percorso (lei compresa, senza quelle nascoste); null se il server non lo permette.</summary>
+    Task<int?> CountDirectoriesAsync(string remotePath, CancellationToken ct = default);
     Task DeleteFileAsync(string remotePath, CancellationToken ct = default);
     Task DeleteDirectoryAsync(string remotePath, CancellationToken ct = default);
     Task RenameAsync(string oldPath, string newPath, CancellationToken ct = default);
+
+    /// <summary>Copia un file o una cartella sul server stesso (i dati non passano dal PC).</summary>
+    Task DuplicateAsync(string sourcePath, string targetPath, CancellationToken ct = default);
 
     Task UploadFileAsync(
         string localPath,

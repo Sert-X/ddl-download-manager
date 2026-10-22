@@ -56,6 +56,11 @@ public sealed class VideoboxSftpPool : IDisposable
         return tab != null && _serverKeys.TryGetValue(profileId, out var key) && key == tab;
     }
 
+    /// <summary>Server (host:porta:utente) di un profilo; null se non ancora connesso.</summary>
+    public string? ServerKeyOf(int profileId) => profileId == SharedProfileId
+        ? _shared.ServerKey
+        : _serverKeys.TryGetValue(profileId, out var key) ? key : null;
+
     /// <summary>Connessione per il profilo, aperta se serve.</summary>
     public async Task<ISftpService> GetAsync(int profileId, CancellationToken ct = default)
     {
@@ -82,6 +87,29 @@ public sealed class VideoboxSftpPool : IDisposable
             _dedicated[profileId] = service;
             _serverKeys[profileId] = config.ServerKey;
             return service;
+        }
+        finally { _gate.Release(); }
+    }
+
+    /// <summary>
+    /// Chiude la connessione dedicata del profilo (es. dopo un timeout di WinSCP, quando la
+    /// sessione resta bloccata): la prossima richiesta ne apre una nuova.
+    /// </summary>
+    public async Task ResetAsync(int profileId)
+    {
+        if (profileId == SharedProfileId) return;
+
+        await _gate.WaitAsync();
+        try
+        {
+            if (!_dedicated.Remove(profileId, out var service)) return;
+            _logger.LogWarning("[VB-SFTP] Connessione del profilo {Id} chiusa dopo un errore: verrà riaperta", profileId);
+            _ = Task.Run(async () =>
+            {
+                try { service.AbortCurrentOperation(); } catch { }
+                try { await service.DisconnectAsync(); } catch { }
+                try { service.Dispose(); } catch { }
+            });
         }
         finally { _gate.Release(); }
     }

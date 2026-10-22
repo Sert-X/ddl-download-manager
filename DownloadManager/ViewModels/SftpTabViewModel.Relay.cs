@@ -23,6 +23,7 @@ public partial class SftpTabViewModel
     private DispatcherTimer _mainRefreshDebounce = null!;
     private DispatcherTimer _server2RefreshDebounce = null!;
     private readonly SemaphoreSlim _server2RefreshLock = new(1, 1);
+    private string? _lastListedServer2Path;
 
     /// <summary>Pannello di sinistra: false = file locali, true = secondo server.</summary>
     [ObservableProperty] private bool _isServer2Mode;
@@ -41,6 +42,9 @@ public partial class SftpTabViewModel
     public ObservableCollection<SftpRelayJob> SftpRelayJobs => _relayQueue.AllJobs;
 
     public string Server2Name => _server2Config?.Name ?? "Secondo server";
+
+    /// <summary>Connessione del secondo server (per la scelta della cartella in "Sposta in...").</summary>
+    public ISftpService Server2Service => _server2;
     public bool IsLocalMode => !IsServer2Mode;
     public bool ShowServer2Connect => IsServer2Mode && !IsServer2Connected;
     public bool ShowServer2Browser => IsServer2Mode && IsServer2Connected;
@@ -51,6 +55,10 @@ public partial class SftpTabViewModel
         _relayQueue.MaxConcurrency = SftpMaxRelayConcurrency;
         _relayQueue.QueueChanged += () => Dispatcher.UIThread.Post(UpdateSftpBadges);
         _relayQueue.JobCompleted += OnRelayJobCompleted;
+        _sftpUploadQueue.JobCompleted += job =>
+        {
+            if (IsInOrUnder(job.DestinationFolder, SftpCurrentRemotePath)) ScheduleMainRefresh();
+        };
 
         // Connessione propria: non toglie slot né blocca quella principale
         _server2 = new SftpWinScpService(loggerFactory.CreateLogger<SftpWinScpService>(), new SftpSessionLimiter(2));
@@ -59,13 +67,13 @@ public partial class SftpTabViewModel
             if (SamePath(change.DirectoryPath, Server2Path) || change.Recursive) ScheduleServer2Refresh();
         };
 
-        _mainRefreshDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };
+        _mainRefreshDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1500) };
         _mainRefreshDebounce.Tick += async (_, _) =>
         {
             _mainRefreshDebounce.Stop();
             try { await SftpRefreshInternalAsync(silent: true); } catch { }
         };
-        _server2RefreshDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };
+        _server2RefreshDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1500) };
         _server2RefreshDebounce.Tick += async (_, _) =>
         {
             _server2RefreshDebounce.Stop();
@@ -171,17 +179,27 @@ public partial class SftpTabViewModel
         await Server2RefreshInternalAsync(silent: false);
     }
 
+    // Aggiornamento "a intervalli": il primo evento fa partire il timer, quelli che arrivano
+    // prima che scatti vengono raccolti nella stessa lettura. Con 100 upload che finiscono
+    // uno dopo l'altro la cartella si rilegge al massimo una volta ogni intervallo (e non
+    // resta mai indietro, come succederebbe facendo ripartire il timer a ogni evento).
     private void ScheduleServer2Refresh() => Dispatcher.UIThread.Post(() =>
     {
-        _server2RefreshDebounce.Stop();
-        _server2RefreshDebounce.Start();
+        if (!_server2RefreshDebounce.IsEnabled) _server2RefreshDebounce.Start();
     });
 
     private void ScheduleMainRefresh() => Dispatcher.UIThread.Post(() =>
     {
-        _mainRefreshDebounce.Stop();
-        _mainRefreshDebounce.Start();
+        if (!_mainRefreshDebounce.IsEnabled) _mainRefreshDebounce.Start();
     });
+
+    /// <summary>Il file è finito in una cartella aperta (o in una sua sottocartella, per le cartelle nuove)?</summary>
+    private static bool IsInOrUnder(string folder, string shownFolder)
+    {
+        var f = (folder ?? "").TrimEnd('/');
+        var s = (shownFolder ?? "").TrimEnd('/');
+        return f == s || f.StartsWith(s + "/", StringComparison.Ordinal);
+    }
 
     private async Task Server2RefreshInternalAsync(bool silent)
     {
@@ -196,9 +214,15 @@ public partial class SftpTabViewModel
             var entries = await _server2.ListDirectoryAsync(path);
             if (!SamePath(Server2Path, path)) return;
 
+            // Modifiche fatte da fuori: l'albero di Videobox si riallinea (come per il server principale)
+            bool samePath = SamePath(_lastListedServer2Path, path);
+            bool differs = !samePath || !SameListing(Server2Entries, entries);
+
             foreach (var e in entries) e.HasZeroByteIssue = !e.IsDirectory && e.Size == 0;
             var sorted = SftpEntrySorter.SortRemoteEntries(entries, RemoteSortOption.Mode, RemoteSortAscending);
             SftpEntrySorter.SyncCollection(Server2Entries, sorted, e => e.FullPath, SftpEntrySorter.UpdateRemoteEntryFromSource);
+            _lastListedServer2Path = path;
+            if (!silent || (samePath && differs)) _server2.NotifyRemoteChanged(new SftpRemoteChange(path));
 
             int dirs = Server2Entries.Count(e => e.IsDirectory);
             Server2Stats = Server2Entries.Count == 0
@@ -227,6 +251,7 @@ public partial class SftpTabViewModel
         if (!IsServer2Connected || string.IsNullOrWhiteSpace(name)) return;
         try
         {
+            SftpStatusMessage = $"Creazione della cartella '{name.Trim()}'...";
             await _server2.CreateDirectoryAsync($"{Server2Path.TrimEnd('/')}/{name.Trim()}");
             SftpStatusMessage = $"Cartella creata su '{Server2Name}': {name}";
             await Server2RefreshInternalAsync(silent: true);
@@ -234,14 +259,87 @@ public partial class SftpTabViewModel
         catch (Exception ex) { SftpStatusMessage = $"Errore: {ex.Message}"; }
     }
 
+    public void PlayServer2File(SftpRemoteEntry entry)
+    {
+        if (!IsServer2Connected || _server2Config == null) return;
+        PlayRemoteFile(entry, _server2Config);
+    }
+
+    public async Task Server2RenameAsync(SftpRemoteEntry entry, string newName)
+    {
+        if (!IsServer2Connected) return;
+        if (Server2Entries.Any(e => string.Equals(e.Name, newName.Trim(), StringComparison.Ordinal)))
+        { SftpStatusMessage = $"Esiste già un elemento chiamato '{newName}'."; return; }
+        try
+        {
+            SftpStatusMessage = $"Rinomina in corso: {entry.Name} → {newName.Trim()}";
+            var target = $"{TransferJobBase.GetRemoteParent(entry.FullPath).TrimEnd('/')}/{newName.Trim()}";
+            await _server2.RenameAsync(entry.FullPath, target);
+            SftpStatusMessage = $"Rinominato in: {newName}";
+            await Server2RefreshInternalAsync(silent: true);
+        }
+        catch (Exception ex) { SftpStatusMessage = $"Errore: {ex.Message}"; }
+    }
+
+    public async Task Server2MoveManyAsync(IReadOnlyList<SftpRemoteEntry> entries, string destinationFolder)
+    {
+        if (!IsServer2Connected || entries.Count == 0 || string.IsNullOrWhiteSpace(destinationFolder)) return;
+
+        var dest = destinationFolder.Replace('\\', '/').TrimEnd('/');
+        int moved = 0, done = 0;
+        var errors = new List<string>();
+        IsServer2Busy = true;
+        foreach (var entry in entries)
+        {
+            SftpStatusMessage = $"Spostamento in corso su '{Server2Name}' ({++done}/{entries.Count}): {entry.Name}";
+            try
+            {
+                var target = $"{dest}/{entry.Name}";
+                if (target == entry.FullPath) continue;
+                if (entry.IsDirectory && (dest + "/").StartsWith(entry.FullPath.TrimEnd('/') + "/", StringComparison.Ordinal))
+                    throw new InvalidOperationException("non si può spostare una cartella dentro sé stessa");
+                await _server2.RenameAsync(entry.FullPath, target);
+                moved++;
+            }
+            catch (Exception ex) { errors.Add($"{entry.Name}: {ex.Message}"); }
+        }
+        IsServer2Busy = false;
+        _relayQueue.ForgetCreatedFolders();
+        SftpStatusMessage = errors.Count == 0
+            ? $"Spostati {moved} elementi in {(dest.Length == 0 ? "/" : dest)}"
+            : $"Spostati {moved} elementi, {errors.Count} errori: {string.Join("; ", errors.Take(3))}";
+        await Server2RefreshInternalAsync(silent: true);
+    }
+
+    public async Task Server2DuplicateAsync(SftpRemoteEntry entry, string newName)
+    {
+        if (!IsServer2Connected) return;
+        if (Server2Entries.Any(e => string.Equals(e.Name, newName.Trim(), StringComparison.Ordinal)))
+        { SftpStatusMessage = $"Esiste già un elemento chiamato '{newName}'."; return; }
+
+        try
+        {
+            IsServer2Busy = true;
+            SftpStatusMessage = $"Duplicazione di '{entry.Name}' su '{Server2Name}'...";
+            var target = $"{TransferJobBase.GetRemoteParent(entry.FullPath).TrimEnd('/')}/{newName.Trim()}";
+            await _server2.DuplicateAsync(entry.FullPath, target);
+            SftpStatusMessage = $"Creata la copia: {newName}";
+            await Server2RefreshInternalAsync(silent: true);
+        }
+        catch (Exception ex) { SftpStatusMessage = $"Duplicazione non riuscita: {ex.Message}"; }
+        finally { IsServer2Busy = false; }
+    }
+
     public async Task Server2DeleteManyAsync(IReadOnlyList<SftpRemoteEntry> entries)
     {
         if (!IsServer2Connected || entries.Count == 0) return;
 
-        int ok = 0;
+        int ok = 0, done = 0;
         var errors = new List<string>();
+        IsServer2Busy = true;
         foreach (var entry in entries)
         {
+            SftpStatusMessage = $"Eliminazione in corso su '{Server2Name}' ({++done}/{entries.Count}): {entry.Name}";
             try
             {
                 if (entry.IsDirectory) await _server2.DeleteDirectoryAsync(entry.FullPath);
@@ -250,6 +348,7 @@ public partial class SftpTabViewModel
             }
             catch (Exception ex) { errors.Add($"{entry.Name}: {ex.Message}"); }
         }
+        IsServer2Busy = false;
         _relayQueue.ForgetCreatedFolders();
         await Server2RefreshInternalAsync(silent: true);
 
@@ -364,12 +463,9 @@ public partial class SftpTabViewModel
         bool toServer2 = _server2Config != null && SameServer(job.DestinationConfig, _server2Config);
         bool toMain = SameServer(job.DestinationConfig, BuildCurrentSftpConfig());
 
-        if (toMain)
-        {
-            _sftpService.NotifyRemoteChanged(new SftpRemoteChange(folder));
-            if (SamePath(folder, SftpCurrentRemotePath)) ScheduleMainRefresh();
-        }
-        if (toServer2 && SamePath(folder, Server2Path)) ScheduleServer2Refresh();
+        SftpChangeHub.Publish(job.DestinationConfig.ServerKey, new SftpRemoteChange(folder));
+        if (toMain && IsInOrUnder(folder, SftpCurrentRemotePath)) ScheduleMainRefresh();
+        if (toServer2 && IsInOrUnder(folder, Server2Path)) ScheduleServer2Refresh();
     }
 
     private static bool SameServer(SftpConfig a, SftpConfig b) =>

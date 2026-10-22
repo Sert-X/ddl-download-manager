@@ -322,7 +322,6 @@ public partial class App : Application
             System.Diagnostics.Debug.WriteLine($"[UPDATE] Trovata versione {update.TargetFullRelease.Version}");
 
             var newVersion = update.TargetFullRelease.Version.ToString();
-            var packageSize = update.TargetFullRelease.Size;
 
             var changelog = await DownloadManager.Services.Update.GitHubReleaseFetcher.FetchChangelogAsync(
                 "Sert-X", "ddl-download-manager", "v" + newVersion);
@@ -335,11 +334,11 @@ public partial class App : Application
                 return await Views.UpdateDialog.ShowAsync(
                     win,
                     newVersion,
-                    packageSize,
+                    Views.UpdateDownloadInfo.From(mgr, update),
                     changelog,
-                    async progress =>
+                    async (progress, ct) =>
                     {
-                        await mgr.DownloadUpdatesAsync(update, p => progress(p));
+                        await mgr.DownloadUpdatesAsync(update, p => progress(p), ct);
                     });
             });
 

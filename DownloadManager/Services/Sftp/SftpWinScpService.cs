@@ -28,7 +28,14 @@ public class SftpWinScpService : ISftpService, IDisposable
     /// <summary>Sollevato dopo ogni modifica riuscita al filesystem remoto (creazione, eliminazione, rinomina, upload).</summary>
     public event Action<SftpRemoteChange>? RemoteChanged;
 
-    public void NotifyRemoteChanged(SftpRemoteChange change) => RemoteChanged?.Invoke(change);
+    public void NotifyRemoteChanged(SftpRemoteChange change) => RaiseChanged(change);
+
+    /// <summary>Avvisa chi ascolta questa connessione e il canale comune (con l'identità del server).</summary>
+    private void RaiseChanged(SftpRemoteChange change)
+    {
+        RemoteChanged?.Invoke(change);
+        SftpChangeHub.Publish(ServerKey, change);
+    }
 
     public bool IsConnected => _session?.Opened == true;
     public string CurrentRemotePath { get; private set; } = "/";
@@ -345,6 +352,30 @@ public class SftpWinScpService : ISftpService, IDisposable
                       .ToList();
     }
 
+    public async Task<int?> CountDirectoriesAsync(string remotePath, CancellationToken ct = default)
+    {
+        if (!IsConnected) return null;
+        // Il conteggio lo fa il server con "find" (un attimo anche su migliaia di cartelle).
+        // Le cartelle nascoste (".qualcosa") sono saltate, come nell'albero.
+        var quoted = "'" + remotePath.Replace("'", "'\\''") + "'";
+        var command = $"find {quoted} -mindepth 1 -name '.*' -prune -o -type d -print | wc -l";
+
+        await _sessionGate.WaitAsync(ct);
+        try
+        {
+            var result = await Task.Run(() => _session!.ExecuteCommand(command), ct);
+            if (!result.IsSuccess) return null;
+            return int.TryParse(result.Output?.Trim(), out var n) ? n + 1 : null;   // + la cartella stessa
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogInformation("[SFTP] Conteggio cartelle non disponibile su {Path}: {Msg}", remotePath, ex.Message);
+            return null;
+        }
+        finally { _sessionGate.Release(); }
+    }
+
     public async Task CreateDirectoryAsync(string remotePath, CancellationToken ct = default)
     {
         EnsureConnected();
@@ -394,7 +425,7 @@ public class SftpWinScpService : ISftpService, IDisposable
             _sessionGate.Release();
         }
 
-        RemoteChanged?.Invoke(new SftpRemoteChange(GetParentPath(remotePath)));
+        RaiseChanged(new SftpRemoteChange(GetParentPath(remotePath)));
     }
 
     public async Task DeleteFileAsync(string remotePath, CancellationToken ct = default)
@@ -460,7 +491,7 @@ public class SftpWinScpService : ISftpService, IDisposable
             _sessionGate.Release();
         }
 
-        RemoteChanged?.Invoke(new SftpRemoteChange(GetParentPath(remotePath)));
+        RaiseChanged(new SftpRemoteChange(GetParentPath(remotePath)));
     }
 
     public async Task DeleteDirectoryAsync(string remotePath, CancellationToken ct = default)
@@ -520,7 +551,7 @@ public class SftpWinScpService : ISftpService, IDisposable
             _sessionGate.Release();
         }
 
-        RemoteChanged?.Invoke(new SftpRemoteChange(GetParentPath(remotePath)));
+        RaiseChanged(new SftpRemoteChange(GetParentPath(remotePath)));
     }
 
     private static string GetParentPath(string fullPath)
@@ -545,9 +576,27 @@ public class SftpWinScpService : ISftpService, IDisposable
             _sessionGate.Release();
         }
 
-        RemoteChanged?.Invoke(new SftpRemoteChange(GetParentPath(oldPath)));
+        RaiseChanged(new SftpRemoteChange(GetParentPath(oldPath)));
         if (GetParentPath(oldPath) != GetParentPath(newPath))
-            RemoteChanged?.Invoke(new SftpRemoteChange(GetParentPath(newPath)));
+            RaiseChanged(new SftpRemoteChange(GetParentPath(newPath)));
+    }
+
+    public async Task DuplicateAsync(string sourcePath, string targetPath, CancellationToken ct = default)
+    {
+        EnsureConnected();
+
+        await _sessionGate.WaitAsync(ct);
+        try
+        {
+            // WinSCP copia sul server (estensione SFTP di copia o comando "cp" della shell)
+            await Task.Run(() => _session!.DuplicateFile(sourcePath, targetPath), ct);
+        }
+        finally
+        {
+            _sessionGate.Release();
+        }
+
+        RaiseChanged(new SftpRemoteChange(GetParentPath(targetPath)));
     }
 
     public async Task UploadFileAsync(
@@ -586,7 +635,7 @@ public class SftpWinScpService : ISftpService, IDisposable
             _sessionGate.Release();
         }
 
-        RemoteChanged?.Invoke(new SftpRemoteChange(GetParentPath(remotePath)));
+        RaiseChanged(new SftpRemoteChange(GetParentPath(remotePath)));
 
         progress?.Report(new SftpProgress
         {
@@ -634,7 +683,7 @@ public class SftpWinScpService : ISftpService, IDisposable
             _sessionGate.Release();
         }
 
-        RemoteChanged?.Invoke(new SftpRemoteChange(remoteTarget, Recursive: true));
+        RaiseChanged(new SftpRemoteChange(remoteTarget, Recursive: true));
     }
 
     public async Task DownloadFileAsync(

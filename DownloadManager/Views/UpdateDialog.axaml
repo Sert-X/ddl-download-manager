@@ -29,7 +29,11 @@
 
                 <!-- FASE 1: conferma -->
                 <DockPanel x:Name="ConfirmPanel">
-                    <TextBlock DockPanel.Dock="Top" x:Name="VersionInfoText" FontSize="13" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                    <TextBlock DockPanel.Dock="Top" x:Name="VersionInfoText" FontSize="13" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                    <StackPanel DockPanel.Dock="Top" Classes="bi" Margin="0,0,0,12">
+                        <Path Classes="icon accent" Data="{StaticResource IconDownload}"/>
+                        <TextBlock x:Name="DownloadSizeText" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource AppAccentBrush}"/>
+                    </StackPanel>
                     <StackPanel DockPanel.Dock="Top" Classes="bi" Margin="0,0,0,8">
                         <Path Classes="icon accent" Data="{StaticResource IconList}"/>
                         <TextBlock Text="Novità di questa versione" FontWeight="SemiBold"/>
@@ -57,12 +61,16 @@
 
                     <ProgressBar x:Name="ProgressBarCtrl" Minimum="0" Maximum="100" Value="0" Height="10"/>
 
-                    <Grid ColumnDefinitions="*, *">
+                    <Grid ColumnDefinitions="*, *, Auto">
                         <StackPanel Grid.Column="0" Spacing="2">
                             <TextBlock Text="Scaricato" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}"/>
                             <TextBlock x:Name="BytesText" Text="0%" FontWeight="SemiBold" FontSize="12"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Spacing="2">
+                            <TextBlock Text="Rimanente" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                            <TextBlock x:Name="RemainingText" Text="-" FontWeight="SemiBold" FontSize="12"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Spacing="2" MinWidth="90">
                             <TextBlock Text="Velocità" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}"/>
                             <TextBlock x:Name="SpeedText" Text="-" FontWeight="SemiBold" FontSize="12"
                                        Foreground="{DynamicResource AppSuccessBrush}"/>

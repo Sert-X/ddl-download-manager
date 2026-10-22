@@ -88,11 +88,25 @@ jobs:
       - name: Pack with Velopack
         shell: pwsh
         run: |
+          # Installer personalizzato: Setup.exe con schermata grafica (DownloadManager/Installer)
+          # e .msi con procedura guidata (benvenuto, avanzamento, fine) in italiano.
           vpk pack `
             -u DDLDownloadManager `
             -v "${{ steps.version.outputs.VERSION }}" `
             -p ./publish `
+            -r win-x64 `
             --mainExe DDLDownloadManager.exe `
+            --packTitle "DDL Download Manager" `
+            --packAuthors "DDL" `
+            --icon DownloadManager/Assets/app.ico `
+            --splashImage DownloadManager/Installer/splash.png `
+            --splashProgressColor "#3B82F6" `
+            --msi `
+            --instLocation PerUser `
+            --instWelcome DownloadManager/Installer/welcome.txt `
+            --instConclusion DownloadManager/Installer/conclusion.txt `
+            --msiTopBanner DownloadManager/Installer/msi-banner.bmp `
+            --msiDialogBackground DownloadManager/Installer/msi-dialog.bmp `
             -o ./Releases
 
       - name: Create GitHub Release
@@ -109,4 +123,5 @@ jobs:
             Releases/releases.win.delta.json
             Releases/*.nupkg
             Releases/*-Setup.exe
+            Releases/*.msi
           fail_on_unmatched_files: false

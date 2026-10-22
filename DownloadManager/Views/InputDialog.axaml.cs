@@ -13,7 +13,12 @@ public partial class InputDialog : Window
         InitializeComponent();
     }
 
-    public static async Task<string?> ShowAsync(Window owner, string prompt, string initialValue = "", string title = "Input")
+    /// <param name="selectNameOnly">
+    /// Seleziona solo il nome, senza l'estensione (come Esplora risorse): scrivendo si
+    /// cambia il nome e l'estensione resta. Per le cartelle va lasciato false.
+    /// </param>
+    public static async Task<string?> ShowAsync(Window owner, string prompt, string initialValue = "", string title = "Input",
+                                                bool selectNameOnly = false)
     {
         var dialog = new InputDialog
         {
@@ -28,8 +33,19 @@ public partial class InputDialog : Window
         // altrimenti il focus non viene preso).
         dialog.Opened += (_, _) =>
         {
-            dialog.InputBox.SelectAll();
+            // Prima il focus, poi la selezione (prendendo il focus il cursore si sposta)
             dialog.InputBox.Focus();
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                var text = dialog.InputBox.Text ?? "";
+                int dot = selectNameOnly ? text.LastIndexOf('.') : -1;
+                if (dot > 0)
+                {
+                    dialog.InputBox.SelectionStart = 0;
+                    dialog.InputBox.SelectionEnd = dot;
+                }
+                else dialog.InputBox.SelectAll();
+            }, Avalonia.Threading.DispatcherPriority.Input);
         };
 
         await dialog.ShowDialog(owner);

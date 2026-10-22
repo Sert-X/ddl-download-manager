@@ -384,16 +384,19 @@ public partial class SftpVideoPlayerWindow : Window
 
     // ───────────────────────── Avvio riproduzione ─────────────────────────
 
+    /// <summary>Anteprima di un file sul PC (stesso player dei file remoti).</summary>
+    public void PlayLocalFile(string localPath)
+    {
+        PlayFrom(Path.GetFileName(localPath), "Apertura file...", () =>
+            new FileStream(localPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 256 * 1024));
+    }
+
     /// <param name="sftpUrl">Formato: sftp://host[:porta]/percorso/file.mp4</param>
-    public async void PlayUrl(string sftpUrl, string fileName,
+    public void PlayUrl(string sftpUrl, string fileName,
         string? username = null, string? password = null)
     {
-        try
+        PlayFrom(fileName, "Connessione SFTP...", () =>
         {
-            var fileNameText = this.FindControl<TextBlock>("FileNameText");
-            if (fileNameText != null) fileNameText.Text = fileName;
-            SetStatus("Connessione SFTP...");
-
             var uri = new Uri(sftpUrl);
             var host = uri.Host;
             var port = uri.Port > 0 ? uri.Port : 22;
@@ -407,18 +410,28 @@ public partial class SftpVideoPlayerWindow : Window
                     password = Uri.UnescapeDataString(parts[1]);
             }
 
-            await Task.Run(() =>
+            _sftp = new SftpClient(host, port, username ?? "", password ?? "")
             {
-                _sftp = new SftpClient(host, port, username ?? "", password ?? "")
-                {
-                    BufferSize = 256 * 1024,
-                    OperationTimeout = TimeSpan.FromSeconds(30)
-                };
-                _sftp.ConnectionInfo.Timeout = TimeSpan.FromSeconds(15);
-                _sftp.Connect();
+                BufferSize = 256 * 1024,
+                OperationTimeout = TimeSpan.FromSeconds(30)
+            };
+            _sftp.ConnectionInfo.Timeout = TimeSpan.FromSeconds(15);
+            _sftp.Connect();
 
-                _remoteStream = _sftp.OpenRead(remotePath);
-            });
+            return _sftp.OpenRead(remotePath);
+        });
+    }
+
+    /// <summary>Apre lo stream (in background) e lo riproduce con LibVLC.</summary>
+    private async void PlayFrom(string fileName, string openingStatus, Func<Stream> openStream)
+    {
+        try
+        {
+            var fileNameText = this.FindControl<TextBlock>("FileNameText");
+            if (fileNameText != null) fileNameText.Text = fileName;
+            SetStatus(openingStatus);
+
+            _remoteStream = await Task.Run(openStream);
 
             if (_disposed)
             {

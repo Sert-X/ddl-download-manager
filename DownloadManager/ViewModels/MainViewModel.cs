@@ -470,7 +470,6 @@ public partial class MainWindowViewModel : ViewModelBase
 
             // CASO 2: aggiornamento disponibile → UpdateDialog
             var newVersion = update.TargetFullRelease.Version.ToString();
-            var packageSize = update.TargetFullRelease.Size;
 
             System.Diagnostics.Debug.WriteLine($"[UPDATE] Trovata versione {newVersion}");
 
@@ -485,11 +484,11 @@ public partial class MainWindowViewModel : ViewModelBase
                 return await Views.UpdateDialog.ShowAsync(
                     win,
                     newVersion,
-                    packageSize,
+                    Views.UpdateDownloadInfo.From(mgr, update),
                     changelog,
-                    async progress =>
+                    async (progress, ct) =>
                     {
-                        await mgr.DownloadUpdatesAsync(update, p => progress(p));
+                        await mgr.DownloadUpdatesAsync(update, p => progress(p), ct);
                     });
             });
 

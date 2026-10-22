@@ -776,6 +776,9 @@ public partial class SftpTabViewModel : ViewModelBase
 
                 if (SftpCurrentRemotePath != pathToRead) return;
 
+                // Quello che si vede ora aggiorna i file a 0 byte della cartella (e il rosso delle superiori)
+                _zeroByteChecker.UpdateFromListing(pathToRead, entries);
+
                 foreach (var e in entries)
                 {
                     if (!e.IsDirectory)
@@ -791,8 +794,17 @@ public partial class SftpTabViewModel : ViewModelBase
                     }
                 }
 
+                // Modifiche fatte da fuori (es. WinSCP): se la cartella è cambiata, o se l'hai
+                // aggiornata a mano, lo si segnala anche all'albero di Videobox Corrector.
+                bool samePath = SamePath(_lastListedRemotePath, pathToRead);
+                bool differs = !samePath || !SameListing(SftpRemoteEntries, entries);
+
                 var sorted = SftpEntrySorter.SortRemoteEntries(entries, RemoteSortOption.Mode, RemoteSortAscending);
                 SftpEntrySorter.SyncCollection(SftpRemoteEntries, sorted, e => e.FullPath, SftpEntrySorter.UpdateRemoteEntryFromSource);
+                _lastListedRemotePath = pathToRead;
+
+                if (!silent || (samePath && differs))
+                    _sftpService.NotifyRemoteChanged(new SftpRemoteChange(pathToRead));
 
                 UpdateRemoteBrowserStats();
 
@@ -810,6 +822,17 @@ public partial class SftpTabViewModel : ViewModelBase
             }
         }
         finally { _remoteRefreshLock.Release(); }
+    }
+
+    private string? _lastListedRemotePath;
+
+    /// <summary>Stessi nomi, tipi e dimensioni (l'ordine non conta).</summary>
+    private static bool SameListing(IEnumerable<SftpRemoteEntry> shown, IEnumerable<SftpRemoteEntry> fresh)
+    {
+        static string Key(SftpRemoteEntry e) => $"{e.Name}|{e.IsDirectory}|{e.Size}";
+        var a = shown.Select(Key).ToHashSet(StringComparer.Ordinal);
+        var b = fresh.Select(Key).ToHashSet(StringComparer.Ordinal);
+        return a.SetEquals(b);
     }
 
     [RelayCommand]
@@ -1012,7 +1035,17 @@ public partial class SftpTabViewModel : ViewModelBase
         });
     }
 
-    private void InvalidateZeroByteCacheRecursive(string? folderPath) => _zeroByteChecker.InvalidateRecursive(folderPath);
+    /// <summary>
+    /// Dopo una modifica: la cartella aperta viene comunque riletta (e aggiornata da
+    /// UpdateFromListing), quindi si dimentica solo un'altra cartella toccata (es. la
+    /// destinazione di uno spostamento). Prima si cancellavano anche tutte le superiori,
+    /// e il rosso spariva da cartelle che contenevano ancora file a 0 byte.
+    /// </summary>
+    private void InvalidateZeroByteCacheRecursive(string? folderPath)
+    {
+        if (string.IsNullOrEmpty(folderPath) || SamePath(folderPath, SftpCurrentRemotePath)) return;
+        _zeroByteChecker.InvalidateFolder(folderPath);
+    }
 
     [RelayCommand]
     private async Task SftpLocalGoUpAsync()
@@ -1053,19 +1086,25 @@ public partial class SftpTabViewModel : ViewModelBase
         var list = entries.Where(e => e != null).ToList();
         if (list.Count == 0) return;
 
-        int success = 0, failed = 0;
+        int success = 0, failed = 0, done = 0;
         string? firstError = null;
 
+        IsSftpBusy = true;
         foreach (var entry in list)
         {
+            SftpStatusMessage = $"Eliminazione in corso ({++done}/{list.Count}): {entry.Name}";
             try
             {
-                if (entry.IsDirectory) Directory.Delete(entry.FullPath, true);
-                else File.Delete(entry.FullPath);
+                await Task.Run(() =>
+                {
+                    if (entry.IsDirectory) Directory.Delete(entry.FullPath, true);
+                    else File.Delete(entry.FullPath);
+                });
                 success++;
             }
             catch (Exception ex) { failed++; firstError ??= ex.Message; }
         }
+        IsSftpBusy = false;
 
         await SftpRefreshLocalInternalAsync(silent: true);
 
@@ -1097,13 +1136,84 @@ public partial class SftpTabViewModel : ViewModelBase
             var dir = Path.GetDirectoryName(entry.FullPath) ?? SftpCurrentLocalPath;
             var newPath = Path.Combine(dir, newName);
 
-            if (entry.IsDirectory) Directory.Move(entry.FullPath, newPath);
-            else File.Move(entry.FullPath, newPath);
+            SftpStatusMessage = $"Rinomina in corso: {entry.Name} → {newName}";
+            await Task.Run(() =>
+            {
+                if (entry.IsDirectory) Directory.Move(entry.FullPath, newPath);
+                else File.Move(entry.FullPath, newPath);
+            });
 
             SftpStatusMessage = $"Rinominato in: {newName}";
             await SftpRefreshLocalAsync();
         }
         catch (Exception ex) { SftpStatusMessage = $"Errore: {ex.Message}"; }
+    }
+
+    // ============================================================
+    //  DUPLICA
+    // ============================================================
+
+    /// <summary>Nome proposto per la copia: "Nome - copia.ext", poi "Nome - copia (2).ext"...</summary>
+    public static string SuggestCopyName(string name, bool isDirectory, IEnumerable<string> existingNames)
+    {
+        var taken = new HashSet<string>(existingNames, StringComparer.OrdinalIgnoreCase);
+        var ext = isDirectory ? "" : Path.GetExtension(name);
+        var stem = isDirectory ? name : Path.GetFileNameWithoutExtension(name);
+        if (string.IsNullOrEmpty(stem)) { stem = name; ext = ""; }
+
+        var candidate = $"{stem} - copia{ext}";
+        for (int i = 2; taken.Contains(candidate); i++) candidate = $"{stem} - copia ({i}){ext}";
+        return candidate;
+    }
+
+    public async Task SftpLocalDuplicateAsync(LocalFileEntry entry, string newName)
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(entry.FullPath) ?? SftpCurrentLocalPath;
+            var target = Path.Combine(dir, newName.Trim());
+            if (File.Exists(target) || Directory.Exists(target))
+            { SftpStatusMessage = $"Esiste già un elemento chiamato '{newName}'."; return; }
+
+            SftpStatusMessage = $"Duplicazione di '{entry.Name}'...";
+            await Task.Run(() =>
+            {
+                if (entry.IsDirectory) CopyDirectory(entry.FullPath, target);
+                else File.Copy(entry.FullPath, target);
+            });
+            SftpStatusMessage = $"Creata la copia: {newName}";
+            await SftpRefreshLocalAsync();
+        }
+        catch (Exception ex) { SftpStatusMessage = $"Duplicazione non riuscita: {ex.Message}"; }
+    }
+
+    private static void CopyDirectory(string source, string target)
+    {
+        Directory.CreateDirectory(target);
+        foreach (var file in Directory.GetFiles(source))
+            File.Copy(file, Path.Combine(target, Path.GetFileName(file)));
+        foreach (var dir in Directory.GetDirectories(source))
+            CopyDirectory(dir, Path.Combine(target, Path.GetFileName(dir)));
+    }
+
+    public async Task SftpRemoteDuplicateAsync(SftpRemoteEntry entry, string newName)
+    {
+        if (!IsSftpConnected) { SftpStatusMessage = "Non connesso."; return; }
+        if (SftpRemoteEntries.Any(e => string.Equals(e.Name, newName.Trim(), StringComparison.Ordinal)))
+        { SftpStatusMessage = $"Esiste già un elemento chiamato '{newName}'."; return; }
+
+        try
+        {
+            IsSftpBusy = true;
+            SftpStatusMessage = $"Duplicazione di '{entry.Name}' sul server...";
+            var target = $"{TransferJobBase.GetRemoteParent(entry.FullPath).TrimEnd('/')}/{newName.Trim()}";
+            await _sftpService.DuplicateAsync(entry.FullPath, target);
+            SftpStatusMessage = $"Creata la copia: {newName}";
+            await SftpRefreshAsync();
+            InvalidateZeroByteCacheRecursive(SftpCurrentRemotePath);
+        }
+        catch (Exception ex) { SftpStatusMessage = $"Duplicazione non riuscita: {ex.Message}"; }
+        finally { IsSftpBusy = false; }
     }
 
     public async Task SftpRemoteDeleteManyAsync(IEnumerable<SftpRemoteEntry> entries)
@@ -1113,11 +1223,13 @@ public partial class SftpTabViewModel : ViewModelBase
         var list = entries.Where(e => e != null).ToList();
         if (list.Count == 0) return;
 
-        int success = 0, failed = 0;
+        int success = 0, failed = 0, done = 0;
         var errors = new List<string>();
 
+        IsSftpBusy = true;
         foreach (var entry in list)
         {
+            SftpStatusMessage = $"Eliminazione in corso dal server ({++done}/{list.Count}): {entry.Name}";
             try
             {
                 if (entry.IsDirectory) await _sftpService.DeleteDirectoryAsync(entry.FullPath);
@@ -1132,6 +1244,7 @@ public partial class SftpTabViewModel : ViewModelBase
             }
         }
 
+        IsSftpBusy = false;
         await SftpRefreshInternalAsync(silent: true);
         InvalidateZeroByteCacheRecursive(SftpCurrentRemotePath);
 
@@ -1150,6 +1263,7 @@ public partial class SftpTabViewModel : ViewModelBase
         try
         {
             var full = $"{SftpCurrentRemotePath.TrimEnd('/')}/{name}";
+            SftpStatusMessage = $"Creazione della cartella '{name}'...";
             await _sftpService.CreateDirectoryAsync(full);
             SftpStatusMessage = $"Cartella remota creata: {name}";
             await SftpRefreshAsync();
@@ -1163,10 +1277,12 @@ public partial class SftpTabViewModel : ViewModelBase
     {
         if (entries.Count == 0 || string.IsNullOrWhiteSpace(destinationFolder)) return;
 
-        int moved = 0;
+        int moved = 0, done = 0;
         var errors = new List<string>();
+        IsSftpBusy = true;
         foreach (var entry in entries)
         {
+            SftpStatusMessage = $"Spostamento in corso ({++done}/{entries.Count}): {entry.Name}";
             try
             {
                 var target = Path.Combine(destinationFolder, entry.Name);
@@ -1188,6 +1304,7 @@ public partial class SftpTabViewModel : ViewModelBase
             catch (Exception ex) { errors.Add($"{entry.Name}: {ex.Message}"); }
         }
 
+        IsSftpBusy = false;
         SftpStatusMessage = errors.Count == 0
             ? $"Spostati {moved} elementi in {destinationFolder}"
             : $"Spostati {moved} elementi, {errors.Count} errori: {string.Join("; ", errors.Take(3))}";
@@ -1204,10 +1321,12 @@ public partial class SftpTabViewModel : ViewModelBase
         var dest = destinationFolder.Replace('\\', '/').TrimEnd('/');
         if (dest.Length == 0) dest = "";
 
-        int moved = 0;
+        int moved = 0, done = 0;
         var errors = new List<string>();
+        IsSftpBusy = true;
         foreach (var entry in entries)
         {
+            SftpStatusMessage = $"Spostamento in corso sul server ({++done}/{entries.Count}): {entry.Name}";
             try
             {
                 var target = $"{dest}/{entry.Name}";
@@ -1221,6 +1340,7 @@ public partial class SftpTabViewModel : ViewModelBase
             catch (Exception ex) { errors.Add($"{entry.Name}: {ex.Message}"); }
         }
 
+        IsSftpBusy = false;
         SftpStatusMessage = errors.Count == 0
             ? $"Spostati {moved} elementi in {(dest.Length == 0 ? "/" : dest)}"
             : $"Spostati {moved} elementi, {errors.Count} errori: {string.Join("; ", errors.Take(3))}";
@@ -1240,6 +1360,7 @@ public partial class SftpTabViewModel : ViewModelBase
             var dir = SftpCurrentRemotePath.TrimEnd('/');
             var newPath = $"{dir}/{newName}";
 
+            SftpStatusMessage = $"Rinomina in corso: {entry.Name} → {newName}";
             await _sftpService.RenameAsync(entry.FullPath, newPath);
             SftpStatusMessage = $"Rinominato in: {newName}";
             await SftpRefreshAsync();
@@ -1261,6 +1382,7 @@ public partial class SftpTabViewModel : ViewModelBase
 
         try
         {
+            SftpStatusMessage = "Preparazione dell'upload...";
             _sftpUploadQueue.Configure(BuildCurrentSftpConfig());
             _sftpUploadQueue.MaxConcurrency = SftpMaxUploadConcurrency;
 
@@ -1354,6 +1476,9 @@ public partial class SftpTabViewModel : ViewModelBase
             int queued = 0;
             foreach (var remote in selected)
             {
+                SftpStatusMessage = remote.IsDirectory
+                    ? $"Lettura della cartella '{remote.Name}' per il download..."
+                    : "Preparazione del download...";
                 if (remote.IsDirectory)
                 {
                     await DownloadRemoteFolderRecursiveAsync(remote.FullPath, targetDir);
@@ -1405,10 +1530,27 @@ public partial class SftpTabViewModel : ViewModelBase
         }
     }
 
-    public void PlayRemoteFile(SftpRemoteEntry entry)
+    public void PlayRemoteFile(SftpRemoteEntry entry) => PlayRemoteFile(entry, null);
+
+    /// <summary>Anteprima di un video sul PC.</summary>
+    public void PlayLocalFile(LocalFileEntry entry)
+    {
+        if (entry == null || entry.IsDirectory || !File.Exists(entry.FullPath)) return;
+        try
+        {
+            var playerWindow = new Views.SftpVideoPlayerWindow();
+            playerWindow.PlayLocalFile(entry.FullPath);
+            playerWindow.Show();
+            SftpStatusMessage = $"Anteprima: {entry.Name}";
+        }
+        catch (Exception ex) { SftpStatusMessage = $"Errore anteprima: {ex.Message}"; }
+    }
+
+    /// <param name="server">Server del file (null = server principale).</param>
+    public void PlayRemoteFile(SftpRemoteEntry entry, SftpConfig? server)
     {
         if (entry == null || entry.IsDirectory) return;
-        if (!IsSftpConnected) { SftpStatusMessage = "Non connesso."; return; }
+        if (server == null && !IsSftpConnected) { SftpStatusMessage = "Non connesso."; return; }
 
         var ext = Path.GetExtension(entry.Name).ToLowerInvariant();
         var playable = new HashSet<string>
@@ -1425,7 +1567,7 @@ public partial class SftpTabViewModel : ViewModelBase
 
         try
         {
-            var cfg = BuildCurrentSftpConfig();
+            var cfg = server ?? BuildCurrentSftpConfig();
 
             // URL senza credenziali (le passiamo come opzioni Media a LibVLC)
             var segments = entry.FullPath.TrimStart('/').Split('/');
