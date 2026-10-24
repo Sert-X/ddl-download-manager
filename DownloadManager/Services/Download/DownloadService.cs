@@ -178,6 +178,18 @@ public partial class DownloadService : IDownloadService
                     throw new InvalidOperationException("UrlExtractor vuoto.");
                 item.Url = fresh;
 
+                // Anime accodati senza link: ora che è noto si calcola il nome definitivo
+                // (il pattern può usare il nome originale del file sul sito)
+                if (item.Category == "anime")
+                {
+                    var names = _services.GetService(typeof(FileNameBuilder)) as FileNameBuilder;
+                    if (names != null)
+                    {
+                        var path = names.BuildDestinationPath(item, fresh, item.EpisodeTitle);
+                        SetUi(() => item.DestinationPath = path);
+                    }
+                }
+
                 if (item.AudioExtractor != null)
                 {
                     try

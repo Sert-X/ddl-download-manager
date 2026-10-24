@@ -25,7 +25,9 @@ public partial class StreamingTabViewModel : ViewModelBase
     private readonly ILogger<StreamingTabViewModel> _logger;
     private readonly ObservableCollection<DownloadItem> _downloads = new();
     private CancellationTokenSource? _batchCts;
-    private bool _loadingQualities;
+    // "Vince l'ultima richiesta": ogni operazione ha un numero; i risultati di una
+    // richiesta superata (nuova ricerca, altro titolo, altra stagione) vengono ignorati.
+    private int _searchSeq, _seasonsSeq, _episodesSeq, _qualitiesSeq;
 
     private const string CategoryName = "streaming";
 
@@ -531,11 +533,13 @@ public partial class StreamingTabViewModel : ViewModelBase
         SearchQuery = term;
         SaveSearchToHistory(term.Trim());
 
+        int seq = ++_searchSeq;
         IsLoadingSearchResults = true;
         try
         {
             StatusMessage = $"Ricerca in corso per '{term}'...";
             var results = await _service.SearchAsync(term);
+            if (seq != _searchSeq) return;   // superata da una ricerca nuova
 
             SearchResults.Clear();
             foreach (var r in results)
@@ -548,10 +552,10 @@ public partial class StreamingTabViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Errore: {ex.Message}";
+            if (seq == _searchSeq) StatusMessage = $"Errore: {ex.Message}";
             _logger.LogWarning(ex, "[STREAMING-TAB] Errore ricerca");
         }
-        finally { IsLoadingSearchResults = false; }
+        finally { if (seq == _searchSeq) IsLoadingSearchResults = false; }
     }
 
     [RelayCommand]
@@ -626,12 +630,14 @@ public partial class StreamingTabViewModel : ViewModelBase
         if (result == null) return;
 
         SelectedResult = result;
+        int seq = ++_seasonsSeq;
         IsLoadingEpisodes = true;
 
         try
         {
             StatusMessage = $"Analisi di '{result.Title}'...";
             var seasons = await _service.GetSeasonsAsync(result.Link);
+            if (seq != _seasonsSeq || !ReferenceEquals(SelectedResult, result)) return;   // scelto un altro titolo
 
             if (seasons.Count == 0)
             {
@@ -657,19 +663,21 @@ public partial class StreamingTabViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Errore: {ex.Message}";
+            if (seq == _seasonsSeq) StatusMessage = $"Errore: {ex.Message}";
             _logger.LogWarning(ex, "[STREAMING-TAB] Errore caricamento stagioni");
         }
-        finally { IsLoadingEpisodes = false; }
+        finally { if (seq == _seasonsSeq) IsLoadingEpisodes = false; }
     }
 
     private async Task LoadEpisodesForSeasonAsync(string seriesLink, int seasonNumber)
     {
+        int seq = ++_episodesSeq;
         IsLoadingEpisodes = true;
         try
         {
             StatusMessage = $"Caricamento episodi stagione {seasonNumber}...";
             var episodes = await _service.GetEpisodesAsync(seriesLink, seasonNumber);
+            if (seq != _episodesSeq) return;   // scelta un'altra stagione o un altro titolo
 
             Episodes.Clear();
             foreach (var ep in episodes) Episodes.Add(ep);
@@ -678,10 +686,10 @@ public partial class StreamingTabViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Errore: {ex.Message}";
+            if (seq == _episodesSeq) StatusMessage = $"Errore: {ex.Message}";
             _logger.LogWarning(ex, "[STREAMING-TAB] Errore caricamento episodi");
         }
-        finally { IsLoadingEpisodes = false; }
+        finally { if (seq == _episodesSeq) IsLoadingEpisodes = false; }
     }
 
     private void ClearTracks()
@@ -767,9 +775,8 @@ public partial class StreamingTabViewModel : ViewModelBase
 
     private async Task LoadQualitiesForCurrentSelectionAsync()
     {
-        if (_loadingQualities) return;
-        _loadingQualities = true;
-        IsQualitiesLoading = true;   // ← NUOVO
+        int seq = ++_qualitiesSeq;
+        IsQualitiesLoading = true;
 
         try
         {
@@ -786,6 +793,7 @@ public partial class StreamingTabViewModel : ViewModelBase
             StatusMessage = "Analisi di qualità, audio e sottotitoli...";
             var tracks = await _service.GetAvailableTracksAsync(
                 SelectedResult.Link, isSeries, seasonNum, 1);
+            if (seq != _qualitiesSeq) return;   // nel frattempo è stato scelto altro
             var qualities = tracks.Videos;
             LoadTracks(tracks);
 
@@ -811,8 +819,7 @@ public partial class StreamingTabViewModel : ViewModelBase
         }
         finally
         {
-            _loadingQualities = false;
-            IsQualitiesLoading = false;   // ← NUOVO
+            if (seq == _qualitiesSeq) IsQualitiesLoading = false;
         }
     }
 

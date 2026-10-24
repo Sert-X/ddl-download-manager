@@ -6,7 +6,13 @@ public partial class DownloadItem : ObservableObject
 {
     public int Id { get; set; }
     public string Url { get; set; } = string.Empty;
-    public string DestinationPath { get; set; } = string.Empty;
+    // Notifica la UI: per gli anime accodati senza link il nome definitivo arriva all'avvio
+    private string _destinationPath = string.Empty;
+    public string DestinationPath
+    {
+        get => _destinationPath;
+        set { if (SetProperty(ref _destinationPath, value)) OnPropertyChanged(nameof(FileName)); }
+    }
     public string SeriesName { get; set; } = string.Empty;
     public int EpisodeNumber { get; set; }
     public int SeasonNumber { get; set; }

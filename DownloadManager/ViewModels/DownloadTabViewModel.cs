@@ -81,13 +81,6 @@ public partial class DownloadTabViewModel : ViewModelBase
 
     public ObservableCollection<string> SearchHistory { get; } = new();
     public ObservableCollection<SeriesGroup> SeriesGroups { get; } = new();
-    /// <summary>
-    /// Accodamento a blocchi: un primo blocco piccolo fa partire subito i download,
-    /// poi blocchi grandi (ogni blocco ha un costo fisso di apertura pagina sul provider).
-    /// </summary>
-    private const int FirstEnqueueChunkSize = 10;
-    private const int EnqueueChunkSize = 100;
-
     private readonly ObservableCollection<DownloadItem> _downloads = new();
     public ObservableCollection<DownloadItem> Downloads => _downloads;
 
@@ -495,14 +488,19 @@ public partial class DownloadTabViewModel : ViewModelBase
         SearchQuery = term;
         SaveSearchToHistory(term.Trim());
 
+        // Una ricerca nuova annulla quella in corso; i risultati di una ricerca superata
+        // vengono ignorati (prima potevano arrivare dopo e sovrascrivere quelli giusti)
+        _searchCts?.Cancel();
+        var cts = _searchCts = new CancellationTokenSource();
+        int seq = ++_searchSeq;
+        var provider = SelectedProvider!;
+
         IsLoadingSearchResults = true;
         try
         {
-            StatusMessage = "Inizializzazione browser...";
-            await SelectedProvider!.InitializeAsync(headless: true);
-
             StatusMessage = $"Ricerca in corso per '{term}'...";
-            var results = await SelectedProvider!.SearchAsync(term);
+            var results = await RunWithRecoveryAsync(provider, () => provider.SearchAsync(term, cts.Token), cts.Token);
+            if (seq != _searchSeq) return;   // nel frattempo è partita un'altra ricerca
 
             SearchResults.Clear();
             foreach (var result in results)
@@ -513,8 +511,10 @@ public partial class DownloadTabViewModel : ViewModelBase
 
             StatusMessage = $"Trovati {results.Count} risultati per '{term}'.";
         }
+        catch (OperationCanceledException) when (seq != _searchSeq) { /* superata da una ricerca nuova */ }
         catch (Exception ex)
         {
+            if (seq != _searchSeq) return;
             StatusMessage = ex.Message.Contains("HTTP ")
                 ? $"⚠ {ex.Message}"
                 : $"Errore: {ex.Message}";
@@ -522,8 +522,47 @@ public partial class DownloadTabViewModel : ViewModelBase
         }
         finally
         {
-            IsLoadingSearchResults = false;
+            if (seq == _searchSeq) IsLoadingSearchResults = false;
         }
+    }
+
+    private CancellationTokenSource? _searchCts;
+    private int _searchSeq;
+    private CancellationTokenSource? _episodesCts;
+    private int _episodesSeq;
+
+    /// <summary>
+    /// Esegue un'operazione sul sito; se il browser interno era stato chiuso (cambio di
+    /// proxy, crash) o il sito ha dato un errore passeggero, lo riapre e riprova una volta.
+    /// </summary>
+    private async Task<T> RunWithRecoveryAsync<T>(IAnimeProvider provider, Func<Task<T>> operation, CancellationToken ct)
+    {
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await provider.InitializeAsync(headless: true);
+                return await operation();
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex) when (attempt == 1 && IsRecoverable(ex))
+            {
+                _logger.LogInformation("[DOWNLOAD-TAB] {Provider}: riapro il browser e riprovo ({Msg})", provider.Name, ex.Message);
+                await Task.Delay(800, ct);
+            }
+        }
+    }
+
+    private static bool IsRecoverable(Exception ex)
+    {
+        var msg = ex.Message;
+        return ex is ObjectDisposedException
+            || ex.GetType().Name.Contains("Playwright")
+            || msg.Contains("non inizializzato", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("closed", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("Target", StringComparison.Ordinal)
+            || msg.Contains("Timeout", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("403") || msg.Contains("429");
     }
 
     [RelayCommand]
@@ -564,23 +603,30 @@ public partial class DownloadTabViewModel : ViewModelBase
     {
         if (anime == null) return;
 
+        _episodesCts?.Cancel();
+        var cts = _episodesCts = new CancellationTokenSource();
+        int seq = ++_episodesSeq;
+        var provider = SelectedProvider!;
+
         IsLoadingEpisodes = true;
         try
         {
             SelectedAnime = anime;
             StatusMessage = $"Caricamento episodi di '{anime.Name}'...";
 
-            var episodes = await SelectedProvider!.GetEpisodesAsync(anime.Link);
+            var episodes = await RunWithRecoveryAsync(provider, () => provider.GetEpisodesAsync(anime.Link, cts.Token), cts.Token);
+            if (seq != _episodesSeq) return;   // nel frattempo è stato scelto un altro anime
 
             Episodes.Clear();
             foreach (var ep in episodes) Episodes.Add(ep);
 
             StatusMessage = $"Trovati {episodes.Count} episodi per '{anime.Name}'.";
         }
-        catch (Exception ex) { StatusMessage = $"Errore: {ex.Message}"; }
+        catch (OperationCanceledException) when (seq != _episodesSeq) { }
+        catch (Exception ex) { if (seq == _episodesSeq) StatusMessage = $"Errore: {ex.Message}"; }
         finally
         {
-            IsLoadingEpisodes = false;
+            if (seq == _episodesSeq) IsLoadingEpisodes = false;
         }
     }
 
@@ -598,21 +644,17 @@ public partial class DownloadTabViewModel : ViewModelBase
     private async Task DownloadEpisodeInternalAsync(Episode episode, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
-        // Via veloce (API del sito su una pagina già aperta); se non trova l'URL si apre la pagina dell'episodio
-        var provider = SelectedProvider!;
-        var urls = await provider.GetVideoUrlsBatchAsync(new List<Episode> { episode }, ct);
-        var videoUrl = urls.TryGetValue(episode.Link, out var fast) && !string.IsNullOrEmpty(fast)
-            ? fast
-            : await provider.GetVideoUrlAsync(episode.Link, ct);
-
-        if (string.IsNullOrEmpty(videoUrl)) return;
-        ct.ThrowIfCancellationRequested();
-
-        var item = BuildDownloadItem(episode, videoUrl, SelectedAnime?.Name ?? "");
+        var item = BuildLazyDownloadItem(episode, SelectedAnime?.Name ?? "", SelectedProvider!);
         await _queueService.EnqueueAsync(item);
+        StatusMessage = $"Episodio {episode.Number} accodato.";
     }
 
-    private DownloadItem BuildDownloadItem(Episode episode, string videoUrl, string seriesName)
+    /// <summary>
+    /// Episodio in coda senza link: lo chiede al sito il download stesso quando parte
+    /// (AnimeUrlResolver: riapre il browser se serve, rallenta e riprova se il sito rifiuta).
+    /// Il nome definitivo del file si calcola quando il link è noto.
+    /// </summary>
+    private DownloadItem BuildLazyDownloadItem(Episode episode, string seriesName, IAnimeProvider provider)
     {
         var episodeNumber = int.TryParse(episode.Number, out var n) ? n : 0;
 
@@ -622,19 +664,19 @@ public partial class DownloadTabViewModel : ViewModelBase
 
         var item = new DownloadItem
         {
-            Url = videoUrl, // L'URL è già stato estratto, quindi è corretto
+            Url = "",
             SeriesName = seriesName,
             EpisodeNumber = episodeNumber,
             EpisodeTitle = episode.Title,
             Status = DownloadStatus.Pending,
             Category = "anime",
-
-            ProviderKey = SelectedProvider?.Name ?? "",
-            ContentLink = episode.Link
+            ProviderKey = provider.Name,
+            ContentLink = episode.Link,
+            UrlExtractor = AnimeUrlResolver.CreateExtractor(provider, episode.Link, episode.Number, _logger)
         };
 
-        // Genera il nome definitivo usando l'URL appena estratto
-        item.DestinationPath = _fileNameBuilder.BuildDestinationPath(item, videoUrl, episode.Title);
+        // Nome provvisorio (definitivo se il pattern non usa il nome originale del file)
+        item.DestinationPath = _fileNameBuilder.BuildDestinationPath(item, "", episode.Title);
         return item;
     }
 
@@ -649,7 +691,7 @@ public partial class DownloadTabViewModel : ViewModelBase
         var token = _batchCts.Token;
         IsBatchActive = true;
 
-        int skipped = 0, errors = 0;
+        int skipped = 0;
 
         try
         {
@@ -672,53 +714,16 @@ public partial class DownloadTabViewModel : ViewModelBase
                 return;
             }
 
-            // Recupero URL e accodamento a blocchi: i primi episodi partono subito
-            // invece di aspettare che siano risolti gli URL di tutta la serie.
+            // Accodamento istantaneo: il link di ogni episodio si chiede al sito all'avvio
+            // del suo download (con ritmo e nuovi tentativi), non tutti insieme adesso:
+            // con centinaia di episodi il sito rispondeva 403 e l'accodamento si fermava.
             var provider = SelectedProvider!;
-            int queued = 0;
-            var failed = new List<Episode>();
-            var chunks = new List<Episode[]> { toDownload.Take(FirstEnqueueChunkSize).ToArray() };
-            chunks.AddRange(toDownload.Skip(FirstEnqueueChunkSize).Chunk(EnqueueChunkSize));
+            var items = toDownload.Select(ep => BuildLazyDownloadItem(ep, seriesName, provider)).ToList();
+            await _queueService.EnqueueManyAsync(items);
 
-            foreach (var chunk in chunks.Where(c => c.Length > 0))
-            {
-                token.ThrowIfCancellationRequested();
-                StatusMessage = $"Recupero URL episodi {queued + errors + 1}-{queued + errors + chunk.Length} di {toDownload.Count}...";
-
-                var urls = await provider.GetVideoUrlsBatchAsync(chunk.ToList(), token);
-
-                var items = new List<DownloadItem>(chunk.Length);
-                foreach (var episode in chunk)
-                {
-                    if (!urls.TryGetValue(episode.Link, out var videoUrl) || string.IsNullOrEmpty(videoUrl))
-                    { errors++; failed.Add(episode); continue; }
-
-                    // L'URL è già noto: l'item nasce col nome definitivo
-                    items.Add(BuildDownloadItem(episode, videoUrl, seriesName));
-                }
-
-                await _queueService.EnqueueManyAsync(items);
-                queued += items.Count;
-            }
-
-            if (queued == 0)
-            {
-                StatusMessage = $"Nessun episodio da accodare ({errors} errori).";
-                return;
-            }
-
-            var msg = $"{queued} episodi accodati";
+            var msg = $"{items.Count} episodi accodati";
             if (skipped > 0) msg += $", {skipped} già in coda";
-            if (failed.Count > 0)
-            {
-                // Restano selezionati solo quelli non trovati: un altro clic li riprova
-                var failedSet = failed.ToHashSet();
-                foreach (var ep in Episodes) ep.IsSelected = failedSet.Contains(ep);
-                var numbers = string.Join(", ", failed.Take(15).Select(e => e.Number));
-                if (failed.Count > 15) numbers += ", …";
-                msg += $". Link non trovato per {failed.Count} episodi ({numbers}): sono rimasti selezionati, premi di nuovo \"Scarica selezionati\" per riprovare";
-            }
-            StatusMessage = msg + ".";
+            StatusMessage = msg + ": il link di ognuno viene preso dal sito quando parte il suo download.";
         }
         catch (OperationCanceledException) { StatusMessage = "Accodamento annullato."; }
         catch (Exception ex) { StatusMessage = $"Errore: {ex.Message}"; }

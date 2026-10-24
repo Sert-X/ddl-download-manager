@@ -127,6 +127,7 @@ public class AnimeWorldService : IAnimeWorldService
 
     public async Task<List<AnimeSearchResult>> SearchAsync(string query, CancellationToken ct = default)
     {
+        await InitializeAsync();   // riapre il browser se è stato chiuso (es. cambio di proxy)
         await _gate.WaitAsync(ct);
         try
         {
@@ -273,6 +274,7 @@ public class AnimeWorldService : IAnimeWorldService
 
     public async Task<List<Episode>> GetEpisodesAsync(string animeUrl, CancellationToken ct = default)
     {
+        await InitializeAsync();   // riapre il browser se è stato chiuso (es. cambio di proxy)
         await _gate.WaitAsync(ct);
         try
         {
@@ -329,6 +331,7 @@ public class AnimeWorldService : IAnimeWorldService
 
     public async Task<string?> GetVideoUrlAsync(string episodePageUrl, CancellationToken ct = default)
     {
+        await InitializeAsync();   // riapre il browser se è stato chiuso (es. cambio di proxy)
         await _gate.WaitAsync(ct);
         try
         {
@@ -416,6 +419,7 @@ public class AnimeWorldService : IAnimeWorldService
     public async Task<Dictionary<string, string>> GetVideoUrlsBatchAsync(
         List<Episode> episodes, CancellationToken ct = default)
     {
+        await InitializeAsync();   // riapre il browser se è stato chiuso (es. cambio di proxy)
         await _gate.WaitAsync(ct);
         try
         {
@@ -444,15 +448,33 @@ public class AnimeWorldService : IAnimeWorldService
             {
                 // Pagina già aperta sul sito: niente caricamento della home a ogni accodamento
                 var page = await GetApiPageAsync(reload: false, ct);
-                var found = await ResolveIdsAsync(page, idList);
+                await PaceAsync(idList.Count, ct);
+                var (found, throttled) = await ResolveIdsAsync(page, idList);
 
-                // Nessun risultato: il cookie di sicurezza del sito potrebbe non essere pronto.
-                // Si ricarica la pagina aspettando che il sito abbia finito e si riprova una volta.
-                if (found.Count == 0)
+                // Nessun risultato senza rifiuti: il cookie di sicurezza del sito potrebbe non
+                // essere pronto. Si ricarica la pagina aspettando che il sito abbia finito.
+                if (found.Count == 0 && !throttled)
                 {
                     _logger.LogInformation("Batch: nessun URL, ricarico la pagina del sito e riprovo");
                     page = await GetApiPageAsync(reload: true, ct);
-                    found = await ResolveIdsAsync(page, idList);
+                    await PaceAsync(idList.Count, ct);
+                    (found, throttled) = await ResolveIdsAsync(page, idList);
+                }
+
+                // Il sito ha rifiutato (403/429 "troppe richieste"): si aspetta e si riprovano
+                // solo quelli mancanti, con attese crescenti
+                for (int round = 1; throttled && round <= 3; round++)
+                {
+                    var missing = idList.Where(i => !found.ContainsKey(i)).ToList();
+                    if (missing.Count == 0) break;
+                    var wait = TimeSpan.FromSeconds(4 * round * round);
+                    _logger.LogInformation("Il sito chiede di rallentare: attendo {Sec}s e riprovo {N} episodi", (int)wait.TotalSeconds, missing.Count);
+                    lock (_paceLock) _nextRequestAt = Math.Max(_nextRequestAt, Environment.TickCount64 + (long)wait.TotalMilliseconds);
+                    await Task.Delay(wait, ct);
+                    await PaceAsync(missing.Count, ct);
+                    var (more, stillThrottled) = await ResolveIdsAsync(page, missing);
+                    foreach (var kv in more) found[kv.Key] = kv.Value;
+                    throttled = stillThrottled;
                 }
 
                 foreach (var (ep, id) in ids)
@@ -515,7 +537,26 @@ public class AnimeWorldService : IAnimeWorldService
     }
 
     /// <summary>Chiama l'API del sito per ogni id (10 alla volta) e restituisce id → URL video.</summary>
-    private static async Task<Dictionary<string, string>> ResolveIdsAsync(IPage page, List<string> ids)
+    // Ritmo verso l'API del sito: le richieste ravvicinate venivano rifiutate (403)
+    private readonly object _paceLock = new();
+    private long _nextRequestAt;
+
+    /// <summary>Distanzia le richieste: circa 300 ms per episodio chiesto.</summary>
+    private async Task PaceAsync(int requests, CancellationToken ct)
+    {
+        long wait;
+        lock (_paceLock)
+        {
+            var now = Environment.TickCount64;
+            var at = Math.Max(now, _nextRequestAt);
+            _nextRequestAt = at + 300L * Math.Max(1, requests);
+            wait = at - now;
+        }
+        if (wait > 0) await Task.Delay(TimeSpan.FromMilliseconds(wait), ct);
+    }
+
+    /// <returns>id → URL trovati, e se il sito ha rifiutato qualche richiesta (403/429/503).</returns>
+    private static async Task<(Dictionary<string, string> Found, bool Throttled)> ResolveIdsAsync(IPage page, List<string> ids)
     {
         var idsJson = System.Text.Json.JsonSerializer.Serialize(ids);
         var resultJson = await page.EvaluateAsync<string>(@"
@@ -532,7 +573,7 @@ public class AnimeWorldService : IAnimeWorldService
                                         credentials: 'include',
                                         headers: { 'x-requested-with': 'XMLHttpRequest' }
                                     });
-                                    if (!r.ok) return [id, null];
+                                    if (!r.ok) return [id, '#' + r.status];
                                     const j = await r.json();
                                     return [id, j.grabber || null];
                                 } catch (e) {
@@ -550,15 +591,21 @@ public class AnimeWorldService : IAnimeWorldService
                 ", idsJson);
 
         var found = new Dictionary<string, string>();
+        bool throttled = false;
         using var doc = System.Text.Json.JsonDocument.Parse(resultJson);
         foreach (var id in ids)
         {
-            if (doc.RootElement.TryGetProperty(id, out var el) &&
-                el.ValueKind == System.Text.Json.JsonValueKind.String &&
-                el.GetString() is { Length: > 0 } url)
-                found[id] = url;
+            if (!doc.RootElement.TryGetProperty(id, out var el) || el.ValueKind != System.Text.Json.JsonValueKind.String) continue;
+            var value = el.GetString();
+            if (string.IsNullOrEmpty(value)) continue;
+            if (value.StartsWith('#'))
+            {
+                if (value is "#403" or "#429" or "#503") throttled = true;
+                continue;
+            }
+            found[id] = value;
         }
-        return found;
+        return (found, throttled);
     }
 
     private static string ExtractDataIdFromUrl(string url)

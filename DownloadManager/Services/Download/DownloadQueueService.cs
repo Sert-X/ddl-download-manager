@@ -117,6 +117,7 @@ public class DownloadQueueService
         foreach (var item in unfinished)
         {
             RewireStreamingExtractors(item);
+            RewireAnimeExtractors(item);
             item.Status = DownloadStatus.Pending;
             await AddToListAsync(item);
             lock (_queueLock)
@@ -125,6 +126,23 @@ public class DownloadQueueService
                     _pending.Add(item);
             }
         }
+    }
+
+    /// <summary>Anime accodati senza link (non ancora partiti): il link si chiederà al sito all'avvio.</summary>
+    private void RewireAnimeExtractors(DownloadItem item)
+    {
+        if (item.Category != "anime" || item.UrlExtractor != null) return;
+        if (!string.IsNullOrEmpty(item.Url) || string.IsNullOrEmpty(item.ContentLink)) return;
+
+        var registry = _serviceProvider.GetService<DownloadManager.Services.Anime.AnimeProviderRegistry>();
+        var provider = registry?.Get(item.ProviderKey);
+        if (provider == null)
+        {
+            _logger.LogWarning("[REWIRE] Provider anime '{Key}' non trovato per {Series} ep. {Ep}", item.ProviderKey, item.SeriesName, item.EpisodeNumber);
+            return;
+        }
+        item.UrlExtractor = DownloadManager.Services.Anime.AnimeUrlResolver.CreateExtractor(
+            provider, item.ContentLink, item.EpisodeNumber.ToString(), _logger);
     }
 
     private void RewireStreamingExtractors(DownloadItem item)

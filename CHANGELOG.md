@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.1.8] — 2026-10-25
+
+### ⚡ Anime Download
+- **Accodamento istantaneo anche di centinaia di episodi** (AnimeWorld e AnimeSaturn): gli episodi entrano subito in coda e il link di ognuno si chiede al sito solo quando parte il suo download. Prima le richieste partivano tutte insieme, il sito rispondeva 403 e l'accodamento si fermava dopo 50-60 episodi.
+- **Errori 403/429 gestiti da soli**: le richieste al sito sono distanziate; se il sito chiede di rallentare, l'app aspetta (sempre un po' di più) e riprova fino a 4 volte prima di segnare l'errore.
+- **Cambio proxy senza blocchi**: niente più "Servizio non inizializzato", il browser interno si riapre da solo e il lavoro continua.
+- AnimeSaturn usa il proprio proxy (prima usava per errore quello di AnimeWorld).
+- Gli episodi in coda non ancora partiti funzionano anche dopo un riavvio dell'app.
+- **Ricerche veloci una dopo l'altra**: vale sempre l'ultima; quella vecchia viene annullata e i suoi risultati ignorati. Lo stesso per gli episodi quando cambi anime al volo. Se il sito dà un errore passeggero, la ricerca riprova da sola.
+
+### 🎬 Film/Serie Download
+- Stessa protezione per ricerca, stagioni, episodi e qualità: contano solo i risultati dell'ultima scelta.
+- Cambiando titolo mentre caricava le qualità, restavano quelle del titolo precedente: corretto.
+
 ## [1.1.7] — 2026-10-24
 
 ### ⚡ Anime Download

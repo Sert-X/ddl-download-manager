@@ -53,7 +53,7 @@ public class AnimeSaturnService : IAnimeSaturnService
 
     public async Task InitializeAsync(bool headless = true)
     {
-        var active = _proxyProvider.GetActive(ProviderKeys.AnimeWorld);
+        var active = _proxyProvider.GetActive(ProviderKeys.AnimeSaturn);   // prima usava per errore il proxy di AnimeWorld
         var proxyKey = active == null
             ? "(none)"
             : $"{active.Protocol}|{active.Host}|{active.Port}|{active.Username}";
@@ -139,6 +139,7 @@ public class AnimeSaturnService : IAnimeSaturnService
         var results = new List<AnimeSearchResult>();
         var seenLinks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        await InitializeAsync();   // riapre il browser se è stato chiuso (es. cambio di proxy)
         if (_context == null) throw new InvalidOperationException("Servizio non inizializzato.");
 
         var page = await _context.NewPageAsync();
@@ -291,6 +292,7 @@ public class AnimeSaturnService : IAnimeSaturnService
     public async Task<List<Episode>> GetEpisodesAsync(string animeUrl, CancellationToken ct = default)
     {
         var episodes = new List<Episode>();
+        await InitializeAsync();   // riapre il browser se è stato chiuso (es. cambio di proxy)
         if (_context == null) throw new InvalidOperationException("Servizio non inizializzato.");
 
         var page = await _context.NewPageAsync();
@@ -385,6 +387,7 @@ public class AnimeSaturnService : IAnimeSaturnService
 
     public async Task<string?> GetVideoUrlAsync(string episodePageUrl, CancellationToken ct = default)
     {
+        await InitializeAsync();   // riapre il browser se è stato chiuso (es. cambio di proxy)
         if (_context == null) throw new InvalidOperationException("Servizio non inizializzato.");
 
         // Via veloce: due richieste leggere (pagina dell'episodio + playlist del player),
@@ -508,6 +511,7 @@ public class AnimeSaturnService : IAnimeSaturnService
     {
         var playerUrl = episodePageUrl.Replace("/episode/", "/anime/", StringComparison.OrdinalIgnoreCase);
         _logger.LogInformation("[SATURN] Video da (player, browser): {Url}", playerUrl);
+        await InitializeAsync();   // riapre il browser se è stato chiuso (es. cambio di proxy)
         if (_context == null) throw new InvalidOperationException("Servizio non inizializzato.");
 
         var page = await _context.NewPageAsync();
