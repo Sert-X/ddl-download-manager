@@ -676,6 +676,7 @@ public partial class DownloadTabViewModel : ViewModelBase
             // invece di aspettare che siano risolti gli URL di tutta la serie.
             var provider = SelectedProvider!;
             int queued = 0;
+            var failed = new List<Episode>();
             var chunks = new List<Episode[]> { toDownload.Take(FirstEnqueueChunkSize).ToArray() };
             chunks.AddRange(toDownload.Skip(FirstEnqueueChunkSize).Chunk(EnqueueChunkSize));
 
@@ -690,7 +691,7 @@ public partial class DownloadTabViewModel : ViewModelBase
                 foreach (var episode in chunk)
                 {
                     if (!urls.TryGetValue(episode.Link, out var videoUrl) || string.IsNullOrEmpty(videoUrl))
-                    { errors++; continue; }
+                    { errors++; failed.Add(episode); continue; }
 
                     // L'URL è già noto: l'item nasce col nome definitivo
                     items.Add(BuildDownloadItem(episode, videoUrl, seriesName));
@@ -708,7 +709,15 @@ public partial class DownloadTabViewModel : ViewModelBase
 
             var msg = $"{queued} episodi accodati";
             if (skipped > 0) msg += $", {skipped} già in coda";
-            if (errors > 0) msg += $", {errors} falliti";
+            if (failed.Count > 0)
+            {
+                // Restano selezionati solo quelli non trovati: un altro clic li riprova
+                var failedSet = failed.ToHashSet();
+                foreach (var ep in Episodes) ep.IsSelected = failedSet.Contains(ep);
+                var numbers = string.Join(", ", failed.Take(15).Select(e => e.Number));
+                if (failed.Count > 15) numbers += ", …";
+                msg += $". Link non trovato per {failed.Count} episodi ({numbers}): sono rimasti selezionati, premi di nuovo \"Scarica selezionati\" per riprovare";
+            }
             StatusMessage = msg + ".";
         }
         catch (OperationCanceledException) { StatusMessage = "Accodamento annullato."; }

@@ -761,6 +761,20 @@ public partial class MainWindow : Window
         if (ResolveItem<SftpNode>(sender) is { } node && Vm != null)
             await CopyAsync(Vm.Videobox.GetPublicUrl(node), "link pubblico");
     }
+    /// <summary>"Togli dall'albero" solo sulle radici delle sorgenti.</summary>
+    private void OnVbTreeMenuOpening(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (sender is not ContextMenu menu) return;
+        bool isRoot = _contextItem is SftpNode { IsSourceRoot: true };
+        foreach (var c in menu.Items.OfType<Control>())
+            if (c.Tag as string == "sourceRoot") c.IsVisible = isRoot;
+    }
+
+    private void OnVbDiscardSourceClick(object? sender, RoutedEventArgs e)
+    {
+        if (ResolveItem<SftpNode>(sender) is { IsSourceRoot: true } root) Vm?.Videobox.DiscardSourceRoot(root);
+    }
+
     private async void OnVbCopyNodeAllUrlsClick(object? sender, RoutedEventArgs e)
     {
         if (ResolveItem<SftpNode>(sender) is { } node && Vm != null)

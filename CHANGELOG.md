@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.1.7] — 2026-10-24
+
+### ⚡ Anime Download
+- **AnimeSaturn non salta più episodi** accodandone tanti insieme: il sito rifiutava le richieste troppo ravvicinate ("troppe richieste") e quegli episodi venivano persi. Ora le richieste sono poche alla volta e distanziate; se il sito chiede di rallentare, l'app aspetta e riprova da sola.
+- Se il link di qualche episodio non si trova, il messaggio dice quali (es. "Link non trovato per 2 episodi (12, 37)") e solo quelli restano selezionati: basta premere di nuovo "Scarica selezionati" per riprovarli. Vale anche per AnimeWorld.
+
+### 🧰 Videobox Corrector
+- **Post modificati ed eliminati sul forum**: la lista si riallinea ogni 30 secondi (prima 90, e saltava il controllo mentre l'app era occupata); i post eliminati o spostati in un'altra categoria vengono tolti. Aprendo un post che non esiste più, viene tolto dalla lista.
+- Gli aggiornamenti automatici usano la categoria con cui hai caricato i post, anche se nel frattempo cambi categoria nel menu.
+- **Sorgenti senza ricaricare tutto**:
+  - "Carica" legge solo le sorgenti nuove e tiene quelle già caricate (rilegge tutto solo se sono già tutte caricate, o se cambi la configurazione di una sorgente).
+  - Togliendo la spunta a una sorgente dal menu "Sorgenti", sparisce subito dall'albero.
+  - Nuova voce **"Togli dall'albero"** nel clic destro sulle radici delle sorgenti: la toglie e le leva la spunta nel menu.
+
 ## [1.1.6] — 2026-10-22
 
 ### 📦 Installazione e aggiornamenti

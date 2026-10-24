@@ -114,7 +114,7 @@ public partial class VideoboxTabViewModel : ObservableObject
     /// <summary>Contatore dei caricamenti completi: un refresh partito prima di un "Carica" viene scartato.</summary>
     private int _treeGeneration;
 
-    private static readonly TimeSpan PostsRefreshInterval = TimeSpan.FromSeconds(90);
+    private static readonly TimeSpan PostsRefreshInterval = TimeSpan.FromSeconds(30);
     private readonly DispatcherTimer _postsRefreshTimer;
     private bool _refreshingPosts;
     private CancellationTokenSource? _treeRefreshDebounceCts;
@@ -345,8 +345,43 @@ public partial class VideoboxTabViewModel : ObservableObject
     private void OnSourcePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(VideoboxSource.IsEnabled) && !_applyingCategorySources)
+        {
             SaveCategorySources();
+            if (sender is VideoboxSource { IsEnabled: false } src) RemoveSourceRoot(src.Id);
+        }
         NotifySourcesChanged();
+    }
+
+    /// <summary>Toglie dall'albero la radice di una sorgente (senza rileggere le altre).</summary>
+    private void RemoveSourceRoot(string sourceId)
+    {
+        if (IsLoadingTree) return;   // il caricamento in corso compone l'albero da sé
+        var root = SftpRootNodes.FirstOrDefault(r => r.IsSourceRoot && r.Source?.Id == sourceId);
+        if (root == null) return;
+
+        if (SelectedSftpNode != null && (ReferenceEquals(SelectedSftpNode, root) || IsUnder(SelectedSftpNode, root)))
+        {
+            SelectedSftpNode = null;
+            SftpPathInput = "";   // il percorso scelto apparteneva alla sorgente tolta
+        }
+        SftpRootNodes.Remove(root);
+        UpdateSftpTreeColors(repaginate: false);
+        StatusMessage = $"'{root.Source!.DisplayName}' tolta dall'albero.";
+    }
+
+    private static bool IsUnder(SftpNode node, SftpNode root)
+    {
+        for (var p = node.Parent; p != null; p = p.Parent) if (ReferenceEquals(p, root)) return true;
+        return false;
+    }
+
+    /// <summary>Clic destro "Togli dall'albero" su una radice: le toglie anche la spunta nel menu Sorgenti.</summary>
+    public void DiscardSourceRoot(SftpNode root)
+    {
+        if (!root.IsSourceRoot || root.Source == null) return;
+        var source = Sources.FirstOrDefault(s => s.Id == root.Source.Id);
+        if (source != null && source.IsEnabled) source.IsEnabled = false;   // salva la scelta e toglie la radice
+        else RemoveSourceRoot(root.Source.Id);
     }
 
     private void NotifySourcesChanged()
@@ -556,7 +591,8 @@ public partial class VideoboxTabViewModel : ObservableObject
             PostsProgressText = "Caricamento pagina 1...";
             _allPosts.Clear();
             _forumMaxId = 0;
-            var pagedData = await _apiService.GetVideosByCategoryAsync(SelectedCategory?.Id, 1, cts.Token);
+            _postsCategoryId = SelectedCategory?.Id;
+            var pagedData = await _apiService.GetVideosByCategoryAsync(_postsCategoryId, 1, cts.Token);
             ProcessPagedData(pagedData);
             try { _forumMaxId = await GetForumMaxIdAsync(SelectedCategory?.Id, pagedData, cts.Token); } catch (OperationCanceledException) { throw; } catch { }
             _currentPage = 1;
@@ -587,7 +623,8 @@ public partial class VideoboxTabViewModel : ObservableObject
             PostsProgressText = "Caricamento pagina 1...";
             _allPosts.Clear();
             _forumMaxId = 0;
-            var firstPage = await _apiService.GetVideosByCategoryAsync(SelectedCategory?.Id, 1, cts.Token);
+            _postsCategoryId = SelectedCategory?.Id;
+            var firstPage = await _apiService.GetVideosByCategoryAsync(_postsCategoryId, 1, cts.Token);
             ProcessPagedData(firstPage);
             try { _forumMaxId = await GetForumMaxIdAsync(SelectedCategory?.Id, firstPage, cts.Token); } catch (OperationCanceledException) { throw; } catch { }
 
@@ -658,7 +695,15 @@ public partial class VideoboxTabViewModel : ObservableObject
         {
             IsBusy = true;
             StatusMessage = $"Caricamento post {postId}...";
-            var postData = await _apiService.GetVideoByIdAsync(postId);
+            VideoboxDto postData;
+            try { postData = await _apiService.GetVideoByIdAsync(postId); }
+            catch (System.Net.Http.HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                var missing = _allPosts.Where(p => p.Id == postId).ToList();
+                if (missing.Count > 0) RemovePosts(missing);
+                StatusMessage = $"Il post {postId} non esiste più sul forum: tolto dalla lista.";
+                return;
+            }
             ApplyFreshPostData(postData);
             CurrentPostId = postData.id;
             CurrentPostTitle = postData.title;
@@ -704,7 +749,7 @@ public partial class VideoboxTabViewModel : ObservableObject
     /// </summary>
     private async Task RefreshVisiblePostsAsync()
     {
-        if (_refreshingPosts || IsLoadingPosts || IsBusy || CategoryPosts.Count == 0) return;
+        if (_refreshingPosts || IsLoadingPosts || CategoryPosts.Count == 0) return;
         _refreshingPosts = true;
         try
         {
@@ -719,27 +764,70 @@ public partial class VideoboxTabViewModel : ObservableObject
                 .ToList();
 
             int changed = 0;
+            var gone = new List<VideoboxPostItem>();
             foreach (var page in pages)
             {
                 VideoboxPagedDto data;
-                try { data = await _apiService.GetVideosByCategoryAsync(SelectedCategory?.Id, page); }
+                try { data = await _apiService.GetVideosByCategoryAsync(_postsCategoryId, page); }
                 catch { return; }   // forum lento o non raggiungibile: si riprova al prossimo giro
+                if (IsLoadingPosts) return;
 
                 foreach (var dto in data.results)
                     if (ApplyFreshPostData(dto, recolor: false)) changed++;
+
+                // Post eliminati (o spostati in un'altra categoria): la pagina del sito copre un
+                // intervallo di numeri di post; quelli della lista in quell'intervallo che il sito
+                // non restituisce più non esistono più qui.
+                if (data.results.Count > 0)
+                {
+                    int min = data.results.Min(r => r.id), max = data.results.Max(r => r.id);
+                    var ids = data.results.Select(r => r.id).ToHashSet();
+                    gone.AddRange(_allPosts.Where(p => p.Id >= min && p.Id <= max && !ids.Contains(p.Id)));
+                }
             }
 
-            if (changed > 0)
+            if (gone.Count > 0) RemovePosts(gone.Distinct().ToList());
+            if (changed > 0) UpdateSftpTreeColors(repaginate: false);
+            if (changed > 0 || gone.Count > 0)
             {
-                UpdateSftpTreeColors(repaginate: false);
-                StatusMessage = $"{changed} post aggiornati dal sito ({DateTime.Now:HH:mm}).";
+                var parts = new List<string>();
+                if (changed > 0) parts.Add($"{changed} post aggiornati");
+                if (gone.Count > 0) parts.Add($"{gone.Count} post eliminati");
+                StatusMessage = $"{string.Join(", ", parts)} dal sito ({DateTime.Now:HH:mm}).";
             }
         }
         finally { _refreshingPosts = false; }
     }
 
+    /// <summary>Toglie dalla lista post che sul forum non ci sono più (mantiene la selezione se possibile).</summary>
+    private void RemovePosts(IReadOnlyCollection<VideoboxPostItem> posts)
+    {
+        var set = posts.ToHashSet();
+        _allPosts.RemoveAll(p => set.Contains(p));
+
+        var selected = SelectedPost;
+        if (selected != null && set.Contains(selected))
+        {
+            // Il post aperto non esiste più: niente mappatura su un post eliminato
+            SelectedPost = null;
+            MappingItems.Clear();
+            CurrentPostId = 0;
+            CurrentPostTitle = "";
+            selected = null;
+        }
+
+        UpdateSftpTreeColors(repaginate: true);
+        if (selected != null && CategoryPosts.Contains(selected) && !ReferenceEquals(SelectedPost, selected))
+        {
+            _restoringSelection = true;
+            try { SelectedPost = selected; } finally { _restoringSelection = false; }
+        }
+    }
+
     private bool _checkingNewPosts;
     private bool _restoringSelection;
+    /// <summary>Categoria con cui sono stati caricati i post (gli aggiornamenti automatici usano questa).</summary>
+    private int? _postsCategoryId;
     /// <summary>Numero del post più recente sul forum al momento del caricamento (0 = non noto).</summary>
     private int _forumMaxId;
 
@@ -766,7 +854,7 @@ public partial class VideoboxTabViewModel : ObservableObject
         try
         {
             int maxKnownId = _forumMaxId;
-            var category = SelectedCategory?.Id;
+            var category = _postsCategoryId;
 
             VideoboxPagedDto first;
             try { first = await _apiService.GetVideosByCategoryAsync(category, 1); }
@@ -785,7 +873,7 @@ public partial class VideoboxTabViewModel : ObservableObject
                                   .GroupBy(d => d.id).Select(g => g.First())
                                   .OrderBy(d => d.id)
                                   .ToList();
-            if (fresh.Count == 0 || IsLoadingPosts || SelectedCategory?.Id != category) return;
+            if (fresh.Count == 0 || IsLoadingPosts || _postsCategoryId != category) return;
             _forumMaxId = fresh.Max(d => d.id);
 
             foreach (var dto in fresh)
@@ -817,6 +905,29 @@ public partial class VideoboxTabViewModel : ObservableObject
         var sources = Sources.Where(x => x.IsEnabled && !string.IsNullOrWhiteSpace(x.RootPath)).ToList();
         if (sources.Count == 0) { StatusMessage = "Nessuna sorgente attiva: aggiungile in Impostazioni e Domini o attivale dal menu Sorgenti."; return; }
         if (IsLoadingTree) return;
+
+        // Si tengono le sorgenti già caricate (stessa configurazione) e si leggono solo le
+        // nuove; se sono già tutte nell'albero, "Carica" le rilegge tutte (ricarica).
+        var keep = SftpRootNodes
+            .Where(r => r.IsSourceRoot && !r.HasLoadError && r.Source != null &&
+                        sources.Any(s => s.Id == r.Source.Id && SourceSignature(s) == r.LoadedSignature))
+            .ToList();
+        var toLoad = sources.Where(s => keep.All(r => r.Source!.Id != s.Id)).ToList();
+        if (toLoad.Count == 0)
+        {
+            var stale = SftpRootNodes.Where(r => !keep.Contains(r)).ToList();
+            if (stale.Count > 0)
+            {
+                // Sono state solo tolte sorgenti: via quelle, le altre restano come sono
+                foreach (var r in stale) SftpRootNodes.Remove(r);
+                if (SelectedSftpNode != null && !IsInTree(SelectedSftpNode)) SelectedSftpNode = null;
+                UpdateSftpTreeColors(repaginate: false);
+                StatusMessage = $"Albero aggiornato: {Plural(stale.Count, "sorgente tolta", "sorgenti tolte")}, le altre restano caricate.";
+                return;
+            }
+            keep.Clear(); toLoad = sources;   // tutto già caricato: Carica = ricarica
+        }
+
         using var cts = _treeCts = new CancellationTokenSource();
         try
         {
@@ -824,7 +935,7 @@ public partial class VideoboxTabViewModel : ObservableObject
             IsLoadingTree = true;
             _treeFoldersRead = 0;
             TreeFoldersTotal = 0;
-            _treeCountsPending = sources.Count;
+            _treeCountsPending = toLoad.Count;
             _treeTotalUnknown = false;
             OnPropertyChanged(nameof(HasTreeTotal));
             TreeProgressText = "Connessione alle sorgenti...";
@@ -835,25 +946,36 @@ public partial class VideoboxTabViewModel : ObservableObject
             _pendingTreeDirs.Clear();
             _pendingFullTreeScan = false;
 
-            StatusMessage = $"Caricamento di {sources.Count} sorgenti...";
-            SftpRootNodes.Clear();
+            StatusMessage = keep.Count > 0
+                ? $"Caricamento di {Plural(toLoad.Count, "sorgente nuova", "sorgenti nuove")} (già caricate: {keep.Count})..."
+                : $"Caricamento di {Plural(toLoad.Count, "sorgente", "sorgenti")}...";
+            // Restano solo le radici tenute (via quelle disattivate o da rileggere)
+            for (int i = SftpRootNodes.Count - 1; i >= 0; i--)
+                if (!keep.Contains(SftpRootNodes[i])) SftpRootNodes.RemoveAt(i);
 
             // Le sorgenti si leggono in parallelo (quelle sullo stesso server condividono la connessione)
-            var roots = await Task.WhenAll(sources.Select(src => LoadSourceRootAsync(src, cts.Token)));
+            var roots = await Task.WhenAll(toLoad.Select(src => LoadSourceRootAsync(src, cts.Token)));
             cts.Token.ThrowIfCancellationRequested();
 
-            SftpRootNodes.Clear();   // la lista contiene solo l'albero appena letto
-            foreach (var root in roots) SftpRootNodes.Add(root);
+            // Nell'albero nell'ordine delle sorgenti
+            var all = keep.Concat(roots).OrderBy(r => sources.FindIndex(s => s.Id == r.Source!.Id)).ToList();
+            SftpRootNodes.Clear();
+            foreach (var root in all) SftpRootNodes.Add(root);
 
             UpdateSftpTreeColors();
             int failed = roots.Count(r => r.HasLoadError);
             StatusMessage = failed == 0
-                ? $"Albero caricato: {sources.Count} sorgenti, {_treeFoldersRead} cartelle (aggiornamento automatico attivo)."
-                : $"Albero caricato con {failed} sorgenti non raggiungibili su {sources.Count} (vedi l'albero).";
+                ? keep.Count > 0
+                    ? $"Caricate: {Plural(toLoad.Count, "sorgente nuova", "sorgenti nuove")} ({Plural(_treeFoldersRead, "cartella", "cartelle")}); già caricate: {keep.Count}."
+                    : $"Albero caricato: {toLoad.Count} sorgenti, {_treeFoldersRead} cartelle (aggiornamento automatico attivo)."
+                : $"Albero caricato con {failed} sorgenti non raggiungibili su {toLoad.Count} (vedi l'albero).";
         }
         catch (OperationCanceledException)
         {
-            SftpRootNodes.Clear();   // un albero a metà darebbe colori sbagliati
+            // Un albero a metà darebbe colori sbagliati: restano solo le sorgenti già complete
+            for (int i = SftpRootNodes.Count - 1; i >= 0; i--)
+                if (!keep.Contains(SftpRootNodes[i])) SftpRootNodes.RemoveAt(i);
+            UpdateSftpTreeColors(repaginate: false);
             StatusMessage = "Caricamento dell'albero SFTP annullato.";
         }
         catch (Exception ex) { StatusMessage = $"Errore SFTP: {ex.Message}"; }
@@ -865,6 +987,12 @@ public partial class VideoboxTabViewModel : ObservableObject
         }
     }
 
+    private static string Plural(int n, string one, string many) => $"{n} {(n == 1 ? one : many)}";
+
+    /// <summary>Configurazione che conta per l'albero e i link: se cambia, la sorgente va riletta.</summary>
+    private static string SourceSignature(VideoboxSource s) =>
+        $"{s.ProfileId}|{s.RootPath.Trim()}|{s.Domain.Trim()}|{s.PublicPath.Trim()}";
+
     /// <summary>Radice dell'albero per una sorgente; se il server non risponde, radice vuota con l'errore nel nome.</summary>
     private async Task<SftpNode> LoadSourceRootAsync(VideoboxSource source, CancellationToken ct)
     {
@@ -875,7 +1003,8 @@ public partial class VideoboxTabViewModel : ObservableObject
             FullPath = source.RootPath,
             IsDirectory = true,
             Source = source,
-            IsSourceRoot = true
+            IsSourceRoot = true,
+            LoadedSignature = SourceSignature(source)
         };
         try
         {

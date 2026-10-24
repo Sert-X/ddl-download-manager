@@ -19,6 +19,8 @@ public partial class SftpNode : ObservableObject
     public bool IsSourceRoot { get; set; }
     /// <summary>Radice di una sorgente che non è stato possibile leggere (server o cartella non raggiungibili).</summary>
     public bool HasLoadError { get; set; }
+    /// <summary>Configurazione della sorgente quando la radice è stata letta (se cambia, va riletta).</summary>
+    public string LoadedSignature { get; set; } = "";
 
     /// <summary>Stato calcolato solo dal match con i link (mai Mismatch).</summary>
     public NodeStatus BaseStatus { get; set; } = NodeStatus.None;

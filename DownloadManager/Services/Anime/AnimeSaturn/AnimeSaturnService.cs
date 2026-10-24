@@ -21,6 +21,15 @@ public class AnimeSaturnService : IAnimeSaturnService
     private readonly ILogger<AnimeSaturnService> _logger;
     private readonly IProxyProvider _proxyProvider;
     private readonly SemaphoreSlim _gate = new(1, 1);
+
+    // Il sito risponde 429 "troppe richieste" (e poi 403 per qualche minuto) se riceve
+    // molte richieste ravvicinate: al massimo 2 alla volta, distanziate, e dopo un rifiuto
+    // tutte aspettano. Il metodo col browser (pesante) lavora un episodio alla volta.
+    private readonly SemaphoreSlim _requestGate = new(2, 2);
+    private readonly SemaphoreSlim _browserGate = new(1, 1);
+    private readonly object _paceLock = new();
+    private long _nextRequestAt;
+    private const int RequestSpacingMs = 350;
     private bool _disposed;
     private string _currentProxyKey = "(none)";
 
@@ -391,7 +400,9 @@ public class AnimeSaturnService : IAnimeSaturnService
             _logger.LogWarning("[SATURN] Via veloce non riuscita ({Msg}), uso il browser", ex.Message);
         }
 
-        return await GetVideoUrlViaBrowserAsync(episodePageUrl, ct);
+        await _browserGate.WaitAsync(ct);
+        try { return await GetVideoUrlViaBrowserAsync(episodePageUrl, ct); }
+        finally { _browserGate.Release(); }
     }
 
     private static readonly System.Text.RegularExpressions.Regex EmbedRegex = new(
@@ -404,13 +415,59 @@ public class AnimeSaturnService : IAnimeSaturnService
     /// base64 con XOR sul token. Le richieste passano dal contesto Playwright (stesso proxy,
     /// cookie e user agent).
     /// </summary>
+    /// <summary>
+    /// GET verso il sito rispettando il suo limite: poche richieste alla volta e distanziate;
+    /// su 429/403/503 si aspetta (quanto chiede il sito, o sempre di più) e si riprova.
+    /// </summary>
+    private async Task<IAPIResponse?> ThrottledGetAsync(IAPIRequestContext api, string url, APIRequestContextOptions options, CancellationToken ct)
+    {
+        IAPIResponse? last = null;
+        for (int attempt = 1; attempt <= 5; attempt++)
+        {
+            await _requestGate.WaitAsync(ct);
+            try
+            {
+                await PaceAsync(ct);
+                last = await api.GetAsync(url, options);
+            }
+            finally { _requestGate.Release(); }
+
+            if (last.Status is not (429 or 403 or 503)) return last;
+
+            var wait = TimeSpan.FromSeconds(Math.Min(30, 2 * Math.Pow(2, attempt - 1)));
+            if (last.Headers.TryGetValue("retry-after", out var ra) && int.TryParse(ra, out var seconds) && seconds is > 0 and < 120)
+                wait = TimeSpan.FromSeconds(seconds);
+            _logger.LogInformation("[SATURN] Il sito chiede di rallentare (HTTP {Status}): attendo {Sec}s (tentativo {N}/5)",
+                last.Status, (int)wait.TotalSeconds, attempt);
+
+            // Rallentano tutte le richieste, non solo questa
+            lock (_paceLock)
+                _nextRequestAt = Math.Max(_nextRequestAt, Environment.TickCount64 + (long)wait.TotalMilliseconds);
+            await Task.Delay(wait, ct);
+        }
+        return last;
+    }
+
+    private async Task PaceAsync(CancellationToken ct)
+    {
+        long wait;
+        lock (_paceLock)
+        {
+            var now = Environment.TickCount64;
+            var at = Math.Max(now, _nextRequestAt);
+            _nextRequestAt = at + RequestSpacingMs;
+            wait = at - now;
+        }
+        if (wait > 0) await Task.Delay(TimeSpan.FromMilliseconds(wait), ct);
+    }
+
     private async Task<string?> GetVideoUrlFastAsync(string episodePageUrl, CancellationToken ct)
     {
         var playerUrl = episodePageUrl.Replace("/episode/", "/anime/", StringComparison.OrdinalIgnoreCase);
         var api = _context!.APIRequest;
 
-        var pageResponse = await api.GetAsync(playerUrl, new APIRequestContextOptions { Timeout = 15000 });
-        if (!pageResponse.Ok) return null;
+        var pageResponse = await ThrottledGetAsync(api, playerUrl, new APIRequestContextOptions { Timeout = 15000 }, ct);
+        if (pageResponse == null || !pageResponse.Ok) return null;
         var html = await pageResponse.TextAsync();
         ct.ThrowIfCancellationRequested();
 
@@ -423,13 +480,13 @@ public class AnimeSaturnService : IAnimeSaturnService
         var expires = m.Groups["exp"].Value;
         var embedUrl = $"https://{host}/embed/{id}?token={token}&expires={expires}";
 
-        var playlist = await api.GetAsync($"https://{host}/embed/{id}/playlist?token={token}&expires={expires}",
+        var playlist = await ThrottledGetAsync(api, $"https://{host}/embed/{id}/playlist?token={token}&expires={expires}",
             new APIRequestContextOptions
             {
                 Timeout = 15000,
                 Headers = new Dictionary<string, string> { ["Referer"] = embedUrl, ["X-Requested-With"] = "XMLHttpRequest" }
-            });
-        if (!playlist.Ok) return null;
+            }, ct);
+        if (playlist == null || !playlist.Ok) return null;
 
         using var doc = System.Text.Json.JsonDocument.Parse(await playlist.TextAsync());
         if (!doc.RootElement.TryGetProperty("d", out var dataEl) || dataEl.GetString() is not { Length: > 0 } data)
@@ -719,7 +776,7 @@ public class AnimeSaturnService : IAnimeSaturnService
         if (episodes.Count == 0) return result;
 
         // === FIX: 5 paralleli invece di 3 ===
-        const int parallelism = 8;   // la via veloce usa solo due richieste leggere per episodio
+        const int parallelism = 4;   // il ritmo verso il sito lo decide ThrottledGetAsync
 
         _logger.LogInformation("[SATURN] Batch: {Count} episodi ({P} paralleli)",
             episodes.Count, parallelism);
