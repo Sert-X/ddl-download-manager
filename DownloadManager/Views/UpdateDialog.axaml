@@ -14,7 +14,7 @@
         <!-- Intestazione -->
         <Grid Grid.Row="0" ColumnDefinitions="Auto, *" Margin="0,0,0,16">
             <Border Width="46" Height="46" CornerRadius="23" Background="{DynamicResource AppAccentSoftBrush}">
-                <Path Classes="icon accent" Data="{StaticResource IconDownload}" Width="22" Height="22"/>
+                <Path x:Name="HeaderIcon" Classes="icon accent" Data="{StaticResource IconDownload}" Width="22" Height="22"/>
             </Border>
             <StackPanel Grid.Column="1" Margin="14,0,0,0" Spacing="2" VerticalAlignment="Center">
                 <TextBlock x:Name="TitleText" Text="Aggiornamento disponibile" FontSize="17" FontWeight="Bold"/>
@@ -36,7 +36,7 @@
                     </StackPanel>
                     <StackPanel DockPanel.Dock="Top" Classes="bi" Margin="0,0,0,8">
                         <Path Classes="icon accent" Data="{StaticResource IconList}"/>
-                        <TextBlock Text="Novità di questa versione" FontWeight="SemiBold"/>
+                        <TextBlock x:Name="ChangelogTitle" Text="Novità di questa versione" FontWeight="SemiBold"/>
                     </StackPanel>
                     <Border Background="{DynamicResource AppInputBrush}"
                             BorderBrush="{DynamicResource AppBorderBrush}"
@@ -99,7 +99,18 @@
                     </Border>
                 </StackPanel>
 
-                <!-- FASE 4: errore -->
+                <!-- FASE 4: installazione (l'app si chiude e Velopack applica in silenzio) -->
+                <StackPanel x:Name="InstallPanel" Spacing="14" VerticalAlignment="Center" IsVisible="False">
+                    <StackPanel Classes="bi">
+                        <Path Classes="icon accent" Data="{StaticResource IconRefresh}" Width="18" Height="18"/>
+                        <TextBlock Text="Installazione dell'aggiornamento..." FontWeight="Bold" FontSize="14"/>
+                    </StackPanel>
+                    <ProgressBar IsIndeterminate="True" Height="10"/>
+                    <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}"
+                               Text="L'app si chiude per qualche secondo e si riapre da sola con la nuova versione. Non serve fare nulla."/>
+                </StackPanel>
+
+                <!-- FASE 5: errore -->
                 <DockPanel x:Name="ErrorPanel" IsVisible="False">
                     <StackPanel DockPanel.Dock="Top" Classes="bi" Margin="0,0,0,10">
                         <Path Classes="icon" Data="{StaticResource IconAlertCircle}" Stroke="{DynamicResource AppDangerBrush}" Width="18" Height="18"/>

@@ -103,8 +103,10 @@ public class DomainTester
         config.IsTesting = true;
         try
         {
-            // Il providerKey coincide con ProviderName (es. "StreamingCommunity")
-            var providerKey = config.ProviderName ?? "";
+            // Il providerKey del proxy coincide con ProviderName, tranne CB01/Maxstream che condividono "Cb01"
+            var providerKey = config.ProviderName is DomainResolver.Cb01 or DomainResolver.Maxstream
+                ? ProviderKeys.Cb01
+                : config.ProviderName ?? "";
             var http = GetClientForProvider(providerKey);
 
             var sw = Stopwatch.StartNew();

@@ -40,6 +40,7 @@ public partial class ProxyTabViewModel : ViewModelBase
         ProviderKeys.AnimeWorld,
         ProviderKeys.AnimeSaturn,
         ProviderKeys.StreamingCommunity,
+        ProviderKeys.Cb01,
         "httpbin (base)"
     };
 
@@ -88,6 +89,18 @@ public partial class ProxyTabViewModel : ViewModelBase
         set
         {
             _settings.Current.UseProxyForDownloads = value;
+            _settings.Save();
+            OnPropertyChanged();
+            _shared.NotifyActiveProxyChanged();
+        }
+    }
+
+    public bool UseProxyCb01
+    {
+        get => _settings.Current.UseProxyForCb01;
+        set
+        {
+            _settings.Current.UseProxyForCb01 = value;
             _settings.Save();
             OnPropertyChanged();
             _shared.NotifyActiveProxyChanged();
@@ -582,6 +595,13 @@ public partial class ProxyTabViewModel : ViewModelBase
         {
             var url = _domainResolver.GetBaseUrl("StreamingCommunity") + "/it";
             var (ok, msg) = await _proxyService.TestProviderAsync(proxy, "StreamingCommunity", url, ct);
+            return (ok, msg, null);
+        }
+
+        if (provider == ProviderKeys.Cb01)
+        {
+            var url = _domainResolver.GetBaseUrl(DomainResolver.Maxstream) + "/";
+            var (ok, msg) = await _proxyService.TestProviderAsync(proxy, "CB01", url, ct);
             return (ok, msg, null);
         }
 

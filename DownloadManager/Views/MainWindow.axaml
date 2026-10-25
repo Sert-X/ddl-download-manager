@@ -303,10 +303,21 @@
                                         </ListBox.ItemsPanel>
                                         <ListBox.ItemTemplate>
                                             <DataTemplate x:DataType="models:AnimeSearchResult">
-                                                <StackPanel Width="140" Spacing="8">
-                                                    <Border Classes="poster" Width="140" Height="200">
-                                                        <Image Source="{Binding Poster}" Stretch="UniformToFill"/>
-                                                    </Border>
+                                                <StackPanel Width="140" Spacing="8" Background="Transparent">
+                                                    <StackPanel.ContextMenu>
+                                                        <ContextMenu>
+                                                            <MenuItem Header="Apri nel browser" Click="OnOpenResultInBrowserClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconGlobe}"/></MenuItem.Icon></MenuItem>
+                                                            <MenuItem Header="Copia link" Click="OnCopyResultLinkClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconCopy}"/></MenuItem.Icon></MenuItem>
+                                                        </ContextMenu>
+                                                    </StackPanel.ContextMenu>
+                                                    <Panel Width="140" Height="200">
+                                                        <Border Classes="poster" Width="140" Height="200">
+                                                            <Image Source="{Binding Poster}" Stretch="UniformToFill"/>
+                                                        </Border>
+                                                        <Button Classes="iconCircle" Width="28" Height="28" Padding="0" Margin="0,6,6,0" HorizontalAlignment="Right" VerticalAlignment="Top" Opacity="0.85" ToolTip.Tip="Apri il post nel browser" Click="OnOpenResultInBrowserClick">
+                                                            <Path Classes="icon" Data="{StaticResource IconGlobe}" Width="14" Height="14"/>
+                                                        </Button>
+                                                    </Panel>
                                                     <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" TextAlignment="Center"/>
                                                 </StackPanel>
                                             </DataTemplate>
@@ -526,58 +537,57 @@
                             </StackPanel>
                         </Border>
 
-                        <Border Classes="cardElevated" Margin="0,0,0,12" Background="{DynamicResource AppWarningSoftBrush}" BorderBrush="{DynamicResource AppWarningBrush}" BorderThickness="1">
-                            <Grid ColumnDefinitions="Auto, *">
-                                <Path Grid.Column="0" Classes="icon warn" Width="22" Height="22" Data="{StaticResource IconAlert}" Margin="0,0,12,0"/>
-                                <TextBlock Grid.Column="1" TextWrapping="Wrap" Foreground="{DynamicResource AppTextBrush}">
-                                    <Run FontWeight="Bold">Importante:</Run>
-                                    <Run>per scaricare da StreamingCommunity è </Run>
-                                    <Run FontWeight="Bold">fortemente consigliato</Run>
-                                    <Run> usare un Proxy attivo (tab Proxy). Senza proxy, Cloudflare potrebbe bloccare i download con errore 403 dopo pochi minuti di attività. Attiva almeno un proxy funzionante per il provider </Run>
-                                    <Run FontWeight="Bold">StreamingCommunity</Run>
-                                    <Run>.</Run>
-                                </TextBlock>
-                            </Grid>
-                        </Border>
-
                         <Border Classes="cardElevated" Margin="0,0,0,12">
-                            <Grid ColumnDefinitions="*, Auto, Auto">
-                                <ComboBox Grid.Column="0" Name="StreamingSearchComboBox" IsEditable="True" ItemsSource="{Binding SearchHistory}" PlaceholderText="Cerca un film o una serie TV..." KeyDown="OnStreamingSearchKeyDown" HorizontalAlignment="Stretch" Margin="0,0,8,0" MinHeight="40"/>
-                                <Button ToolTip.Tip="Cerca film o serie TV (o premi Invio nel campo di ricerca)" Grid.Column="1" Classes="accent" Click="OnStreamingSearchButtonClick" MinWidth="110" Height="40" Margin="0,0,8,0">
+                            <Grid ColumnDefinitions="Auto, *, Auto, Auto" RowDefinitions="Auto">
+                                <ComboBox Grid.Column="0" ItemsSource="{Binding AvailableProviders}" SelectedItem="{Binding SelectedProvider, Mode=TwoWay}" MinWidth="170" Margin="0,0,8,0" MinHeight="40" ToolTip.Tip="Scegli il provider: StreamingCommunity (HLS) o CB01 (Maxstream)"/>
+                                <ComboBox Grid.Column="1" Name="StreamingSearchComboBox" IsEditable="True" ItemsSource="{Binding SearchHistory}" PlaceholderText="Cerca un film o una serie TV..." KeyDown="OnStreamingSearchKeyDown" HorizontalAlignment="Stretch" Margin="0,0,8,0" MinHeight="40"/>
+                                <Button ToolTip.Tip="Cerca film o serie TV (o premi Invio nel campo di ricerca)" Grid.Column="2" Classes="accent" Click="OnStreamingSearchButtonClick" MinWidth="110" Height="40" Margin="0,0,8,0">
                                     <StackPanel Classes="bi" HorizontalAlignment="Center">
                                         <Path Classes="icon" Data="{StaticResource IconSearch}"/>
                                         <TextBlock Text="Cerca"/>
                                     </StackPanel>
                                 </Button>
-                                <Button Grid.Column="2" Classes="iconCircle" ToolTip.Tip="Svuota cronologia" Click="OnStreamingClearSearchHistoryClick">
+                                <Button Grid.Column="3" Classes="iconCircle" ToolTip.Tip="Svuota cronologia" Click="OnStreamingClearSearchHistoryClick">
                                     <Path Classes="icon" Data="{StaticResource IconTrash}"/>
                                 </Button>
                             </Grid>
                         </Border>
 
                         <Border Classes="cardElevated" Margin="0,0,0,12">
-                            <Grid ColumnDefinitions="Auto, *, Auto, Auto, Auto" RowDefinitions="Auto, Auto, Auto, Auto">
-                                <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0"><TextBlock Text="Pattern Film" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="Movie" Target="{Binding #MoviePatternBox}"/></StackPanel>
+                            <Grid ColumnDefinitions="Auto, *, Auto, Auto, Auto" RowDefinitions="Auto, Auto, Auto, Auto, Auto, Auto">
+                                <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0" ToolTip.Tip="Nome dei film scaricati da StreamingCommunity"><TextBlock Text="Film · StreamingCommunity" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="Movie" Target="{Binding #MoviePatternBox}"/></StackPanel>
                                 <ComboBox x:Name="MoviePatternBox" Grid.Row="0" Grid.Column="1" IsEditable="True" ItemsSource="{Binding MovieNamingPresets}" Text="{Binding MovieNamingPattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,0,10,0"/>
                                 <Border Grid.Row="0" Grid.Column="2" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,0,10,0" MaxWidth="380">
                                     <TextBlock Text="{Binding MoviePatternPreview}" FontFamily="Consolas,Menlo,monospace" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                 </Border>
 
-                                <StackPanel Grid.Row="1" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,10,4,0"><TextBlock Text="Pattern Serie" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="Series" Target="{Binding #SeriesPatternBox}"/></StackPanel>
+                                <StackPanel Grid.Row="1" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,10,4,0" ToolTip.Tip="Nome degli episodi scaricati da StreamingCommunity"><TextBlock Text="Serie · StreamingCommunity" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="Series" Target="{Binding #SeriesPatternBox}"/></StackPanel>
                                 <ComboBox x:Name="SeriesPatternBox" Grid.Row="1" Grid.Column="1" IsEditable="True" ItemsSource="{Binding SeriesNamingPresets}" Text="{Binding SeriesNamingPattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,10,10,0"/>
                                 <Border Grid.Row="1" Grid.Column="2" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,10,10,0" MaxWidth="380">
                                     <TextBlock Text="{Binding SeriesPatternPreview}" FontFamily="Consolas,Menlo,monospace" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                 </Border>
 
-                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Cartella base" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,10,10,0"/>
-                                <TextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding BaseDownloadFolder, Mode=TwoWay}" Margin="0,10,10,0"/>
-                                <Button Grid.Row="2" Grid.Column="3" Classes="iconCircle" Click="OnStreamingBrowseBaseFolderClick" Margin="0,10,8,0" ToolTip.Tip="Sfoglia">
+                                <StackPanel Grid.Row="2" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,10,4,0" ToolTip.Tip="Nome dei film scaricati da CB01. {OriginalFileName} = nome del file su Maxstream"><TextBlock Text="Film · CB01" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="Movie" Target="{Binding #Cb01MoviePatternBox}"/></StackPanel>
+                                <ComboBox x:Name="Cb01MoviePatternBox" Grid.Row="2" Grid.Column="1" IsEditable="True" ItemsSource="{Binding MovieNamingPresets}" Text="{Binding Cb01MovieNamingPattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,10,10,0"/>
+                                <Border Grid.Row="2" Grid.Column="2" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,10,10,0" MaxWidth="380">
+                                    <TextBlock Text="{Binding Cb01MoviePatternPreview}" FontFamily="Consolas,Menlo,monospace" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                </Border>
+
+                                <StackPanel Grid.Row="3" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,10,4,0" ToolTip.Tip="Nome degli episodi scaricati da CB01. {OriginalFileName} = nome del file su Maxstream"><TextBlock Text="Serie · CB01" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="Series" Target="{Binding #Cb01SeriesPatternBox}"/></StackPanel>
+                                <ComboBox x:Name="Cb01SeriesPatternBox" Grid.Row="3" Grid.Column="1" IsEditable="True" ItemsSource="{Binding SeriesNamingPresets}" Text="{Binding Cb01SeriesNamingPattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,10,10,0"/>
+                                <Border Grid.Row="3" Grid.Column="2" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,10,10,0" MaxWidth="380">
+                                    <TextBlock Text="{Binding Cb01SeriesPatternPreview}" FontFamily="Consolas,Menlo,monospace" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                </Border>
+
+                                <TextBlock Grid.Row="4" Grid.Column="0" Text="Cartella base" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,10,10,0"/>
+                                <TextBox Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding BaseDownloadFolder, Mode=TwoWay}" Margin="0,10,10,0"/>
+                                <Button Grid.Row="4" Grid.Column="3" Classes="iconCircle" Click="OnStreamingBrowseBaseFolderClick" Margin="0,10,8,0" ToolTip.Tip="Sfoglia">
                                     <Path Classes="icon" Data="{StaticResource IconFolder}"/>
                                 </Button>
-                                <CheckBox ToolTip.Tip="Salva ogni serie in una sottocartella con il suo nome dentro la cartella base" Grid.Row="2" Grid.Column="4" Content="Crea sottocartella per serie" IsChecked="{Binding CreateSeriesFolder, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                                <CheckBox ToolTip.Tip="Salva ogni serie in una sottocartella con il suo nome dentro la cartella base" Grid.Row="4" Grid.Column="4" Content="Crea sottocartella per serie" IsChecked="{Binding CreateSeriesFolder, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,10,0,0"/>
 
-                                <StackPanel Grid.Row="3" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,10,4,0"><TextBlock Text="Sottocartella stagione" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="SeasonFolder" Target="{Binding #SeasonFolderBox}"/></StackPanel>
-                                <TextBox x:Name="SeasonFolderBox" Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding SeasonFolderPattern}" PlaceholderText="Stagione {number} (vuoto = nessuna)" Margin="0,10,10,0"/>
+                                <StackPanel Grid.Row="5" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,10,4,0"><TextBlock Text="Sottocartella stagione" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="SeasonFolder" Target="{Binding #SeasonFolderBox}"/></StackPanel>
+                                <TextBox x:Name="SeasonFolderBox" Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding SeasonFolderPattern}" PlaceholderText="Stagione {number} (vuoto = nessuna)" Margin="0,10,10,0"/>
                             </Grid>
                         </Border>
 
@@ -603,10 +613,21 @@
                                         </ListBox.ItemsPanel>
                                         <ListBox.ItemTemplate>
                                             <DataTemplate x:DataType="models:MovieSearchResult">
-                                                <StackPanel Width="140" Spacing="4">
-                                                    <Border Classes="poster" Width="140" Height="200">
-                                                        <Image Source="{Binding Poster}" Stretch="UniformToFill"/>
-                                                    </Border>
+                                                <StackPanel Width="140" Spacing="4" Background="Transparent">
+                                                    <StackPanel.ContextMenu>
+                                                        <ContextMenu>
+                                                            <MenuItem Header="Apri nel browser" Click="OnOpenResultInBrowserClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconGlobe}"/></MenuItem.Icon></MenuItem>
+                                                            <MenuItem Header="Copia link" Click="OnCopyResultLinkClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconCopy}"/></MenuItem.Icon></MenuItem>
+                                                        </ContextMenu>
+                                                    </StackPanel.ContextMenu>
+                                                    <Panel Width="140" Height="200">
+                                                        <Border Classes="poster" Width="140" Height="200">
+                                                            <Image Source="{Binding Poster}" Stretch="UniformToFill"/>
+                                                        </Border>
+                                                        <Button Classes="iconCircle" Width="28" Height="28" Padding="0" Margin="0,6,6,0" HorizontalAlignment="Right" VerticalAlignment="Top" Opacity="0.85" ToolTip.Tip="Apri il post nel browser" Click="OnOpenResultInBrowserClick">
+                                                            <Path Classes="icon" Data="{StaticResource IconGlobe}" Width="14" Height="14"/>
+                                                        </Button>
+                                                    </Panel>
                                                     <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" TextAlignment="Center"/>
                                                     <TextBlock FontSize="11" TextAlignment="Center" Foreground="{DynamicResource AppTextMutedBrush}">
                                                         <Run Text="{Binding Year}"/>
@@ -644,7 +665,7 @@
                                     </Grid>
 
                                     <WrapPanel DockPanel.Dock="Top" Orientation="Horizontal" ItemSpacing="14" LineSpacing="8" Margin="0,0,0,8" IsVisible="{Binding HasSelectedResult}">
-                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding !IsCb01}">
                                             <TextBlock Text="Qualità:" VerticalAlignment="Center" FontWeight="SemiBold"/>
                                             <ComboBox ItemsSource="{Binding AvailableQualities}" SelectedItem="{Binding SelectedQuality, Mode=TwoWay}" MinWidth="160" ToolTip.Tip="Auto seleziona la qualità migliore disponibile. 1080p richiede l'account Premium.">
                                                 <ComboBox.ItemTemplate>
@@ -909,11 +930,8 @@
                     <ScrollViewer VerticalScrollBarVisibility="Auto" DataContext="{Binding Account}">
                         <StackPanel Margin="0,10,0,0" Spacing="12">
 
-                            <!-- STATUS -->
-                            <ContentControl Theme="{StaticResource StatusBannerTheme}" Content="{Binding StatusMessage}"/>
-
-                            <!-- GUIDA ACCOUNT -->
-                            <Border Classes="cardElevated" Margin="0,0,0,12" Padding="0" ClipToBounds="True">
+                            <!-- GUIDA UNICA -->
+                            <Border Classes="cardElevated" Padding="0" ClipToBounds="True">
                                 <StackPanel>
                                     <ToggleButton Classes="guideToggle" x:Name="ToggleGuideAccount" IsChecked="False">
                                         <Grid ColumnDefinitions="*, Auto">
@@ -926,62 +944,115 @@
                                     </ToggleButton>
                                     <Border IsVisible="{Binding #ToggleGuideAccount.IsChecked}" Background="Transparent" Margin="16,0,16,16" Padding="12">
                                         <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}">
-                                            <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">A cosa serve</Run><LineBreak/>
-                                            Collega il tuo account StreamingCommunity per scaricare in 1080p (serve un account Premium). Senza login i download funzionano comunque, in qualità standard.<LineBreak/>
+                                            <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">A cosa servono</Run><LineBreak/>
+                                            <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• StreamingCommunity:</Run> con un account Premium i download arrivano a 1080p. Senza login funzionano comunque, in qualità standard (720p).<LineBreak/>
+                                            <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• CB01 · Maxstream:</Run> i film e le serie di CB01 si scaricano da Maxstream e serve un account Premium. Senza, Maxstream mostra un captcha e i download falliscono. Con il Premium si scarica il file originale, non la versione ridotta dello streaming.<LineBreak/>
                                             <LineBreak/>
-                                            <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Come si usa</Run><LineBreak/>
-                                            <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Accedi:</Run> inserisci username (o email) e password e premi Accedi. La sessione viene salvata e riusata ai prossimi avvii.<LineBreak/>
-                                            <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Disconnetti:</Run> cancella la sessione salvata. Usalo se cambi account o se il login risulta scaduto.<LineBreak/>
+                                            <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Come si usano (uguale per entrambi)</Run><LineBreak/>
+                                            <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Accedi:</Run> inserisci username e password e premi Accedi. Vengono mostrati piano, scadenza e giorni rimanenti; la sessione viene salvata e riusata.<LineBreak/>
+                                            <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Testa sessione:</Run> verifica che la sessione sia ancora valida. Maxstream viene verificato anche da solo a ogni avvio e rinnovato durante i download quando scade.<LineBreak/>
+                                            <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Disconnetti:</Run> chiude la sessione, le credenziali restano salvate. Elimina credenziali le cancella del tutto.<LineBreak/>
                                             <LineBreak/>
-                                            <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Sicurezza e rete</Run><LineBreak/>
-                                            <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Cifratura:</Run> le credenziali sono cifrate con DPAPI di Windows: solo il tuo utente può leggerle e non vengono mai salvate in chiaro.<LineBreak/>
-                                            <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Proxy:</Run> il login passa dal proxy attivo per StreamingCommunity (tab Proxy), così l'IP è lo stesso dei download.<LineBreak/>
-                                            <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Problemi:</Run> se il login fallisce, controlla nella tab Domini che il dominio di StreamingCommunity sia raggiungibile.
+                                            <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Rete e sicurezza</Run><LineBreak/>
+                                            <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Cifratura:</Run> le credenziali sono cifrate con DPAPI di Windows: solo il tuo utente può leggerle.<LineBreak/>
+                                            <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Proxy:</Run> ogni account usa il proxy attivo per il suo provider (tab Proxy). Il link di download di Maxstream vale solo per l'IP che l'ha chiesto, quindi anche il download esce da quell'IP.<LineBreak/>
+                                            <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• FlareSolverr:</Run> facoltativo. Serve solo se Cloudflare blocca la connessione diretta a Maxstream (IP da datacenter o VPN); con la connessione di casa non serve.<LineBreak/>
+                                            <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Problemi:</Run> se un login fallisce, controlla nella tab Domini che il dominio del sito sia raggiungibile.
                                         </TextBlock>
                                     </Border>
                                 </StackPanel>
                             </Border>
 
-                            <Border Classes="cardElevated" Padding="16">
-                                <StackPanel Spacing="6">
-                                    <TextBlock Text="{Binding SessionBadge}" FontWeight="Bold" FontSize="16"/>
-                                    <TextBlock Text="{Binding SessionDetails}" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" TextWrapping="Wrap"/>
-                                </StackPanel>
-                            </Border>
+                            <!-- DUE BLOCCHI IDENTICI -->
+                            <Grid ColumnDefinitions="*, *">
+                                <!-- ===== StreamingCommunity ===== -->
+                                <Border Grid.Column="0" Classes="cardElevated" Padding="16" Margin="0,0,6,0">
+                                    <StackPanel Spacing="12">
+                                        <StackPanel Classes="bi">
+                                            <Path Classes="icon accent" Data="{StaticResource IconKey}"/>
+                                            <TextBlock Text="StreamingCommunity" FontWeight="Bold" FontSize="18"/>
+                                        </StackPanel>
 
-                            <Border Classes="cardElevated" Padding="16">
-                                <StackPanel Spacing="10">
-                                    <TextBlock Text="StreamingCommunity — Account" FontWeight="Bold" FontSize="14"/>
-                                    <Grid ColumnDefinitions="120, *" RowDefinitions="Auto, Auto">
-                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Username / Email" VerticalAlignment="Center" Margin="0,0,10,8" ToolTip.Tip="La tua email o username di StreamingCommunity"/>
-                                        <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Username, Mode=TwoWay}" Margin="0,0,0,8"/>
-                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Password" VerticalAlignment="Center" Margin="0,0,10,0" ToolTip.Tip="La tua password. Verrà salvata cifrata nel PC."/>
-                                        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Password, Mode=TwoWay}" PasswordChar="•"/>
-                                    </Grid>
+                                        <Border Background="{DynamicResource AppSurface2Brush}" CornerRadius="8" Padding="12">
+                                            <StackPanel Spacing="4">
+                                                <TextBlock Text="{Binding SessionBadge}" FontWeight="Bold" FontSize="15"/>
+                                                <TextBlock Text="{Binding SessionDetails}" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" TextWrapping="Wrap" MinHeight="68"/>
+                                            </StackPanel>
+                                        </Border>
 
-                                    <WrapPanel Orientation="Horizontal" ItemSpacing="8">
-                                        <Button ToolTip.Tip="Accedi a StreamingCommunity con le credenziali inserite" Classes="success" Command="{Binding LoginCommand}" IsEnabled="{Binding !IsBusy}" IsVisible="{Binding !IsLoggedIn}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconKey}"/><TextBlock Text="Accedi"/></StackPanel></Button>
-                                        <Button Command="{Binding ReloadCredentialsCommand}" IsEnabled="{Binding !IsBusy}" IsVisible="{Binding !IsLoggedIn}" ToolTip.Tip="Ricarica nei campi le credenziali salvate (DPAPI)"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconUnlock}"/><TextBlock Text="Ricarica credenziali"/></StackPanel></Button>
-                                        <Button Command="{Binding SaveCredentialsCommand}" IsEnabled="{Binding !IsBusy}" ToolTip.Tip="Salva le credenziali in modo sicuro per il prossimo avvio"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconSave}"/><TextBlock Text="Salva credenziali"/></StackPanel></Button>
-                                        <Button Classes="info" Command="{Binding TestSessionCommand}" IsEnabled="{Binding !IsBusy}" ToolTip.Tip="Verifica se i cookie di sessione sono ancora validi"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconSearch}"/><TextBlock Text="Testa sessione"/></StackPanel></Button>
-                                        <Button ToolTip.Tip="Esci dall'account e cancella la sessione salvata" Classes="warning" Command="{Binding LogoutCommand}" IsVisible="{Binding IsLoggedIn}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconLogOut}"/><TextBlock Text="Disconnetti"/></StackPanel></Button>
-                                        <Button Classes="danger" Command="{Binding DeleteCredentialsCommand}" IsEnabled="{Binding !IsBusy}" IsVisible="{Binding HasSavedCredentials}" ToolTip.Tip="Rimuove definitivamente username e password dal DPAPI"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTrash}"/><TextBlock Text="Elimina credenziali"/></StackPanel></Button>
-                                        <Button ToolTip.Tip="Accesso in corso, attendi..." Classes="danger" IsVisible="{Binding IsBusy}" IsEnabled="False"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconStop}"/><TextBlock Text="Stop"/></StackPanel></Button>
-                                    </WrapPanel>
-                                </StackPanel>
-                            </Border>
+                                        <Grid ColumnDefinitions="90, *" RowDefinitions="Auto, Auto">
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Username" VerticalAlignment="Center" Margin="0,0,10,8" ToolTip.Tip="Username o email di StreamingCommunity"/>
+                                            <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Username, Mode=TwoWay}" Margin="0,0,0,8"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Password" VerticalAlignment="Center" Margin="0,0,10,0" ToolTip.Tip="Verrà salvata cifrata nel PC"/>
+                                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Password, Mode=TwoWay}" PasswordChar="•"/>
+                                        </Grid>
 
+                                        <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="6">
+                                            <Button ToolTip.Tip="Accedi con le credenziali inserite" Classes="success" Command="{Binding LoginCommand}" IsEnabled="{Binding !IsBusy}" IsVisible="{Binding !IsLoggedIn}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconKey}"/><TextBlock Text="Accedi"/></StackPanel></Button>
+                                            <Button Command="{Binding ReloadCredentialsCommand}" IsEnabled="{Binding !IsBusy}" IsVisible="{Binding !IsLoggedIn}" ToolTip.Tip="Ricarica nei campi le credenziali salvate"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconUnlock}"/><TextBlock Text="Ricarica credenziali"/></StackPanel></Button>
+                                            <Button Command="{Binding SaveCredentialsCommand}" IsEnabled="{Binding !IsBusy}" ToolTip.Tip="Salva le credenziali per il prossimo avvio"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconSave}"/><TextBlock Text="Salva credenziali"/></StackPanel></Button>
+                                            <Button Classes="info" Command="{Binding TestSessionCommand}" IsEnabled="{Binding !IsBusy}" ToolTip.Tip="Verifica se la sessione è ancora valida"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconSearch}"/><TextBlock Text="Testa sessione"/></StackPanel></Button>
+                                            <Button Classes="warning" Command="{Binding LogoutCommand}" IsVisible="{Binding IsLoggedIn}" ToolTip.Tip="Esci e cancella la sessione salvata"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconLogOut}"/><TextBlock Text="Disconnetti"/></StackPanel></Button>
+                                            <Button Classes="danger" Command="{Binding DeleteCredentialsCommand}" IsEnabled="{Binding !IsBusy}" IsVisible="{Binding HasSavedCredentials}" ToolTip.Tip="Rimuove definitivamente username e password"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTrash}"/><TextBlock Text="Elimina credenziali"/></StackPanel></Button>
+                                            <Button Classes="danger" IsVisible="{Binding IsBusy}" IsEnabled="False" ToolTip.Tip="Operazione in corso, attendi..."><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconStop}"/><TextBlock Text="Stop"/></StackPanel></Button>
+                                        </WrapPanel>
+
+                                        <ContentControl Theme="{StaticResource StatusBannerTheme}" Content="{Binding StatusMessage}"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- ===== CB01 · Maxstream ===== -->
+                                <Border Grid.Column="1" Classes="cardElevated" Padding="16" Margin="6,0,0,0">
+                                    <StackPanel Spacing="12">
+                                        <StackPanel Classes="bi">
+                                            <Path Classes="icon accent" Data="{StaticResource IconKey}"/>
+                                            <TextBlock Text="CB01 · Maxstream" FontWeight="Bold" FontSize="18"/>
+                                        </StackPanel>
+
+                                        <Border Background="{DynamicResource AppSurface2Brush}" CornerRadius="8" Padding="12">
+                                            <StackPanel Spacing="4">
+                                                <TextBlock Text="{Binding MsSessionBadge}" FontWeight="Bold" FontSize="15"/>
+                                                <TextBlock Text="{Binding MsSessionDetails}" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" TextWrapping="Wrap" MinHeight="68"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <Grid ColumnDefinitions="90, *" RowDefinitions="Auto, Auto">
+                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Username" VerticalAlignment="Center" Margin="0,0,10,8" ToolTip.Tip="Username di Maxstream"/>
+                                            <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding MsUsername, Mode=TwoWay}" Margin="0,0,0,8"/>
+                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Password" VerticalAlignment="Center" Margin="0,0,10,0" ToolTip.Tip="Verrà salvata cifrata nel PC"/>
+                                            <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding MsPassword, Mode=TwoWay}" PasswordChar="•"/>
+                                        </Grid>
+
+                                        <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="6">
+                                            <Button ToolTip.Tip="Accedi con le credenziali inserite" Classes="success" Command="{Binding MsLoginCommand}" IsEnabled="{Binding !IsMsBusy}" IsVisible="{Binding !IsMsLoggedIn}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconKey}"/><TextBlock Text="Accedi"/></StackPanel></Button>
+                                            <Button Command="{Binding MsReloadCredentialsCommand}" IsEnabled="{Binding !IsMsBusy}" IsVisible="{Binding !IsMsLoggedIn}" ToolTip.Tip="Ricarica nei campi le credenziali salvate"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconUnlock}"/><TextBlock Text="Ricarica credenziali"/></StackPanel></Button>
+                                            <Button Command="{Binding MsSaveCredentialsCommand}" IsEnabled="{Binding !IsMsBusy}" ToolTip.Tip="Salva le credenziali per il prossimo avvio"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconSave}"/><TextBlock Text="Salva credenziali"/></StackPanel></Button>
+                                            <Button Classes="info" Command="{Binding MsTestSessionCommand}" IsEnabled="{Binding !IsMsBusy}" ToolTip.Tip="Verifica se la sessione è ancora valida e aggiorna la scadenza"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconSearch}"/><TextBlock Text="Testa sessione"/></StackPanel></Button>
+                                            <Button Classes="warning" Command="{Binding MsLogoutCommand}" IsVisible="{Binding IsMsLoggedIn}" ToolTip.Tip="Esci e chiudi la sessione"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconLogOut}"/><TextBlock Text="Disconnetti"/></StackPanel></Button>
+                                            <Button Classes="danger" Command="{Binding MsDeleteCredentialsCommand}" IsEnabled="{Binding !IsMsBusy}" IsVisible="{Binding HasMsSavedCredentials}" ToolTip.Tip="Rimuove definitivamente username e password"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTrash}"/><TextBlock Text="Elimina credenziali"/></StackPanel></Button>
+                                            <Button Classes="danger" IsVisible="{Binding IsMsBusy}" IsEnabled="False" ToolTip.Tip="Operazione in corso, attendi..."><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconStop}"/><TextBlock Text="Stop"/></StackPanel></Button>
+                                        </WrapPanel>
+
+                                        <ContentControl Theme="{StaticResource StatusBannerTheme}" Content="{Binding MsStatusMessage}"/>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+
+                            <!-- FLARESOLVERR (facoltativo, condiviso) -->
                             <Border Classes="cardElevated" Padding="16">
-                                <StackPanel Spacing="6">
+                                <StackPanel Spacing="8">
                                     <StackPanel Classes="bi">
                                         <Path Classes="icon accent" Data="{StaticResource IconInfo}"/>
-                                        <TextBlock Text="Note" FontWeight="Bold"/>
+                                        <TextBlock Text="FlareSolverr (facoltativo)" FontWeight="Bold" FontSize="14"/>
                                     </StackPanel>
-                                    <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}">
-                                        Le credenziali vengono salvate cifrate (DPAPI Windows) nella cartella dell'utente. Il login viene eseguito via HTTPS verso StreamingCommunity; i cookie di sessione vengono riutilizzati per i download. Con account Premium la qualità disponibile sale fino a 1080p.
-                                    </TextBlock>
+                                    <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" Text="Usato solo se Cloudflare blocca la connessione diretta a Maxstream. Con la connessione di casa non serve: lascia vuoto."/>
+                                    <Grid ColumnDefinitions="90, *">
+                                        <TextBlock Grid.Column="0" Text="URL" VerticalAlignment="Center" Margin="0,0,10,0" ToolTip.Tip="Indirizzo del server FlareSolverr (es. http://localhost:8191)"/>
+                                        <TextBox Grid.Column="1" Text="{Binding MsFlareSolverrUrl, Mode=TwoWay}" PlaceholderText="vuoto = non usato (es. http://localhost:8191)"/>
+                                    </Grid>
                                 </StackPanel>
                             </Border>
+
                         </StackPanel>
                     </ScrollViewer>
                 </Panel>
@@ -2474,6 +2545,7 @@
                                     <CheckBox Content="AnimeSaturn" IsChecked="{Binding UseProxyAnimeSaturn, Mode=TwoWay}" ToolTip.Tip="Se attivo, usa il proxy per questo provider"/>
                                     <CheckBox Content="StreamingCommunity" IsChecked="{Binding UseProxyStreamingCommunity, Mode=TwoWay}" ToolTip.Tip="Se attivo, usa il proxy per questo provider"/>
                                     <CheckBox Content="Download diretti" IsChecked="{Binding UseProxyDownloads, Mode=TwoWay}" ToolTip.Tip="Se attivo, usa il proxy per i download"/>
+                                    <CheckBox Content="CB01/Maxstream" IsChecked="{Binding UseProxyCb01, Mode=TwoWay}" ToolTip.Tip="Se attivo, usa il proxy per CB01 e Maxstream"/>
                                 </WrapPanel>
                             </StackPanel>
                         </Border>

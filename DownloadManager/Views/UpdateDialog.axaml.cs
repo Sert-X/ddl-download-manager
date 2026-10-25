@@ -48,7 +48,7 @@ public record UpdateDownloadInfo(long TotalBytes, bool IsDelta, string? Packages
 
 public partial class UpdateDialog : Window
 {
-    private enum Phase { Confirm, Downloading, ReadyToRestart, Error }
+    private enum Phase { Confirm, Downloading, ReadyToRestart, Installing, Error, Updated }
 
     private string _newVersion = "";
     private UpdateDownloadInfo _info = new(0, false, null, Array.Empty<string>());
@@ -93,15 +93,25 @@ public partial class UpdateDialog : Window
         return dlg.Choice;
     }
 
+    /// <summary>Al primo avvio dopo un aggiornamento: conferma e novità della versione installata.</summary>
+    public static async Task ShowUpdatedAsync(Window owner, string version, string changelog)
+    {
+        var dlg = new UpdateDialog { _newVersion = version, _changelog = changelog ?? "" };
+        dlg.Title = "Aggiornamento completato";
+        dlg.ShowPhase(Phase.Updated);
+        await dlg.ShowDialog(owner);
+    }
+
     // ============================================================
     //  GESTIONE FASI
     // ============================================================
 
     private void ShowPhase(Phase phase)
     {
-        ConfirmPanel.IsVisible = phase == Phase.Confirm;
         DownloadPanel.IsVisible = phase == Phase.Downloading;
+        ConfirmPanel.IsVisible = phase is Phase.Confirm or Phase.Updated;
         ReadyPanel.IsVisible = phase == Phase.ReadyToRestart;
+        InstallPanel.IsVisible = phase == Phase.Installing;
         ErrorPanel.IsVisible = phase == Phase.Error;
 
         ButtonsPanel.Children.Clear();
@@ -140,7 +150,24 @@ public partial class UpdateDialog : Window
             case Phase.ReadyToRestart:
                 SubtitleText.Text = $"Versione {_newVersion} scaricata";
                 AddButton("Al prossimo avvio", "ghost", () => { Choice = UpdateChoice.InstallLater; Close(); });
-                AddButton("Riavvia ora", "success", () => { Choice = UpdateChoice.InstallNow; Close(); });
+                AddButton("Riavvia ora", "success", () => _ = BeginInstallAsync());
+                break;
+
+            case Phase.Installing:
+                SubtitleText.Text = $"Installazione della versione {_newVersion}";
+                break;
+
+            case Phase.Updated:
+                TitleText.Text = "Aggiornamento completato";
+                SubtitleText.Text = $"Ora stai usando la versione {_newVersion}";
+                HeaderIcon.Data = (Avalonia.Media.Geometry?)Avalonia.Application.Current?.FindResource("IconCheckCircle") ?? HeaderIcon.Data;
+                VersionInfoText.Text = "DDL Download Manager è stato aggiornato correttamente.";
+                DownloadSizeText.IsVisible = false;
+                ChangelogTitle.Text = "Cosa c'è di nuovo";
+                ChangelogText.Text = string.IsNullOrWhiteSpace(_changelog)
+                    ? "Nessun dettaglio disponibile per questa versione."
+                    : _changelog;
+                AddButton("Inizia", "accent", Close);
                 break;
 
             case Phase.Error:
@@ -148,6 +175,15 @@ public partial class UpdateDialog : Window
                 AddButton("Chiudi", "ghost", () => { Choice = UpdateChoice.Cancel; Close(); });
                 break;
         }
+    }
+
+    /// <summary>Mostra "Installazione..." per un attimo, poi l'app si chiude e Velopack applica l'aggiornamento.</summary>
+    private async Task BeginInstallAsync()
+    {
+        Choice = UpdateChoice.InstallNow;
+        ShowPhase(Phase.Installing);
+        await Task.Delay(1500);
+        Close();
     }
 
     private void AddButton(string text, string classes, Action onClick)

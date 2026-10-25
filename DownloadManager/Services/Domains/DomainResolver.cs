@@ -25,8 +25,21 @@ public class DomainResolver
     {
         { "AnimeWorld", "https://www.animeworld.ac" },
         { "AnimeSaturn", "https://www.animesaturn.net" },
-        { "StreamingCommunity", "https://streamingcommunity.rip" }
+        { "StreamingCommunity", "https://streamingcommunity.rip" },
+        { Cb01, "https://cb01one.com" },
+        { Maxstream, "https://maxstream.video" }
     };
+
+    public const string Cb01 = "CB01";
+    public const string Maxstream = "Maxstream";
+
+    /// <summary>"https://www.maxstream.video/x" → "maxstream.video": confronto tra host senza "www.".</summary>
+    public static string HostOf(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var u)) return "";
+        var h = u.Host.ToLowerInvariant();
+        return h.StartsWith("www.") ? h[4..] : h;
+    }
 
     public DomainResolver(SettingsService settings, ILogger<DomainResolver> logger)
     {

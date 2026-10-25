@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.2.0] — 2026-10-25
+
+### 🎬 Film/Serie Download
+- **Nuovo provider CB01** (film e serie TV), scaricati da Maxstream con account Premium: si sceglie dal menu accanto alla ricerca.
+- **File originale in alta qualità**: si scarica il file originale (es. 2,4 GB) invece della versione ridotta dello streaming, e alla fine diventa sempre un **.mp4**. La conversione copia video e audio senza perdita di qualità; l'audio non adatto all'MP4 (DTS, TrueHD, Vorbis...) diventa AAC.
+- **Scelta del link a prova di errore**: se nel post HD e SD o Maxstream e Mixdrop sono invertiti, l'app prova i link e tiene il file migliore (risoluzione e dimensione reali).
+- Serie con un link per episodio o con la cartella di tutte le stagioni: stagioni ed episodi letti correttamente; la versione ITA ha la precedenza su quella SUB-ITA.
+- **Pattern dei nomi separati per CB01**: `{OriginalFileName}` è il nome del file su Maxstream. I pattern di StreamingCommunity ora sono indicati come tali.
+- I download CB01 rimasti in coda ripartono anche dopo un riavvio dell'app.
+- Tolto l'avviso che chiedeva un proxy obbligatorio per StreamingCommunity.
+
+### ⚡ Anime e Film/Serie
+- **Selezione multipla con Ctrl e Shift** negli episodi, sia sulle righe sia sulle caselle: Ctrl aggiunge o toglie, Shift seleziona l'intervallo.
+- **Apri il post nel browser**: icona sul poster dei risultati, oppure clic destro → "Apri nel browser" / "Copia link".
+
+### 👤 Account
+- Sezione rinnovata: una sola guida e due blocchi identici per StreamingCommunity e CB01 · Maxstream.
+- **Maxstream**: login Premium con scadenza e giorni rimanenti; la sessione si rinnova da sola durante i download se scade.
+- Entrambi gli account vengono **verificati a ogni avvio**; StreamingCommunity mostra la data di scadenza invece della data grezza.
+- FlareSolverr è facoltativo: con la connessione di casa non serve.
+
+### 🌍 Domini e 🌐 Proxy
+- **CB01 e Maxstream nella tab Domini**: quando cambiano dominio basta aggiornarlo lì.
+- Proxy opzionale per CB01/Maxstream, con test dedicato nella tab Proxy.
+
+### ☁ SFTP
+- **Barra di scorrimento**: trascinandola non parte più per errore il drag & drop dei file (il cursore con il divieto e la lista che non scorreva).
+- **Ricerca per lettera** come in Esplora risorse: premendo una lettera si va al primo file o cartella che inizia così; ripremendola, al successivo.
+
+### 📦 Aggiornamenti
+- L'aggiornamento si installa **senza la finestra di sistema** di Velopack: l'app si chiude per qualche secondo e si riapre con la schermata **"Aggiornamento completato"** e le novità. Vale dagli aggiornamenti successivi a questo.
+- La schermata di Setup.exe mostra la versione installata.
+
 ## [1.1.8] — 2026-10-25
 
 ### ⚡ Anime Download

@@ -46,6 +46,8 @@ public class DynamicWebProxy : IWebProxy
         if (h.Contains("animesaturn")) return ProviderKeys.AnimeSaturn;
         if (h.Contains("streamingcommunity") || h.Contains("vixcloud") ||
             h.Contains("vix-content")) return ProviderKeys.StreamingCommunity;
+        if (h.Contains("maxstream") || h.Contains("host-cdn") || h.Contains("cb01") ||
+            h.Contains("stayonline") || h.Contains("uprot")) return ProviderKeys.Cb01;
         return ProviderKeys.Downloads;
     }
 }
@@ -63,6 +65,8 @@ internal class DynamicProxyCredentials : ICredentials
             var h when h.Contains("animeworld") => ProviderKeys.AnimeWorld,
             var h when h.Contains("animesaturn") => ProviderKeys.AnimeSaturn,
             var h when h.Contains("streamingcommunity") || h.Contains("vixcloud") => ProviderKeys.StreamingCommunity,
+            var h when h.Contains("maxstream") || h.Contains("host-cdn") || h.Contains("cb01") ||
+                       h.Contains("stayonline") || h.Contains("uprot") => ProviderKeys.Cb01,
             _ => ProviderKeys.Downloads
         };
 

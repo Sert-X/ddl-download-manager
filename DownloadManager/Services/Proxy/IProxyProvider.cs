@@ -20,4 +20,5 @@ public static class ProviderKeys
     public const string AnimeSaturn = "AnimeSaturn";
     public const string StreamingCommunity = "StreamingCommunity";
     public const string Downloads = "Downloads";
+    public const string Cb01 = "Cb01";
 }

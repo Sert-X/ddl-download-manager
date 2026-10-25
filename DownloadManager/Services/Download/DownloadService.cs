@@ -178,14 +178,18 @@ public partial class DownloadService : IDownloadService
                     throw new InvalidOperationException("UrlExtractor vuoto.");
                 item.Url = fresh;
 
-                // Anime accodati senza link: ora che è noto si calcola il nome definitivo
-                // (il pattern può usare il nome originale del file sul sito)
-                if (item.Category == "anime")
+                if (item.Category == "anime" || item.ProviderKey == "CB01")
                 {
                     var names = _services.GetService(typeof(FileNameBuilder)) as FileNameBuilder;
                     if (names != null)
                     {
-                        var path = names.BuildDestinationPath(item, fresh, item.EpisodeTitle);
+                        // CB01 arriva dalla tab Film/Serie: senza override userebbe cartella e pattern Anime
+                        string? pattern = item.ProviderKey == "CB01"
+                            ? (item.IsSeries
+                                ? _settings.Current.Cb01SeriesNamingPattern
+                                : _settings.Current.Cb01MovieNamingPattern)
+                            : null;
+                        var path = names.BuildDestinationPath(item, fresh, item.EpisodeTitle, pattern);
                         SetUi(() => item.DestinationPath = path);
                     }
                 }
@@ -282,6 +286,24 @@ public partial class DownloadService : IDownloadService
 
         if (File.Exists(item.DestinationPath)) File.Delete(item.DestinationPath);
         File.Move(tempPath, item.DestinationPath);
+
+        // CB01: si scarica il file originale (spesso .mkv) ma si consegna sempre un .mp4
+        if (item.ProviderKey == "CB01" &&
+            !item.DestinationPath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
+        {
+            var ffmpeg = _ffmpegLocator.GetFfmpegPath();
+            if (string.IsNullOrEmpty(ffmpeg))
+            {
+                _logger.LogWarning("[MP4] ffmpeg non trovato: {File} resta nel formato originale", item.DestinationPath);
+            }
+            else
+            {
+                SetUi(() => item.ErrorMessage = "Conversione in MP4...");
+                var mp4 = await Mp4Remuxer.ConvertAsync(ffmpeg, item.DestinationPath, _logger, ct);
+                if (mp4 != null) SetUi(() => item.DestinationPath = mp4);
+                SetUi(() => item.ErrorMessage = string.Empty);
+            }
+        }
 
         SetUi(() =>
         {
@@ -526,7 +548,8 @@ public partial class DownloadService : IDownloadService
     {
         if (string.IsNullOrEmpty(url)) return true;
 
-        if (url.Contains("vixcloud", StringComparison.OrdinalIgnoreCase))
+        if (url.Contains("vixcloud", StringComparison.OrdinalIgnoreCase) ||
+            url.Contains("host-cdn", StringComparison.OrdinalIgnoreCase))
         {
             var m = Regex.Match(url, @"[?&]expires=(\d+)");
             if (m.Success && long.TryParse(m.Groups[1].Value, out var exp))

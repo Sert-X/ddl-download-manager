@@ -53,7 +53,15 @@ public class FileNameBuilder
                     || string.IsNullOrEmpty(originalFileName)
                     || originalVideoUrl.Contains("vixcloud.co/playlist/", StringComparison.OrdinalIgnoreCase);
 
-        if (isHls)
+        if (!string.IsNullOrWhiteSpace(item.SourceFileName))
+        {
+            // Nome reale dichiarato dal sito (es. Maxstream): vale più di quello ricavato dall'URL
+            var srcExt = Path.GetExtension(item.SourceFileName).TrimStart('.');
+            bool knownExt = srcExt.Length is > 0 and <= 4 && srcExt.All(char.IsLetterOrDigit) && !srcExt.All(char.IsDigit);
+            originalFileName = knownExt ? Path.GetFileNameWithoutExtension(item.SourceFileName) : item.SourceFileName;
+            ext = isHls ? "mp4" : (knownExt ? srcExt : (string.IsNullOrEmpty(ext) ? "mp4" : ext));
+        }
+        else if (isHls)
         {
             originalFileName = $"Episode_{item.EpisodeNumber:D3}";
             ext = "mp4";

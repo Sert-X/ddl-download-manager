@@ -32,6 +32,9 @@ public partial class DownloadItem : ObservableObject
     public int EpisodeId { get; set; }              // ID episodio streamingcommunity (0 = film)
     public bool IsSeries { get; set; }              // true se è una serie
 
+    /// <summary>Nome reale del file sul sito sorgente (es. Maxstream), con estensione: alimenta {OriginalFileName}.</summary>
+    public string SourceFileName { get; set; } = "";
+
     // === Tracce scelte nell'analisi (Film/Serie) ===
     /// <summary>Lingue audio da includere (codice LANGUAGE della playlist o nome traccia), separate da '|'. Vuoto = automatico (italiano).</summary>
     public string AudioLanguages { get; set; } = "";

@@ -76,6 +76,7 @@ public partial class MainWindowViewModel : ViewModelBase
             if (s.UseProxyForAnimeSaturn && Proxy.Proxies.Any(p => p.IsEnabledForAnimeSaturn)) providers.Add("AS");
             if (s.UseProxyForStreamingCommunity && Proxy.Proxies.Any(p => p.IsEnabledForStreamingCommunity)) providers.Add("SC");
             if (s.UseProxyForDownloads && Proxy.Proxies.Any(p => p.IsEnabledForDownloads)) providers.Add("DL");
+            if (s.UseProxyForCb01 && Proxy.Proxies.Any(p => p.IsEnabledForCb01)) providers.Add("CB");
 
             if (providers.Count == 0) return "🌐 Off";
             return $"🌐 {string.Join("+", providers)}";
@@ -91,7 +92,8 @@ public partial class MainWindowViewModel : ViewModelBase
                 (s.UseProxyForAnimeWorld && p.IsEnabledForAnimeWorld) ||
                 (s.UseProxyForAnimeSaturn && p.IsEnabledForAnimeSaturn) ||
                 (s.UseProxyForStreamingCommunity && p.IsEnabledForStreamingCommunity) ||
-                (s.UseProxyForDownloads && p.IsEnabledForDownloads));
+                (s.UseProxyForDownloads && p.IsEnabledForDownloads) ||
+                (s.UseProxyForCb01 && p.IsEnabledForCb01));
         }
     }
 
@@ -120,6 +122,7 @@ public partial class MainWindowViewModel : ViewModelBase
         ILogger<DownloadTabViewModel> downloadLogger,
         ILogger<StreamingTabViewModel> streamingLogger,
         IStreamingCommunityService streamingCommunityService,
+        DownloadManager.Services.Streaming.Cb01.ICb01Service cb01Service,
         AccountTabViewModel accountVm,
         VideoboxTabViewModel videobox,
         SftpRelayQueueService sftpRelayQueue,
@@ -156,6 +159,7 @@ public partial class MainWindowViewModel : ViewModelBase
 
         Streaming = new StreamingTabViewModel(
             _streamingCommunityService,
+            cb01Service,
             _queueService,
             _fileNameBuilder,
             _settings,

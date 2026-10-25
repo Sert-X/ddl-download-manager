@@ -5,10 +5,16 @@ Genera la grafica dell'installer (da rilanciare solo se cambia il logo):
   - msi-dialog.bmp      sfondo delle pagine Benvenuto/Fine dell'installer .msi (493x312)
   - ../Assets/app.ico   icona dell'app in tutte le dimensioni (16-256)
 
-Uso:  python Installer/make_installer_art.py   (dalla cartella DownloadManager)
+Uso:  python Installer/make_installer_art.py [--version 1.2.0]   (dalla cartella DownloadManager)
+      Con --version la splash mostra la versione installata (la usa la release su GitHub).
 """
+import argparse
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
+
+ARGS = argparse.ArgumentParser()
+ARGS.add_argument("--version", default="")
+VERSION = ARGS.parse_args().version.strip().lstrip("v")
 
 ROOT = Path(__file__).resolve().parent
 LOGO = Image.open(ROOT.parent / "Assets" / "logo.png").convert("RGBA")
@@ -76,7 +82,15 @@ paste_logo(splash, 124, (W // 2, 112))
 d = ImageDraw.Draw(splash)
 centered(d, 196, [("DDL ", ACCENT), ("Download Manager", TEXT)], font("Inter-SemiBold.ttf", 36), W)
 centered(d, 248, [("Anime  ·  Film e Serie  ·  SFTP  ·  Videobox", MUTED)], font("Inter-Regular.ttf", 15), W)
-centered(d, 318, [("Installazione in corso…", FAINT)], font("Inter-Regular.ttf", 13), W)
+if VERSION:
+    # "pillola" con la versione, nello stile dei badge dell'app
+    pf = font("Inter-SemiBold.ttf", 12)
+    label = f"Versione {VERSION}"
+    pw = d.textlength(label, font=pf) + 24
+    px, py = (W - pw) / 2, 280
+    d.rounded_rectangle((px, py, px + pw, py + 24), radius=12, fill=(30, 58, 110), outline=(59, 130, 246))
+    d.text((px + 12, py + 4), label, font=pf, fill=(191, 219, 254))
+centered(d, 322, [("Installazione in corso…", FAINT)], font("Inter-Regular.ttf", 13), W)
 # bordo sottile
 d.rectangle((0, 0, W - 1, H - 1), outline=(37, 52, 82))
 splash.convert("RGB").save(ROOT / "splash.png")

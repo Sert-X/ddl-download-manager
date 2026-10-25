@@ -29,6 +29,7 @@ public partial class ProxyConfig : ObservableObject
     [ObservableProperty] private bool _isEnabledForAnimeSaturn;
     [ObservableProperty] private bool _isEnabledForStreamingCommunity;
     [ObservableProperty] private bool _isEnabledForDownloads;
+    [ObservableProperty] private bool _isEnabledForCb01;
     /// <summary>Attivo per il provider attualmente selezionato nella UI (aggiornato dal VM).</summary>
     [ObservableProperty] private bool _isActiveForSelectedProvider;
 
@@ -37,13 +38,15 @@ public partial class ProxyConfig : ObservableObject
     public bool ManuallyDisabledForAnimeSaturn { get; set; }
     public bool ManuallyDisabledForStreamingCommunity { get; set; }
     public bool ManuallyDisabledForDownloads { get; set; }
+    public bool ManuallyDisabledForCb01 { get; set; }
 
     // Helper: ritorna true se il proxy è attivo per almeno un provider
     public bool IsEnabled =>
         IsEnabledForAnimeWorld ||
         IsEnabledForAnimeSaturn ||
         IsEnabledForStreamingCommunity ||
-        IsEnabledForDownloads;
+        IsEnabledForDownloads ||
+        IsEnabledForCb01;
 
     partial void OnIsEnabledForAnimeWorldChanged(bool value)
     {
@@ -61,6 +64,11 @@ public partial class ProxyConfig : ObservableObject
         OnPropertyChanged(nameof(ActiveProvidersText));
     }
     partial void OnIsEnabledForDownloadsChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsEnabled));
+        OnPropertyChanged(nameof(ActiveProvidersText));
+    }
+    partial void OnIsEnabledForCb01Changed(bool value)
     {
         OnPropertyChanged(nameof(IsEnabled));
         OnPropertyChanged(nameof(ActiveProvidersText));
@@ -163,6 +171,7 @@ public partial class ProxyConfig : ObservableObject
             if (IsEnabledForAnimeSaturn) list.Add("AS");
             if (IsEnabledForStreamingCommunity) list.Add("SC");
             if (IsEnabledForDownloads) list.Add("DL");
+            if (IsEnabledForCb01) list.Add("CB");
             return list.Count == 0 ? "" : "[" + string.Join(" ", list) + "]";
         }
     }

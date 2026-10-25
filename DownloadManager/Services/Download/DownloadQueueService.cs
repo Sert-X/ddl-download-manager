@@ -117,6 +117,7 @@ public class DownloadQueueService
         foreach (var item in unfinished)
         {
             RewireStreamingExtractors(item);
+            RewireCb01Extractors(item);
             RewireAnimeExtractors(item);
             item.Status = DownloadStatus.Pending;
             await AddToListAsync(item);
@@ -143,6 +144,20 @@ public class DownloadQueueService
         }
         item.UrlExtractor = DownloadManager.Services.Anime.AnimeUrlResolver.CreateExtractor(
             provider, item.ContentLink, item.EpisodeNumber.ToString(), _logger);
+    }
+
+    /// <summary>CB01: il link Maxstream vale solo per l'IP e scade, quindi si sceglie di nuovo al via.</summary>
+    private void RewireCb01Extractors(DownloadItem item)
+    {
+        if (item.ProviderKey != "CB01" || item.UrlExtractor != null || string.IsNullOrEmpty(item.ContentLink)) return;
+
+        var cb01 = _serviceProvider.GetService<DownloadManager.Services.Streaming.Cb01.ICb01Service>();
+        if (cb01 == null)
+        {
+            _logger.LogWarning("[REWIRE] ICb01Service non disponibile");
+            return;
+        }
+        cb01.AttachExtractor(item);
     }
 
     private void RewireStreamingExtractors(DownloadItem item)

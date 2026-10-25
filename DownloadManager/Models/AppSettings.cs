@@ -13,6 +13,9 @@ public class AppSettings
     public bool StreamingCreateSeriesFolder { get; set; } = true;
     public string StreamingMovieNamingPattern { get; set; } = "{Series} ({Anno})";
     public string StreamingSeriesNamingPattern { get; set; } = "{Episode}";
+    /// <summary>Pattern per i download da CB01: {OriginalFileName} è il nome del file su Maxstream.</summary>
+    public string Cb01MovieNamingPattern { get; set; } = "{OriginalFileName}";
+    public string Cb01SeriesNamingPattern { get; set; } = "{OriginalFileName}";
     public string SeasonFolderPattern { get; set; } = "Stagione {number}";
 
     /// <summary>Download simultanei della tab Anime.</summary>
@@ -29,11 +32,17 @@ public class AppSettings
     public Dictionary<string, string> ProviderDomains { get; set; } = new();
     public List<string> SearchHistory { get; set; } = new();
     public string ThemeVariant { get; set; } = "Default";
+    /// <summary>Versione dell'ultimo avvio: se cambia, al primo avvio si mostrano le novità.</summary>
+    public string LastRunVersion { get; set; } = "";
 
     public bool UseProxyForAnimeWorld { get; set; } = true;
     public bool UseProxyForAnimeSaturn { get; set; } = true;
     public bool UseProxyForStreamingCommunity { get; set; } = true;
     public bool UseProxyForDownloads { get; set; } = true;
+    public bool UseProxyForCb01 { get; set; }
+
+    /// <summary>URL di FlareSolverr (es. http://host:8191/token). Vuoto = bypass CF locale con Playwright.</summary>
+    public string FlareSolverrUrl { get; set; } = string.Empty;
 
     // ============================================================
     //  VIDEBOX CORRECTOR

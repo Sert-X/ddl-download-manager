@@ -185,6 +185,7 @@ public class ProxyService
             ProviderKeys.AnimeSaturn => p.IsEnabledForAnimeSaturn,
             ProviderKeys.StreamingCommunity => p.IsEnabledForStreamingCommunity,
             ProviderKeys.Downloads => p.IsEnabledForDownloads,
+            ProviderKeys.Cb01 => p.IsEnabledForCb01,
             _ => false
         };
     }
@@ -197,6 +198,7 @@ public class ProxyService
             case ProviderKeys.AnimeSaturn: p.IsEnabledForAnimeSaturn = value; break;
             case ProviderKeys.StreamingCommunity: p.IsEnabledForStreamingCommunity = value; break;
             case ProviderKeys.Downloads: p.IsEnabledForDownloads = value; break;
+            case ProviderKeys.Cb01: p.IsEnabledForCb01 = value; break;
         }
     }
 
@@ -208,6 +210,7 @@ public class ProxyService
             ProviderKeys.AnimeSaturn => p.ManuallyDisabledForAnimeSaturn,
             ProviderKeys.StreamingCommunity => p.ManuallyDisabledForStreamingCommunity,
             ProviderKeys.Downloads => p.ManuallyDisabledForDownloads,
+            ProviderKeys.Cb01 => p.ManuallyDisabledForCb01,
             _ => false
         };
     }
@@ -220,6 +223,7 @@ public class ProxyService
             case ProviderKeys.AnimeSaturn: p.ManuallyDisabledForAnimeSaturn = value; break;
             case ProviderKeys.StreamingCommunity: p.ManuallyDisabledForStreamingCommunity = value; break;
             case ProviderKeys.Downloads: p.ManuallyDisabledForDownloads = value; break;
+            case ProviderKeys.Cb01: p.ManuallyDisabledForCb01 = value; break;
         }
     }
 

@@ -1,5 +1,7 @@
-﻿using Avalonia;
+﻿using System.Diagnostics;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
@@ -138,6 +140,21 @@ public partial class MainWindow : Window
         RemoteFilesGrid.AddHandler(
             PointerReleasedEvent, OnRemoteGridPointerReleased,
             RoutingStrategies.Bubble, handledEventsToo: true);
+
+        // Episodi: caselle di spunta allineate alla selezione (Ctrl/Shift come in Windows)
+        GridCheckboxSelection.Attach(EpisodesGrid, v => _syncingEpisodeSelection = v);
+        GridCheckboxSelection.Attach(StreamingEpisodesGrid, v => _syncingStreamingEpisodeSelection = v);
+
+        // SFTP: una lettera porta al primo file/cartella che inizia così
+        static string? EntryName(object o) => o switch
+        {
+            LocalFileEntry l => l.Name,
+            SftpRemoteEntry r => r.Name,
+            _ => null
+        };
+        GridTypeAhead.Attach(LocalFilesGrid, EntryName);
+        GridTypeAhead.Attach(RemoteFilesGrid, EntryName);
+        GridTypeAhead.Attach(Server2FilesGrid, EntryName);
     }
 
     public MainWindow()
@@ -1093,6 +1110,7 @@ public partial class MainWindow : Window
     {
         if (sender is not DataGrid grid) return;
         if (!e.GetCurrentPoint(grid).Properties.IsLeftButtonPressed) return;
+        if (!DragGuard.IsOnRow(e.Source)) { _localPointerDown = false; _localPressedArgs = null; return; }
         _localDragStart = e.GetPosition(grid);
         _localPointerDown = true;
         _localPressedArgs = e;
@@ -1145,6 +1163,7 @@ public partial class MainWindow : Window
     {
         if (sender is not DataGrid grid) return;
         if (!e.GetCurrentPoint(grid).Properties.IsLeftButtonPressed) return;
+        if (!DragGuard.IsOnRow(e.Source)) { _remotePointerDown = false; _remotePressedArgs = null; return; }
         _remoteDragStart = e.GetPosition(grid);
         _remotePointerDown = true;
         _remotePressedArgs = e;
@@ -1295,6 +1314,33 @@ public partial class MainWindow : Window
 
     private void OnStreamingClearSearchHistoryClick(object? sender, RoutedEventArgs e)
         => Vm?.Streaming.ClearSearchHistoryCommand.Execute(null);
+
+    // ============================================================
+    //  RISULTATI DI RICERCA — APRI / COPIA LINK DEL POST
+    // ============================================================
+
+    private static string? ResultLink(object? sender) => (sender as Control)?.DataContext switch
+    {
+        AnimeSearchResult a => a.Link,
+        MovieSearchResult m => m.Link,
+        _ => null
+    };
+
+    private void OnOpenResultInBrowserClick(object? sender, RoutedEventArgs e)
+    {
+        e.Handled = true;   // il clic sull'icona non deve aprire anche la serie
+        var link = ResultLink(sender);
+        if (!Uri.TryCreate(link, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            return;
+        try { Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }); }
+        catch (Exception ex) { Console.WriteLine($">>> Apertura browser fallita: {ex.Message}"); }
+    }
+
+    private async void OnCopyResultLinkClick(object? sender, RoutedEventArgs e)
+    {
+        var link = ResultLink(sender);
+        if (!string.IsNullOrEmpty(link)) await ClipboardHelper.SetTextAsync(link);
+    }
 
     // ============================================================
     //  TAB FILM/SERIE — DOPPIO CLICK RISULTATO

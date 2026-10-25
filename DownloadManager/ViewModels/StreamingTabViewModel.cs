@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.Input;
 using DownloadManager.Models;
 using DownloadManager.Persistence;
 using DownloadManager.Services.Download;
+using DownloadManager.Services.Streaming.Cb01;
 using DownloadManager.Services.Streaming.StreamingCommunity;
 using Microsoft.Extensions.Logging;
 using System.IO;
@@ -18,6 +19,7 @@ namespace DownloadManager.ViewModels;
 public partial class StreamingTabViewModel : ViewModelBase
 {
     private readonly IStreamingCommunityService _service;
+    private readonly ICb01Service _cb01;
     private readonly DownloadQueueService _queueService;
     private readonly FileNameBuilder _fileNameBuilder;
     private readonly SettingsService _settings;
@@ -25,8 +27,6 @@ public partial class StreamingTabViewModel : ViewModelBase
     private readonly ILogger<StreamingTabViewModel> _logger;
     private readonly ObservableCollection<DownloadItem> _downloads = new();
     private CancellationTokenSource? _batchCts;
-    // "Vince l'ultima richiesta": ogni operazione ha un numero; i risultati di una
-    // richiesta superata (nuova ricerca, altro titolo, altra stagione) vengono ignorati.
     private int _searchSeq, _seasonsSeq, _episodesSeq, _qualitiesSeq;
 
     private const string CategoryName = "streaming";
@@ -34,6 +34,11 @@ public partial class StreamingTabViewModel : ViewModelBase
     // ============================================================
     //  PROPERTY RICERCA
     // ============================================================
+
+    // === Provider selector ===
+    public string[] AvailableProviders { get; } = ["StreamingCommunity", "CB01"];
+    [ObservableProperty] private string _selectedProvider = "StreamingCommunity";
+    public bool IsCb01 => SelectedProvider == "CB01";
 
     [ObservableProperty] private string _searchQuery = string.Empty;
     [ObservableProperty] private string _statusMessage = "Cerca un film o una serie TV per iniziare.";
@@ -50,6 +55,8 @@ public partial class StreamingTabViewModel : ViewModelBase
     // === Due pattern separati per Film e Serie ===
     [ObservableProperty] private string _movieNamingPattern = "{Series} ({Anno})";
     [ObservableProperty] private string _seriesNamingPattern = "{Episode}";
+    [ObservableProperty] private string _cb01MovieNamingPattern = "{OriginalFileName}";
+    [ObservableProperty] private string _cb01SeriesNamingPattern = "{OriginalFileName}";
     [ObservableProperty] private string _seasonFolderPattern = "Stagione {number}";
 
     [ObservableProperty] private ObservableCollection<VideoQuality> _availableQualities = new();
@@ -143,7 +150,9 @@ public partial class StreamingTabViewModel : ViewModelBase
     /// (almeno un elemento in AvailableQualities). Blocca il pulsante
     /// "Scarica film" sia durante il caricamento sia in caso di errore.
     /// </summary>
-    public bool CanDownloadMovie => !IsQualitiesLoading && AvailableQualities.Count > 0;
+    public bool CanDownloadMovie => IsCb01
+        ? (HasSelectedResult && !IsLoadingEpisodes)
+        : (!IsQualitiesLoading && AvailableQualities.Count > 0);
 
     // === Cartella base: usa settings streaming separati ===
     public string BaseDownloadFolder
@@ -195,6 +204,18 @@ public partial class StreamingTabViewModel : ViewModelBase
             }
             catch { return "(pattern non valido)"; }
         }
+    }
+
+    // Anteprime CB01: {OriginalFileName} è il nome reale del file su Maxstream
+    public string Cb01MoviePatternPreview => SafePreview(() => FileNameBuilder.ApplyPattern(
+        Cb01MovieNamingPattern, "Nome Film", 1, "Titolo", "Nome.Film.2024.1080p.WEBDL", year: "2024") + ".mkv");
+
+    public string Cb01SeriesPatternPreview => SafePreview(() => FileNameBuilder.ApplyPattern(
+        Cb01SeriesNamingPattern, "Nome Serie", 5, "Episodio 5", "Nome.Serie.01x05.Titolo", season: 1) + ".mp4");
+
+    private static string SafePreview(Func<string> build)
+    {
+        try { return build(); } catch { return "(pattern non valido)"; }
     }
 
     public string SeasonFolderPreview
@@ -289,6 +310,7 @@ public partial class StreamingTabViewModel : ViewModelBase
 
     public StreamingTabViewModel(
         IStreamingCommunityService service,
+        ICb01Service cb01,
         DownloadQueueService queueService,
         FileNameBuilder fileNameBuilder,
         SettingsService settings,
@@ -296,6 +318,7 @@ public partial class StreamingTabViewModel : ViewModelBase
         SharedState shared)
     {
         _service = service;
+        _cb01 = cb01;
         _queueService = queueService;
         _fileNameBuilder = fileNameBuilder;
         _settings = settings;
@@ -304,6 +327,8 @@ public partial class StreamingTabViewModel : ViewModelBase
 
         MovieNamingPattern = _settings.Current.StreamingMovieNamingPattern;
         SeriesNamingPattern = _settings.Current.StreamingSeriesNamingPattern;
+        Cb01MovieNamingPattern = _settings.Current.Cb01MovieNamingPattern;
+        Cb01SeriesNamingPattern = _settings.Current.Cb01SeriesNamingPattern;
         SeasonFolderPattern = _settings.Current.SeasonFolderPattern;
         // Slot propri: prima questa riga forzava a 1 il limite di TUTTA la coda,
         // rallentando anche gli anime.
@@ -462,6 +487,22 @@ public partial class StreamingTabViewModel : ViewModelBase
     //  PROPERTY CHANGED
     // ============================================================
 
+    partial void OnSelectedProviderChanged(string value)
+    {
+        SearchResults.Clear();
+        Episodes.Clear();
+        Seasons.Clear();
+        SelectedResult = null;
+        SelectedSeason = null;
+        AvailableQualities.Clear();
+        SelectedQuality = null;
+        ClearTracks();
+        OnPropertyChanged(nameof(IsCb01));
+        StatusMessage = value == "CB01"
+            ? "Provider CB01 selezionato. Cerca un film o una serie."
+            : "Cerca un film o una serie TV per iniziare.";
+    }
+
     partial void OnSelectedResultChanged(MovieSearchResult? value)
     {
         OnPropertyChanged(nameof(SelectedResultName));
@@ -485,7 +526,8 @@ public partial class StreamingTabViewModel : ViewModelBase
         if (SelectedResult == null || !SelectedResult.IsSeries) return;
 
         _ = LoadEpisodesForSeasonAsync(SelectedResult.Link, value.Number);
-        _ = LoadQualitiesForCurrentSelectionAsync();
+        if (!IsCb01)
+            _ = LoadQualitiesForCurrentSelectionAsync();
     }
 
     partial void OnMovieNamingPatternChanged(string value)
@@ -500,6 +542,20 @@ public partial class StreamingTabViewModel : ViewModelBase
         _settings.Current.StreamingSeriesNamingPattern = value;
         _settings.Save();
         OnPropertyChanged(nameof(SeriesPatternPreview));
+    }
+
+    partial void OnCb01MovieNamingPatternChanged(string value)
+    {
+        _settings.Current.Cb01MovieNamingPattern = value;
+        _settings.Save();
+        OnPropertyChanged(nameof(Cb01MoviePatternPreview));
+    }
+
+    partial void OnCb01SeriesNamingPatternChanged(string value)
+    {
+        _settings.Current.Cb01SeriesNamingPattern = value;
+        _settings.Save();
+        OnPropertyChanged(nameof(Cb01SeriesPatternPreview));
     }
 
     partial void OnSeasonFolderPatternChanged(string value)
@@ -538,14 +594,20 @@ public partial class StreamingTabViewModel : ViewModelBase
         try
         {
             StatusMessage = $"Ricerca in corso per '{term}'...";
-            var results = await _service.SearchAsync(term);
-            if (seq != _searchSeq) return;   // superata da una ricerca nuova
+
+            List<MovieSearchResult> results;
+            if (IsCb01)
+                results = await _cb01.SearchAsync(term);
+            else
+                results = await _service.SearchAsync(term);
+
+            if (seq != _searchSeq) return;
 
             SearchResults.Clear();
             foreach (var r in results)
             {
                 SearchResults.Add(r);
-                _ = LoadPosterAsync(r);   // scarica in background, non blocca la UI
+                _ = LoadPosterAsync(r);
             }
 
             StatusMessage = $"Trovati {results.Count} risultati per '{term}'.";
@@ -636,8 +698,10 @@ public partial class StreamingTabViewModel : ViewModelBase
         try
         {
             StatusMessage = $"Analisi di '{result.Title}'...";
-            var seasons = await _service.GetSeasonsAsync(result.Link);
-            if (seq != _seasonsSeq || !ReferenceEquals(SelectedResult, result)) return;   // scelto un altro titolo
+            var seasons = IsCb01
+                ? await _cb01.GetSeasonsAsync(result.Link)
+                : await _service.GetSeasonsAsync(result.Link);
+            if (seq != _seasonsSeq || !ReferenceEquals(SelectedResult, result)) return;
 
             if (seasons.Count == 0)
             {
@@ -645,8 +709,10 @@ public partial class StreamingTabViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsSelectedResultSeries));
                 OnPropertyChanged(nameof(IsSelectedResultMovie));
 
-                StatusMessage = $"Film selezionato: '{result.Title}'. Clicca 'Scarica film' per procedere.";
-                _ = LoadQualitiesForCurrentSelectionAsync();
+                StatusMessage = IsCb01
+                    ? $"Film selezionato: '{result.Title}'. Clicca 'Scarica film' per procedere (Maxstream)."
+                    : $"Film selezionato: '{result.Title}'. Clicca 'Scarica film' per procedere.";
+                if (!IsCb01) _ = LoadQualitiesForCurrentSelectionAsync();
                 return;
             }
 
@@ -676,8 +742,10 @@ public partial class StreamingTabViewModel : ViewModelBase
         try
         {
             StatusMessage = $"Caricamento episodi stagione {seasonNumber}...";
-            var episodes = await _service.GetEpisodesAsync(seriesLink, seasonNumber);
-            if (seq != _episodesSeq) return;   // scelta un'altra stagione o un altro titolo
+            var episodes = IsCb01
+                ? await _cb01.GetEpisodesAsync(seriesLink, seasonNumber)
+                : await _service.GetEpisodesAsync(seriesLink, seasonNumber);
+            if (seq != _episodesSeq) return;
 
             Episodes.Clear();
             foreach (var ep in episodes) Episodes.Add(ep);
@@ -835,20 +903,37 @@ public partial class StreamingTabViewModel : ViewModelBase
 
         try
         {
-            // Come per gli episodi: il film entra subito in coda e il link (che scade in
-            // pochi minuti) viene estratto all'avvio del download.
-            var link = movie.Link;
-            Func<CancellationToken, Task<string?>> extractor = _ => _service.GetMovieStreamUrlAsync(link);
+            if (IsCb01)
+            {
+                // Il link (HD/SD, Maxstream/Mixdrop) si sceglie al via del download, provando quelli del post
+                var links = await _cb01.GetEpisodesAsync(movie.Link, 1);
+                if (links.Count == 0) { StatusMessage = "Nessun link Maxstream trovato nel post."; return; }
 
-            var item = BuildDownloadItem(
-                "", movie.Title, 1, movie.Title,
-                urlExtractor: extractor,
-                contentLink: movie.Link,
-                episodeId: 0,
-                isSeries: false,
-                year: movie.Year ?? "");
+                var item = BuildDownloadItem(
+                    "", movie.Title, 1, movie.Title,
+                    contentLink: movie.Link,
+                    episodeId: 0,
+                    isSeries: false,
+                    year: movie.Year ?? "",
+                    providerKey: "CB01");
 
-            await _queueService.EnqueueAsync(item);
+                await _queueService.EnqueueAsync(item);
+            }
+            else
+            {
+                var link = movie.Link;
+                Func<CancellationToken, Task<string?>> extractor = _ => _service.GetMovieStreamUrlAsync(link);
+
+                var item = BuildDownloadItem(
+                    "", movie.Title, 1, movie.Title,
+                    urlExtractor: extractor,
+                    contentLink: movie.Link,
+                    episodeId: 0,
+                    isSeries: false,
+                    year: movie.Year ?? "");
+
+                await _queueService.EnqueueAsync(item);
+            }
 
             StatusMessage = $"Film accodato: {movie.Title}";
         }
@@ -1007,8 +1092,12 @@ public partial class StreamingTabViewModel : ViewModelBase
 
                 try
                 {
-                    var eps = await _service.GetEpisodesAsync(series.Link, season.Number);
-                    var toAdd = eps.Where(ep => ep.EpisodeId > 0).ToList();
+                    var eps = IsCb01
+                        ? await _cb01.GetEpisodesAsync(series.Link, season.Number)
+                        : await _service.GetEpisodesAsync(series.Link, season.Number);
+                    var toAdd = IsCb01
+                        ? eps.Where(ep => int.TryParse(ep.Number, out var n) && n > 0).ToList()
+                        : eps.Where(ep => ep.EpisodeId > 0).ToList();
 
                     var queued = await EnqueueEpisodesAsync(
                         series.Link, season.Number, seriesName, toAdd, token);
@@ -1064,18 +1153,30 @@ public partial class StreamingTabViewModel : ViewModelBase
             var epNum = int.TryParse(ep.Number, out var parsed) ? parsed : 0;
             if (epNum <= 0 || !existing.Add(epNum)) continue;
 
-            int? epId = ep.EpisodeId > 0 ? ep.EpisodeId : null;
-            Func<CancellationToken, Task<string?>> extractor = _ => _service.GetVideoUrlAsync(
-                seriesLink, isSeries: true,
-                seasonNumber: seasonNumber, episodeNumber: epNum,
-                episodeId: epId);
+            Func<CancellationToken, Task<string?>>? extractor = null;
+            string provKey;
+
+            if (IsCb01)
+            {
+                provKey = "CB01";
+            }
+            else
+            {
+                int? epId = ep.EpisodeId > 0 ? ep.EpisodeId : null;
+                extractor = _ => _service.GetVideoUrlAsync(
+                    seriesLink, isSeries: true,
+                    seasonNumber: seasonNumber, episodeNumber: epNum,
+                    episodeId: epId);
+                provKey = "StreamingCommunity";
+            }
 
             items.Add(BuildDownloadItem(
                 "", seriesName, epNum, ep.Title, seasonNumber,
                 extractor, null,
                 contentLink: seriesLink,
                 episodeId: ep.EpisodeId,
-                isSeries: true));
+                isSeries: true,
+                providerKey: provKey));
         }
 
         await _queueService.EnqueueManyAsync(items);
@@ -1105,10 +1206,13 @@ public partial class StreamingTabViewModel : ViewModelBase
         string contentLink = "",
         int episodeId = 0,
         bool isSeries = false,
-        string year = "")
+        string year = "",
+        string providerKey = "StreamingCommunity")
     {
-        // === Pattern corretto in base al tipo ===
-        var pattern = isSeries ? SeriesNamingPattern : MovieNamingPattern;
+        var isCb01Provider = providerKey == "CB01";
+        var pattern = isCb01Provider
+            ? (isSeries ? Cb01SeriesNamingPattern : Cb01MovieNamingPattern)
+            : (isSeries ? SeriesNamingPattern : MovieNamingPattern);
 
         var item = new DownloadItem
         {
@@ -1122,20 +1226,23 @@ public partial class StreamingTabViewModel : ViewModelBase
             Category = CategoryName,
             UrlExtractor = urlExtractor,
             AudioExtractor = audioExtractor,
-            CookieExtractor = async token =>
+            CookieExtractor = isCb01Provider ? null : async token =>
             {
                 return await _service.GetSessionCookiesNetscapeAsync();
             },
-            QualityName = SelectedQuality?.Name ?? "",
-            ProviderKey = "StreamingCommunity",
-            AudioLanguages = string.Join("|", AudioTracks.Where(t => t.IsSelected).Select(t => t.Key)),
-            SubtitleLanguages = string.Join("|", SubtitleTracks.Where(t => t.IsSelected).Select(t => t.Key)),
-            BurnSubtitles = BurnSubtitles && SubtitleTracks.Any(t => t.IsSelected),
+            QualityName = isCb01Provider ? "" : (SelectedQuality?.Name ?? ""),
+            ProviderKey = providerKey,
+            AudioLanguages = isCb01Provider ? "" : string.Join("|", AudioTracks.Where(t => t.IsSelected).Select(t => t.Key)),
+            SubtitleLanguages = isCb01Provider ? "" : string.Join("|", SubtitleTracks.Where(t => t.IsSelected).Select(t => t.Key)),
+            BurnSubtitles = isCb01Provider ? false : (BurnSubtitles && SubtitleTracks.Any(t => t.IsSelected)),
 
             ContentLink = contentLink,
             EpisodeId = episodeId,
             IsSeries = isSeries
         };
+
+        // CB01: link e nome file reale si conoscono solo al via (il percorso viene ricalcolato allora)
+        if (isCb01Provider) _cb01.AttachExtractor(item);
 
         var dummy = string.IsNullOrEmpty(videoUrl)
             ? "https://placeholder/episode.mp4"

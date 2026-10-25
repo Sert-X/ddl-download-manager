@@ -10,6 +10,7 @@ using DownloadManager.Services.Anime;
 using DownloadManager.Services.Anime.AnimeWorld;
 using DownloadManager.Services.Anime.AnimeSaturn;
 using DownloadManager.Services.Streaming;
+using DownloadManager.Services.Streaming.Cb01;
 using DownloadManager.Services.Streaming.StreamingCommunity;
 using DownloadManager.Services.Download;
 using DownloadManager.Services.FileOrganizer;
@@ -94,9 +95,12 @@ public partial class App : Application
         services.AddSingleton<IStreamingProvider>(sp =>
             sp.GetRequiredService<IStreamingCommunityService>());
         services.AddSingleton<DownloadManager.Persistence.AccountRepository>();
+        services.AddSingleton<DownloadManager.Persistence.MaxstreamAccountRepository>();
         services.AddSingleton<DownloadManager.Services.Streaming.StreamingCommunity.StreamingCommunityAuthService>();
         services.AddSingleton<DownloadManager.ViewModels.AccountTabViewModel>();
         services.AddSingleton<IStreamingCommunityService, StreamingCommunityService>();
+        services.AddSingleton<ICb01Service, Cb01Service>();
+        services.AddSingleton<MaxstreamService>();
         services.AddSingleton<StreamingProviderRegistry>();
         services.AddSingleton<FfmpegLocator>();
         services.AddSingleton<DownloadManager.Services.Download.YtDlpLocator>();
@@ -305,6 +309,8 @@ public partial class App : Application
             // Attendi che la MainWindow sia visibile
             await Task.Delay(3000);
 
+            await ShowWhatsNewIfUpdatedAsync(desktop);
+
             var mgr = new Velopack.UpdateManager(
                 new Velopack.Sources.GithubSource(
                     "https://github.com/Sert-X/ddl-download-manager",
@@ -342,20 +348,54 @@ public partial class App : Application
                     });
             });
 
+            // silent: niente finestra di sistema di Velopack ("Aggiornamento alla versione..."):
+            // l'avanzamento lo mostra il nostro dialog e, al riavvio, la schermata delle novità
             switch (choice)
             {
                 case UpdateChoice.InstallNow:
-                    mgr.ApplyUpdatesAndRestart(update);
+                    mgr.WaitExitThenApplyUpdates(update.TargetFullRelease, silent: true, restart: true);
+                    await Dispatcher.UIThread.InvokeAsync(() => desktop.Shutdown());
                     break;
 
                 case UpdateChoice.InstallLater:
-                    mgr.WaitExitThenApplyUpdates(update);
+                    mgr.WaitExitThenApplyUpdates(update.TargetFullRelease, silent: true, restart: false);
                     break;
             }
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[UPDATE] ECCEZIONE: {ex}");
+        }
+    }
+
+    /// <summary>Primo avvio dopo un aggiornamento: finestra "Aggiornamento completato" con le novità.</summary>
+    private static async Task ShowWhatsNewIfUpdatedAsync(IClassicDesktopStyleApplicationLifetime desktop)
+    {
+        try
+        {
+            var settings = Services!.GetRequiredService<SettingsService>();
+            var v = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version;
+            if (v == null) return;
+            var current = $"{v.Major}.{v.Minor}.{v.Build}";
+            var previous = settings.Current.LastRunVersion;
+
+            if (previous == current) return;
+            settings.Current.LastRunVersion = current;
+            settings.Save();
+            if (string.IsNullOrEmpty(previous)) return;   // prima installazione: niente novità da mostrare
+
+            var changelog = await DownloadManager.Services.Update.GitHubReleaseFetcher.FetchChangelogAsync(
+                "Sert-X", "ddl-download-manager", "v" + current);
+
+            await Dispatcher.UIThread.InvokeAsync(async () =>
+            {
+                if (desktop.MainWindow is { } win)
+                    await Views.UpdateDialog.ShowUpdatedAsync(win, current, changelog);
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[UPDATE] Novità non mostrate: {ex.Message}");
         }
     }
 
@@ -389,6 +429,8 @@ public partial class App : Application
                 var anime = Services!.GetRequiredService<IAnimeWorldService>();
                 var t2 = anime.DisposeAsync();
                 Task.WaitAny(t2, Task.Delay(3000));
+
+                try { Services!.GetRequiredService<MaxstreamService>().DisposeAsync().AsTask().Wait(3000); } catch { }
             }
         }
         catch { }

@@ -23,6 +23,7 @@ public class ProxyProvider : IProxyProvider
             ProviderKeys.AnimeSaturn => s.UseProxyForAnimeSaturn,
             ProviderKeys.StreamingCommunity => s.UseProxyForStreamingCommunity,
             ProviderKeys.Downloads => s.UseProxyForDownloads,
+            ProviderKeys.Cb01 => s.UseProxyForCb01,
             _ => true
         };
     }

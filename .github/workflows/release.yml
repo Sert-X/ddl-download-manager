@@ -82,6 +82,13 @@ jobs:
             Where-Object { $_.Name -in @('ffmpeg.exe','ffprobe.exe','yt-dlp.exe','WinSCP.exe') } |
             Select-Object FullName, Length
 
+      - name: Installer art with version
+        shell: pwsh
+        run: |
+          # Splash di Setup.exe con la versione della release
+          pip install pillow
+          python DownloadManager/Installer/make_installer_art.py --version "${{ steps.version.outputs.VERSION }}"
+
       - name: Install vpk
         run: dotnet tool install -g vpk
 
