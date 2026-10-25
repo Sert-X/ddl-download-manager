@@ -1,0 +1,55 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="DownloadManager.Views.ProxyImportDialog"
+        Title="Importa proxy"
+        Width="560"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        ShowInTaskbar="False"
+        Background="{DynamicResource AppBackgroundBrush}">
+
+    <StackPanel Margin="22" Spacing="14">
+
+        <Grid ColumnDefinitions="Auto, *">
+            <Border Width="42" Height="42" CornerRadius="21" Background="{DynamicResource AppAccentSoftBrush}" VerticalAlignment="Top">
+                <Path Classes="icon accent" Data="{StaticResource IconUpload}" Width="20" Height="20"/>
+            </Border>
+            <StackPanel Grid.Column="1" Margin="14,0,0,0" Spacing="4" VerticalAlignment="Center">
+                <TextBlock Text="Importa proxy" FontSize="15" FontWeight="Bold"/>
+                <TextBlock FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource AppTextMutedBrush}"
+                           Text="Incolla la lista o caricala da un file (.txt / .csv): una riga per proxy, es. host:porta, host:porta:utente:password, http://utente:password@host:porta. I proxy già presenti non vengono duplicati."/>
+            </StackPanel>
+        </Grid>
+
+        <Grid ColumnDefinitions="*, Auto">
+            <TextBlock x:Name="LinesText" Text="Nessuna riga" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}"/>
+            <Button Grid.Column="1" Click="OnFromFileClick" ToolTip.Tip="Carica le righe da un file .txt o .csv">
+                <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconFolder}"/><TextBlock Text="Da file..."/></StackPanel>
+            </Button>
+        </Grid>
+
+        <TextBox x:Name="ContentBox" AcceptsReturn="True" TextWrapping="NoWrap" Height="170"
+                 FontFamily="Consolas,Menlo,monospace" FontSize="12"
+                 PlaceholderText="1.2.3.4:8080&#x0a;5.6.7.8:3128:utente:password&#x0a;socks5://9.9.9.9:1080"
+                 TextChanged="OnContentChanged"/>
+
+        <Border Background="{DynamicResource AppSurface2Brush}" CornerRadius="8" Padding="12">
+            <StackPanel Spacing="8">
+                <TextBlock Text="In quali liste aggiungerli?" FontWeight="SemiBold"/>
+                <RadioButton x:Name="AllListsRadio" GroupName="dest" Content="Tutte le liste" IsChecked="True" IsCheckedChanged="OnDestinationChanged"/>
+                <RadioButton x:Name="SomeListsRadio" GroupName="dest" Content="Solo nelle liste scelte:" IsCheckedChanged="OnDestinationChanged"/>
+                <WrapPanel x:Name="ProvidersPanel" Orientation="Horizontal" ItemSpacing="16" LineSpacing="6" Margin="24,0,0,0" IsEnabled="False"/>
+            </StackPanel>
+        </Border>
+
+        <TextBlock x:Name="ErrorText" Foreground="{DynamicResource AppDangerBrush}" FontSize="12" IsVisible="False" TextWrapping="Wrap"/>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+            <Button Classes="ghost" MinWidth="100" Click="OnCancelClick"><TextBlock Text="Annulla"/></Button>
+            <Button Classes="accent" MinWidth="120" IsDefault="True" Click="OnImportClick">
+                <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCheck}"/><TextBlock Text="Importa"/></StackPanel>
+            </Button>
+        </StackPanel>
+    </StackPanel>
+</Window>

@@ -396,6 +396,14 @@ public class MaxstreamService : IAsyncDisposable
         var html = await PostPageAsync(baseUrl + "/", postData, ct);
 
         var info = ParseAccount(html);
+        // La home è passata ma il login no: Maxstream ha rimandato alla sua pagina di accesso protetta
+        // (succede dopo molti accessi ravvicinati o da IP diversi), non è un blocco della connessione
+        if (!info.LoggedIn && !_useFlare && IsCloudflareBlock(html))
+            info = info with
+            {
+                Message = "Maxstream ha messo in verifica il login di questo account (troppi accessi ravvicinati o da IP diversi). " +
+                          "Accedi una volta dal browser su maxstream.video, poi riprova; di solito si sblocca da solo dopo un po'."
+            };
         if (info.LoggedIn)
         {
             _loggedIn = true;

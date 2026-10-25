@@ -7,6 +7,9 @@ namespace DownloadManager.Models;
 public enum ProxyProtocol { Http, Socks5 }
 public enum ProxyAuthType { None, UserPassword }
 
+/// <summary>
+/// Un proxy dell'archivio. In quali liste provider compare (e con che esito) sta in <see cref="Lists"/>.
+/// </summary>
 public partial class ProxyConfig : ObservableObject
 {
     public int Id { get; set; }
@@ -20,70 +23,49 @@ public partial class ProxyConfig : ObservableObject
     [ObservableProperty] private string _password = string.Empty;
 
     [ObservableProperty] private bool _isTesting;
-    [ObservableProperty] private string _testResult = string.Empty;
-    [ObservableProperty] private DateTime _lastTested;
     [ObservableProperty] private bool _isSelected;
 
-    // === Provider enablement (per-proxy) ===
-    [ObservableProperty] private bool _isEnabledForAnimeWorld;
-    [ObservableProperty] private bool _isEnabledForAnimeSaturn;
-    [ObservableProperty] private bool _isEnabledForStreamingCommunity;
-    [ObservableProperty] private bool _isEnabledForDownloads;
-    [ObservableProperty] private bool _isEnabledForCb01;
-    /// <summary>Attivo per il provider attualmente selezionato nella UI (aggiornato dal VM).</summary>
+    // === Vista della lista selezionata nella tab (aggiornati dal VM) ===
+    [ObservableProperty] private string _testResult = string.Empty;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusOk), nameof(StatusFailed), nameof(StatusExcluded), nameof(StatusUntested), nameof(StatusText))]
+    private ProxyEntryStatus _statusForSelected;
     [ObservableProperty] private bool _isActiveForSelectedProvider;
+    [ObservableProperty] private string _lastTestedText = string.Empty;
+    [ObservableProperty] private string _latencyText = string.Empty;
+    [ObservableProperty] private string _detailText = string.Empty;
+    [ObservableProperty] private IReadOnlyList<ProxyListBadge> _listBadges = Array.Empty<ProxyListBadge>();
+    [ObservableProperty] private bool _showStatus = true;
 
-    // Flag interni: "l'utente ha disattivato manualmente questo provider"
-    public bool ManuallyDisabledForAnimeWorld { get; set; }
-    public bool ManuallyDisabledForAnimeSaturn { get; set; }
-    public bool ManuallyDisabledForStreamingCommunity { get; set; }
-    public bool ManuallyDisabledForDownloads { get; set; }
-    public bool ManuallyDisabledForCb01 { get; set; }
+    public bool StatusOk => StatusForSelected == ProxyEntryStatus.Ok;
+    public bool StatusFailed => StatusForSelected == ProxyEntryStatus.Failed;
+    public bool StatusExcluded => StatusForSelected == ProxyEntryStatus.Excluded;
+    public bool StatusUntested => StatusForSelected == ProxyEntryStatus.Untested;
+    public string StatusText => ProxyListBadge.Label(StatusForSelected);
 
-    // Helper: ritorna true se il proxy è attivo per almeno un provider
-    public bool IsEnabled =>
-        IsEnabledForAnimeWorld ||
-        IsEnabledForAnimeSaturn ||
-        IsEnabledForStreamingCommunity ||
-        IsEnabledForDownloads ||
-        IsEnabledForCb01;
+    // === Rotazione durante l'uso ===
+    public DateTime? LastFailedUtc { get; set; }
+    public int ConsecutiveFailures { get; set; }
 
-    partial void OnIsEnabledForAnimeWorldChanged(bool value)
+    /// <summary>Liste provider in cui compare il proxy (chiave = ProviderKeys.*).</summary>
+    public Dictionary<string, ProxyListEntry> Lists { get; set; } = new();
+
+    public ProxyListEntry? EntryFor(string provider) => Lists.TryGetValue(provider, out var e) ? e : null;
+
+    public ProxyListEntry GetOrAddEntry(string provider)
     {
-        OnPropertyChanged(nameof(IsEnabled));
-        OnPropertyChanged(nameof(ActiveProvidersText));
+        if (!Lists.TryGetValue(provider, out var e))
+            Lists[provider] = e = new ProxyListEntry { Provider = provider };
+        return e;
     }
-    partial void OnIsEnabledForAnimeSaturnChanged(bool value)
-    {
-        OnPropertyChanged(nameof(IsEnabled));
-        OnPropertyChanged(nameof(ActiveProvidersText));
-    }
-    partial void OnIsEnabledForStreamingCommunityChanged(bool value)
-    {
-        OnPropertyChanged(nameof(IsEnabled));
-        OnPropertyChanged(nameof(ActiveProvidersText));
-    }
-    partial void OnIsEnabledForDownloadsChanged(bool value)
-    {
-        OnPropertyChanged(nameof(IsEnabled));
-        OnPropertyChanged(nameof(ActiveProvidersText));
-    }
-    partial void OnIsEnabledForCb01Changed(bool value)
-    {
-        OnPropertyChanged(nameof(IsEnabled));
-        OnPropertyChanged(nameof(ActiveProvidersText));
-    }
+
+    /// <summary>Stesso proxy anche se scritto in modo diverso: host (minuscolo), porta e utente.</summary>
+    public string IdentityKey => $"{Host.Trim().ToLowerInvariant()}:{Port}:{Username.Trim()}";
 
     public string ProtocolText => Protocol == ProxyProtocol.Http ? "HTTP" : "SOCKS5";
     public string DisplayText => $"{ProtocolText.ToLower()}://{Host}:{Port}";
-    public string AuthText => Auth == ProxyAuthType.None
-        ? "senza auth"
-        : $"auth: {Username}";
-
-    public bool IsFailed => TestResult.StartsWith("❌");
-
-    partial void OnTestResultChanged(string value) => OnPropertyChanged(nameof(IsFailed));
-
+    public string Address => $"{Host}:{Port}";
+    public string AuthText => Auth == ProxyAuthType.None ? "senza auth" : $"auth: {Username}";
     public string PlaywrightServer => $"{ProtocolText.ToLower()}://{Host}:{Port}";
 
     public int ProtocolIndex
@@ -108,12 +90,14 @@ public partial class ProxyConfig : ObservableObject
 
     partial void OnHostChanged(string value)
     {
+        OnPropertyChanged(nameof(Address));
         OnPropertyChanged(nameof(DisplayText));
         OnPropertyChanged(nameof(PlaywrightServer));
     }
 
     partial void OnPortChanged(int value)
     {
+        OnPropertyChanged(nameof(Address));
         OnPropertyChanged(nameof(DisplayText));
         OnPropertyChanged(nameof(PlaywrightServer));
     }
@@ -126,64 +110,5 @@ public partial class ProxyConfig : ObservableObject
         OnPropertyChanged(nameof(AuthIndex));
     }
 
-    // === Rotazione ===
-    public DateTime? LastFailedUtc { get; set; }
-    public int ConsecutiveFailures { get; set; }
-
-    // === Risultati test per provider ===
-    private Dictionary<string, string> _providerResults = new();
-
-    public Dictionary<string, string> ProviderResults
-    {
-        get => _providerResults;
-        set
-        {
-            _providerResults = value ?? new();
-            OnPropertyChanged(nameof(ProviderResults));
-            OnPropertyChanged(nameof(ProviderResultsText));
-        }
-    }
-
-    public string ProviderResultsText
-    {
-        get
-        {
-            if (_providerResults.Count == 0) return "(nessun test provider)";
-            return string.Join(" | ", _providerResults
-                .OrderBy(kv => kv.Key)
-                .Select(kv => $"{kv.Key}: {kv.Value}"));
-        }
-    }
-
-    public void SetProviderResult(string provider, string result)
-    {
-        _providerResults[provider] = result;
-        OnPropertyChanged(nameof(ProviderResults));
-        OnPropertyChanged(nameof(ProviderResultsText));
-    }
-
-    public string ActiveProvidersText
-    {
-        get
-        {
-            var list = new List<string>();
-            if (IsEnabledForAnimeWorld) list.Add("AW");
-            if (IsEnabledForAnimeSaturn) list.Add("AS");
-            if (IsEnabledForStreamingCommunity) list.Add("SC");
-            if (IsEnabledForDownloads) list.Add("DL");
-            if (IsEnabledForCb01) list.Add("CB");
-            return list.Count == 0 ? "" : "[" + string.Join(" ", list) + "]";
-        }
-    }
-
-    /// <summary>Ritorna true se il proxy ha test ✅ per il provider specificato.</summary>
-    public bool HasTestOkFor(string providerKey)
-        => ProviderResults.TryGetValue(providerKey, out var r)
-           && r.StartsWith("✅");
-
-    /// <summary>
-    /// Provider da cui questo proxy è stato "rimosso dalla lista corrente".
-    /// Il proxy resta in DB ma non appare nella vista di quel provider.
-    /// </summary>
-    public HashSet<string> RemovedFromProviders { get; set; } = new();
+    public override string ToString() => $"{Host}:{Port}";
 }

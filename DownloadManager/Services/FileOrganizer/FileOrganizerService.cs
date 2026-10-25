@@ -133,7 +133,7 @@ public class FileOrganizerService : IFileOrganizerService
                 if (createSubfolders && !string.IsNullOrWhiteSpace(series))
                     destFolder = Path.Combine(folder, Sanitize(series));
 
-                var newPath = Path.Combine(destFolder, Sanitize(newName) + "." + ext);
+                var newPath = Path.Combine(destFolder, SanitizeRelative(newName, Path.DirectorySeparatorChar) + "." + ext);
 
                 if (string.Equals(Path.GetFullPath(entry.Path), Path.GetFullPath(newPath), StringComparison.OrdinalIgnoreCase))
                     continue;
@@ -242,7 +242,7 @@ public class FileOrganizerService : IFileOrganizerService
                     if (createSubfolders && !string.IsNullOrWhiteSpace(series))
                         destFolder = Path.Combine(destinationFolder, Sanitize(series));
 
-                    var newPath = Path.Combine(destFolder, Sanitize(newName) + "." + ext);
+                    var newPath = Path.Combine(destFolder, SanitizeRelative(newName, Path.DirectorySeparatorChar) + "." + ext);
 
                     if (string.Equals(Path.GetFullPath(file), Path.GetFullPath(newPath), StringComparison.OrdinalIgnoreCase))
                         continue;
@@ -382,7 +382,7 @@ public class FileOrganizerService : IFileOrganizerService
 
                 var title = ExtractTitle(fileName);
                 var newName = ApplyPatternWithRange(filePattern, series, newInfo, title, fileName);
-                var newPath = Path.Combine(subFolder, Sanitize(newName) + "." + ext);
+                var newPath = Path.Combine(subFolder, SanitizeRelative(newName, Path.DirectorySeparatorChar) + "." + ext);
 
                 if (string.Equals(Path.GetFullPath(entry.FilePath), Path.GetFullPath(newPath), StringComparison.OrdinalIgnoreCase))
                     continue;
@@ -484,7 +484,7 @@ public class FileOrganizerService : IFileOrganizerService
                 currentEpisode += count;
 
                 var title = ExtractTitle(fileName);
-                var newName = Sanitize(ApplyPatternWithRange(pattern, series, info, title, fileName)) + "." + ext;
+                var newName = SanitizeRelative(ApplyPatternWithRange(pattern, series, info, title, fileName), '/') + "." + ext;
 
                 var destFolder = remoteBase;
                 if (createSubfolders && !string.IsNullOrWhiteSpace(series))
@@ -505,7 +505,7 @@ public class FileOrganizerService : IFileOrganizerService
                         : FileOperationType.Move
                 };
 
-                await CheckRemoteConflictAsync(op, destFolder, newName, listedDirs, assignedTargets, ct, entry.FullPath);
+                await CheckRemoteConflictAsync(op, RemoteDirName(newPath), RemoteFileName(newPath), listedDirs, assignedTargets, ct, entry.FullPath);
                 result.Add(op);
             }
             catch (Exception ex)
@@ -602,7 +602,7 @@ public class FileOrganizerService : IFileOrganizerService
                     if (string.IsNullOrWhiteSpace(series)) series = folderName;
 
                     var title = ExtractTitle(fileName);
-                    var newName = Sanitize(ApplyPatternWithRange(pattern, series, newInfo, title, fileName)) + "." + ext;
+                    var newName = SanitizeRelative(ApplyPatternWithRange(pattern, series, newInfo, title, fileName), '/') + "." + ext;
 
                     var destFolder = remoteDest;
                     if (createSubfolders && !string.IsNullOrWhiteSpace(series))
@@ -621,7 +621,7 @@ public class FileOrganizerService : IFileOrganizerService
                         Type = FileOperationType.Move
                     };
 
-                    await CheckRemoteConflictAsync(op, destFolder, newName, listedDirs, assignedTargets, ct, entry.FullPath);
+                    await CheckRemoteConflictAsync(op, RemoteDirName(newPath), RemoteFileName(newPath), listedDirs, assignedTargets, ct, entry.FullPath);
                     result.Add(op);
                 }
                 catch (Exception ex)
@@ -746,7 +746,7 @@ public class FileOrganizerService : IFileOrganizerService
                 if (string.IsNullOrWhiteSpace(series)) series = folderName;
 
                 var title = ExtractTitle(fileName);
-                var newName = Sanitize(ApplyPatternWithRange(filePattern, series, newInfo, title, fileName)) + "." + ext;
+                var newName = SanitizeRelative(ApplyPatternWithRange(filePattern, series, newInfo, title, fileName), '/') + "." + ext;
                 var newPath = subFolder.TrimEnd('/') + "/" + newName;
 
                 if (string.Equals(entry.FullPath, newPath, StringComparison.OrdinalIgnoreCase))
@@ -760,7 +760,7 @@ public class FileOrganizerService : IFileOrganizerService
                     Type = FileOperationType.Move
                 };
 
-                await CheckRemoteConflictAsync(op, subFolder, newName, listedDirs, assignedTargets, ct, entry.FullPath);
+                await CheckRemoteConflictAsync(op, RemoteDirName(newPath), RemoteFileName(newPath), listedDirs, assignedTargets, ct, entry.FullPath);
                 result.Add(op);
             }
 
@@ -837,15 +837,20 @@ public class FileOrganizerService : IFileOrganizerService
                     var destDir = Path.GetDirectoryName(op.NewPath);
                     if (!string.IsNullOrEmpty(destDir) && !Directory.Exists(destDir))
                     {
+                        // Con "{Series}/S01/..." mancano più livelli: si registrano tutti, dal più esterno
+                        var missing = new List<string>();
+                        for (var d = destDir; !string.IsNullOrEmpty(d) && !Directory.Exists(d); d = Path.GetDirectoryName(d))
+                            missing.Insert(0, d);
                         Directory.CreateDirectory(destDir);
-                        log.Add(new FileOperation
-                        {
-                            Type = FileOperationType.CreateDir,
-                            OriginalPath = string.Empty,
-                            NewPath = destDir,
-                            BatchId = batchId,
-                            IsRemote = false
-                        });
+                        foreach (var dir in missing)
+                            log.Add(new FileOperation
+                            {
+                                Type = FileOperationType.CreateDir,
+                                OriginalPath = string.Empty,
+                                NewPath = dir,
+                                BatchId = batchId,
+                                IsRemote = false
+                            });
                     }
 
                     if (File.Exists(op.OriginalPath))
@@ -904,8 +909,15 @@ public class FileOrganizerService : IFileOrganizerService
                     var destDir = RemoteDirName(op.NewPath);
                     if (!string.IsNullOrEmpty(destDir) && createdDirs.Add(destDir))
                     {
-                        try { await _sftpService.CreateDirectoryAsync(destDir, ct); }
-                        catch { /* già esiste */ }
+                        // Dal livello più esterno al più interno (pattern con più "/")
+                        var chain = new List<string>();
+                        for (var d = destDir; d.Length > 1; d = RemoteDirName(d)) chain.Insert(0, d);
+                        foreach (var dir in chain)
+                        {
+                            if (dir != destDir && !createdDirs.Add(dir)) continue;
+                            try { await _sftpService.CreateDirectoryAsync(dir, ct); }
+                            catch { /* già esiste */ }
+                        }
                     }
 
                     await _sftpService.RenameAsync(op.OriginalPath, op.NewPath, ct);
@@ -1041,6 +1053,19 @@ public class FileOrganizerService : IFileOrganizerService
     {
         var idx = path.LastIndexOf('/');
         return idx >= 0 ? path.Substring(idx + 1) : path;
+    }
+
+    /// <summary>
+    /// Pulisce un nome che può contenere sottocartelle ("{Series}/{Episode}" → "Frieren/005"):
+    /// ogni pezzo viene ripulito, la "/" resta come separatore. Niente ".." per non uscire dalla destinazione.
+    /// </summary>
+    private static string SanitizeRelative(string name, char separator)
+    {
+        var parts = name.Split('/', '\\')
+            .Select(p => Sanitize(p))
+            .Where(p => p.Length > 0 && p != "." && p != "..")
+            .ToList();
+        return parts.Count == 0 ? Sanitize(name) : string.Join(separator, parts);
     }
 
     private static string RemoteDirName(string path)

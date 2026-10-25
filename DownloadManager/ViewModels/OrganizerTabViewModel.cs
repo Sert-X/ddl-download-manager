@@ -126,8 +126,8 @@ public partial class OrganizerTabViewModel : ViewModelBase
             try
             {
                 var p = FileNameBuilder.ApplyPattern(
-                    OrganizePattern, "Naruto Shippuden", 1, "Episodio 1", "NarutoShippuden_Ep_001_SUB_ITA");
-                return p + ".mp4";
+                    OrganizePattern, "Frieren", 1, "Episodio 1", "Frieren_Ep_001_SUB_ITA");
+                return p.Replace('/', System.IO.Path.DirectorySeparatorChar) + ".mp4";
             }
             catch { return "(pattern non valido)"; }
         }
@@ -140,8 +140,8 @@ public partial class OrganizerTabViewModel : ViewModelBase
             try
             {
                 var p = FileNameBuilder.ApplyPattern(
-                    MergePattern, "Naruto Shippuden", 1, "Episodio 1", "NarutoShippuden_Ep_001_SUB_ITA");
-                return p + ".mp4";
+                    MergePattern, "Frieren", 1, "Episodio 1", "Frieren_Ep_001_SUB_ITA");
+                return p.Replace('/', System.IO.Path.DirectorySeparatorChar) + ".mp4";
             }
             catch { return "(pattern non valido)"; }
         }
@@ -154,8 +154,8 @@ public partial class OrganizerTabViewModel : ViewModelBase
             try
             {
                 var p = FileNameBuilder.ApplyPattern(
-                    SplitFilePattern, "Naruto Shippuden", 1, "Episodio 1", "NarutoShippuden_Ep_001_SUB_ITA");
-                return p + ".mp4";
+                    SplitFilePattern, "Frieren", 1, "Episodio 1", "Frieren_Ep_001_SUB_ITA");
+                return p.Replace('/', System.IO.Path.DirectorySeparatorChar) + ".mp4";
             }
             catch { return "(pattern non valido)"; }
         }

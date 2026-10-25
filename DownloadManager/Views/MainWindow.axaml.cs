@@ -31,7 +31,7 @@ public partial class MainWindow : Window
     private PointerPressedEventArgs? _localPressedArgs;
     private PointerPressedEventArgs? _remotePressedArgs;
 
-    private bool _logCollapsed;
+    private bool _logCollapsed = true;   // all'avvio il log è chiuso
     private double _logHeightBeforeCollapse = 150;
     private bool _syncingEpisodeSelection;
 
@@ -912,41 +912,28 @@ public partial class MainWindow : Window
     private async void OnProxyImportFileClick(object? sender, RoutedEventArgs e)
     {
         if (Vm == null) return;
+        var request = await ProxyImportDialog.ShowAsync(this, ProxyTabViewModel.ImportTargets, Vm.Proxy.SelectedTab?.Key);
+        if (request != null) await Vm.Proxy.ImportAsync(request.Content, request.Providers);
+    }
 
-        var storage = StorageProvider;
-        if (storage == null) return;
+    private async void OnProxyDeleteCheckedClick(object? sender, RoutedEventArgs e)
+    {
+        if (Vm == null) return;
+        var n = Vm.Proxy.CheckedForDeletionCount;
+        if (n == 0) { Vm.Proxy.ProxyStatusMessage = "Nessun proxy selezionato."; return; }
+        var ok = await ConfirmDialog.ShowAsync(this,
+            $"Eliminare definitivamente {n} proxy dall'archivio e da tutte le liste?", "Conferma eliminazione");
+        if (ok) await Vm.Proxy.DeleteCheckedAsync();
+    }
 
-        var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = "Importa lista proxy",
-            AllowMultiple = false,
-            FileTypeFilter = new[]
-            {
-                new FilePickerFileType("File proxy")
-                {
-                    Patterns = new[] { "*.txt", "*.csv" }
-                },
-                new FilePickerFileType("Tutti i file")
-                {
-                    Patterns = new[] { "*" }
-                }
-            }
-        });
-
-        if (files == null || files.Count == 0) return;
-
-        var path = files[0].TryGetLocalPath();
-        if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
-
-        try
-        {
-            var content = await File.ReadAllTextAsync(path);
-            Vm.Proxy.ProxyImportFromString(content);
-        }
-        catch (Exception ex)
-        {
-            Vm.Proxy.ProxyStatusMessage = $"Errore lettura file: {ex.Message}";
-        }
+    private async void OnProxyCleanupArchiveClick(object? sender, RoutedEventArgs e)
+    {
+        if (Vm == null) return;
+        var n = Vm.Proxy.UselessCount;
+        if (n == 0) { Vm.Proxy.ProxyStatusMessage = "Archivio già pulito: nessun proxy fallito o escluso ovunque."; return; }
+        var ok = await ConfirmDialog.ShowAsync(this,
+            $"Eliminare definitivamente {n} proxy che risultano falliti o esclusi in tutte le loro liste?", "Pulisci archivio");
+        if (ok) await Vm.Proxy.CleanupArchiveAsync();
     }
 
     private bool _syncingProxySelection;
@@ -1002,6 +989,22 @@ public partial class MainWindow : Window
         if (selected is not AnimeSearchResult anime) return;
         if (Vm == null) return;
         await Vm.AnimeDownload.LoadEpisodesCommand.ExecuteAsync(anime);
+    }
+
+    /// <summary>Pulsante "Analizza" sulla locandina: come il doppio clic.</summary>
+    private async void OnAnalyzeAnimeClick(object? sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (Vm == null || (sender as Control)?.DataContext is not AnimeSearchResult anime) return;
+        await Vm.AnimeDownload.LoadEpisodesCommand.ExecuteAsync(anime);
+    }
+
+    private async void OnAnalyzeStreamingClick(object? sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (Vm == null || (sender as Control)?.DataContext is not MovieSearchResult result) return;
+        Vm.Streaming.SelectedResult = result;
+        await Vm.Streaming.LoadSeasonsCommand.ExecuteAsync(result);
     }
 
     private async void OnEpisodeDoubleTapped(object? sender, TappedEventArgs e)
@@ -1330,6 +1333,15 @@ public partial class MainWindow : Window
     {
         e.Handled = true;   // il clic sull'icona non deve aprire anche la serie
         var link = ResultLink(sender);
+        if (!Uri.TryCreate(link, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            return;
+        try { Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }); }
+        catch (Exception ex) { Console.WriteLine($">>> Apertura browser fallita: {ex.Message}"); }
+    }
+
+    private void OnOpenSelectedResultInBrowserClick(object? sender, RoutedEventArgs e)
+    {
+        var link = Vm.Streaming.SelectedResult?.Link;
         if (!Uri.TryCreate(link, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
             return;
         try { Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }); }

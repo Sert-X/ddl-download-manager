@@ -34,12 +34,18 @@ public class AppSettings
     public string ThemeVariant { get; set; } = "Default";
     /// <summary>Versione dell'ultimo avvio: se cambia, al primo avvio si mostrano le novità.</summary>
     public string LastRunVersion { get; set; } = "";
+    /// <summary>Ogni quanti minuti ricontrollare i domini in background (0 = solo all'avvio).</summary>
+    public int DomainCheckIntervalMinutes { get; set; } = 10;
 
     public bool UseProxyForAnimeWorld { get; set; } = true;
     public bool UseProxyForAnimeSaturn { get; set; } = true;
     public bool UseProxyForStreamingCommunity { get; set; } = true;
     public bool UseProxyForDownloads { get; set; } = true;
     public bool UseProxyForCb01 { get; set; }
+
+    /// <summary>Dopo un test fallito il proxy viene escluso dalla lista del provider (non si ritesta più).</summary>
+    public bool ProxyAutoExcludeFailed { get; set; } = true;
+    public int ProxyTestConcurrency { get; set; } = 10;
 
     /// <summary>URL di FlareSolverr (es. http://host:8191/token). Vuoto = bypass CF locale con Playwright.</summary>
     public string FlareSolverrUrl { get; set; } = string.Empty;

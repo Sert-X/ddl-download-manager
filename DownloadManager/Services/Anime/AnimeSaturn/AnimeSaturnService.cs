@@ -132,7 +132,7 @@ public class AnimeSaturnService : IAnimeSaturnService
                 query, cached.Results.Count);
             // Clone per evitare mutazioni dall'UI
             return cached.Results
-                .Select(r => new AnimeSearchResult { Name = r.Name, Link = r.Link })
+                .Select(r => new AnimeSearchResult { Name = r.Name, Link = r.Link, PosterUrl = r.PosterUrl })
                 .ToList();
         }
 
@@ -142,133 +142,46 @@ public class AnimeSaturnService : IAnimeSaturnService
         await InitializeAsync();   // riapre il browser se è stato chiuso (es. cambio di proxy)
         if (_context == null) throw new InvalidOperationException("Servizio non inizializzato.");
 
-        var page = await _context.NewPageAsync();
+        const int maxPages = 5;
+        var firstUrl = $"{BaseUrl}/filter?key={Uri.EscapeDataString(query)}";
+
         try
         {
-            int pageNum = 1;
-            const int maxPages = 5;
+            // Pagina 1: risultati + paginazione (il sito usa /filter/2?key=...); le altre si caricano insieme
+            var (first, lastPage, template) = await LoadSearchPageAsync(firstUrl, readPaging: true, ct);
+            var pages = new List<List<string[]>> { first };
 
-            while (pageNum <= maxPages)
+            var more = Math.Min(lastPage, maxPages);
+            if (first.Count > 0 && more > 1 && template != null)
             {
-                ct.ThrowIfCancellationRequested();
-
-                var searchUrl = pageNum == 1
-                    ? $"{BaseUrl}/filter?key={Uri.EscapeDataString(query)}"
-                    : $"{BaseUrl}/filter?key={Uri.EscapeDataString(query)}&page={pageNum}";
-
-                _logger.LogInformation("[SATURN] Ricerca pagina {Page}: {Url}", pageNum, searchUrl);
-
-                // === FIX: DOMContentLoaded invece di NetworkIdle ===
-                var navResponse = await page.GotoAsync(searchUrl, new PageGotoOptions
-                {
-                    WaitUntil = WaitUntilState.DOMContentLoaded,
-                    Timeout = 20000
-                });
-
-                if (navResponse != null && navResponse.Status >= 400)
-                {
-                    throw new InvalidOperationException(
-                        $"HTTP {navResponse.Status} {navResponse.StatusText}");
-                }
-
-                // Il selettore è già reattivo (WaitForSelectorAsync)
-                try
-                {
-                    await page.WaitForSelectorAsync("a.ac",
-                        new PageWaitForSelectorOptions { Timeout = 8000 });
-                }
-                catch
-                {
-                    _logger.LogWarning("[SATURN] Nessun risultato su pagina {Page}", pageNum);
-                    break;
-                }
-
-                // Rimosso WaitForTimeoutAsync(500): non necessario, i dati sono già nel DOM
-
-                var anchors = await page.QuerySelectorAllAsync("a.ac");
-                _logger.LogInformation("[SATURN] Pagina {Page}: trovati {Count} anchor",
-                    pageNum, anchors?.Count ?? 0);
-
-                if (anchors == null || anchors.Count == 0) break;
-
-                int addedThisPage = 0;
-
-                foreach (var a in anchors)
-                {
-                    try
-                    {
-                        var href = await a.GetAttributeAsync("href") ?? "";
-                        if (string.IsNullOrEmpty(href)) continue;
-                        if (href.StartsWith("/")) href = BaseUrl + href;
-
-                        var cleanHref = href.Split('?')[0];
-                        if (!cleanHref.Contains("/anime/", StringComparison.OrdinalIgnoreCase))
-                            continue;
-
-                        if (!seenLinks.Add(cleanHref)) continue;
-
-                        var titleEl = await a.QuerySelectorAsync("h3.ac__title");
-                        var name = titleEl != null
-                            ? (await titleEl.InnerTextAsync()).Trim()
-                            : "";
-
-                        if (string.IsNullOrEmpty(name)) continue;
-
-                        // === ESTRAZIONE POSTER ===
-                        string? posterUrl = null;
-                        try
-                        {
-                            var img = await a.QuerySelectorAsync("img");
-                            if (img == null)
-                            {
-                                // Cerca nel contenitore padre (a volte il layout ha img fuori dall'anchor)
-                                var parent = await a.EvaluateHandleAsync("el => el.closest('.col-6') || el.closest('.card') || el.parentElement");
-                                if (parent != null)
-                                {
-                                    var parentEl = parent.AsElement();
-                                    if (parentEl != null)
-                                        img = await parentEl.QuerySelectorAsync("img");
-                                }
-                            }
-
-                            if (img != null)
-                            {
-                                posterUrl = await img.GetAttributeAsync("data-src")
-                                        ?? await img.GetAttributeAsync("src");
-
-                                if (!string.IsNullOrEmpty(posterUrl) && posterUrl.StartsWith("/"))
-                                    posterUrl = BaseUrl + posterUrl;
-
-                                if (!string.IsNullOrEmpty(posterUrl) &&
-                                    (posterUrl.StartsWith("data:", StringComparison.OrdinalIgnoreCase) ||
-                                    posterUrl.Contains("placeholder", StringComparison.OrdinalIgnoreCase)))
-                                    posterUrl = null;
-                            }
-                        }
-                        catch { }
-
-                        results.Add(new AnimeSearchResult
-                        {
-                            Name = name,
-                            Link = cleanHref,
-                            PosterUrl = posterUrl
-                        });
-                    }
-                    catch { }
-                }
-
-                _logger.LogInformation("[SATURN] Pagina {Page}: aggiunti {Added} risultati (totale {Total})",
-                    pageNum, addedThisPage, results.Count);
-
-                if (addedThisPage == 0) break;
-
-                var hasNext = await page.QuerySelectorAsync("a[rel='next'], a.next, li.next a");
-                if (hasNext == null) break;
-
-                pageNum++;
+                var rest = await Task.WhenAll(Enumerable.Range(2, more - 1)
+                    .Select(n => LoadSearchPageAsync(template.Replace("{n}", n.ToString()), readPaging: false, ct)));
+                pages.AddRange(rest.Select(r => r.Rows));
             }
 
-            _logger.LogInformation("[SATURN] Ricerca completata: {Count} risultati", results.Count);
+            foreach (var rows in pages)
+            foreach (var row in rows)
+            {
+                var href = row[0];
+                var name = row[1];
+                if (string.IsNullOrEmpty(href) || string.IsNullOrEmpty(name)) continue;
+                if (href.StartsWith("/")) href = BaseUrl + href;
+
+                var cleanHref = href.Split('?')[0];
+                if (!cleanHref.Contains("/anime/", StringComparison.OrdinalIgnoreCase)) continue;
+                if (!seenLinks.Add(cleanHref)) continue;
+
+                string? posterUrl = row[2];
+                if (!string.IsNullOrEmpty(posterUrl) && posterUrl.StartsWith("/")) posterUrl = BaseUrl + posterUrl;
+                if (string.IsNullOrEmpty(posterUrl) ||
+                    posterUrl.StartsWith("data:", StringComparison.OrdinalIgnoreCase) ||
+                    posterUrl.Contains("placeholder", StringComparison.OrdinalIgnoreCase))
+                    posterUrl = null;
+
+                results.Add(new AnimeSearchResult { Name = name, Link = cleanHref, PosterUrl = posterUrl });
+            }
+
+            _logger.LogInformation("[SATURN] Ricerca completata: {Count} risultati da {Pages} pagine", results.Count, pages.Count);
 
             // Salva in cache
             _searchCache[cacheKey] = (DateTime.UtcNow, results);
@@ -278,11 +191,79 @@ public class AnimeSaturnService : IAnimeSaturnService
             _logger.LogError(ex, "[SATURN] Errore ricerca '{Query}'", query);
             throw;
         }
+        return results;
+    }
+
+    /// <summary>
+    /// Una pagina di risultati: [link, titolo, locandina] per ogni anime. Con <paramref name="readPaging"/>
+    /// legge anche l'ultima pagina e un modello di indirizzo con "{n}" al posto del numero di pagina.
+    /// </summary>
+    private async Task<(List<string[]> Rows, int LastPage, string? Template)> LoadSearchPageAsync(string url, bool readPaging, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var page = await LightPage.OpenAsync(_context!);
+        try
+        {
+            _logger.LogInformation("[SATURN] Ricerca: {Url}", url);
+            var navResponse = await page.GotoAsync(url, new PageGotoOptions
+            {
+                WaitUntil = WaitUntilState.DOMContentLoaded,
+                Timeout = 20000
+            });
+            if (navResponse != null && navResponse.Status >= 400)
+                throw new InvalidOperationException($"HTTP {navResponse.Status} {navResponse.StatusText}");
+
+            try
+            {
+                await page.WaitForSelectorAsync("a.ac",
+                    new PageWaitForSelectorOptions { Timeout = readPaging ? 8000 : 4000, State = WaitForSelectorState.Attached });
+            }
+            catch
+            {
+                return (new List<string[]>(), 1, null);
+            }
+
+            var rows = await page.EvaluateAsync<string[][]>(@"() => [...document.querySelectorAll('a.ac')].map(a => {
+                const t = a.querySelector('h3.ac__title');
+                const box = a.closest('.col-6') || a.closest('.card') || a.parentElement;
+                const img = a.querySelector('img') || (box ? box.querySelector('img') : null);
+                return [a.getAttribute('href') || '',
+                        t ? (t.innerText || t.textContent || '').trim() : '',
+                        img ? (img.getAttribute('data-src') || img.getAttribute('src') || '') : ''];
+            })");
+
+            int last = 1;
+            string? template = null;
+            if (readPaging)
+            {
+                // Link di pagina: /filter/2?key=... (oppure ?page=2 se il sito cambia formato)
+                var paging = await page.EvaluateAsync<string[]>(@"() => {
+                    let max = 1, tpl = '';
+                    const links = document.querySelectorAll('nav[aria-label=""Paginazione""] a[href], .pagination a[href], a.page-num[href]');
+                    for (const a of links) {
+                        const u = new URL(a.getAttribute('href'), location.href);
+                        let m = u.pathname.match(/^(.*\/filter\/)(\d+)\/?$/), n = 0;
+                        if (m) { n = parseInt(m[2], 10); if (!tpl) tpl = u.origin + m[1] + '{n}' + u.search; }
+                        else if (u.searchParams.get('page')) {
+                            n = parseInt(u.searchParams.get('page'), 10);
+                            if (!tpl) { u.searchParams.set('page', '__N__'); tpl = u.href.replace('__N__', '{n}'); }
+                        }
+                        if (n > max) max = n;
+                    }
+                    return [String(max), tpl];
+                }");
+                if (paging.Length == 2)
+                {
+                    int.TryParse(paging[0], out last);
+                    template = string.IsNullOrEmpty(paging[1]) ? null : paging[1];
+                }
+            }
+            return (rows.ToList(), Math.Max(1, last), template);
+        }
         finally
         {
             try { await page.CloseAsync(); } catch { }
         }
-        return results;
     }
 
     // ============================================================
@@ -295,7 +276,7 @@ public class AnimeSaturnService : IAnimeSaturnService
         await InitializeAsync();   // riapre il browser se è stato chiuso (es. cambio di proxy)
         if (_context == null) throw new InvalidOperationException("Servizio non inizializzato.");
 
-        var page = await _context.NewPageAsync();
+        var page = await LightPage.OpenAsync(_context);
         try
         {
             _logger.LogInformation("[SATURN] Episodi da: {Url}", animeUrl);
@@ -310,7 +291,7 @@ public class AnimeSaturnService : IAnimeSaturnService
             try
             {
                 await page.WaitForSelectorAsync("a.ep-tile",
-                    new PageWaitForSelectorOptions { Timeout = 8000 });
+                    new PageWaitForSelectorOptions { Timeout = 8000, State = WaitForSelectorState.Attached });
             }
             catch
             {
@@ -320,53 +301,39 @@ public class AnimeSaturnService : IAnimeSaturnService
 
             // Rimosso WaitForTimeoutAsync(500)
 
-            var episodeElements = await page.QuerySelectorAllAsync("a.ep-tile");
-            _logger.LogInformation("[SATURN] Trovati {Count} link episodi", episodeElements?.Count ?? 0);
+            // Tutti gli episodi in una sola chiamata (prima: 2 chiamate per episodio)
+            var rows = await page.EvalOnSelectorAllAsync<string[][]>("a.ep-tile",
+                "els => els.map(e => [e.getAttribute('href') || '', e.getAttribute('title') || ''])");
+            _logger.LogInformation("[SATURN] Trovati {Count} link episodi", rows.Length);
 
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            if (episodeElements != null)
+            foreach (var row in rows)
             {
-                foreach (var el in episodeElements)
+                var href = row[0];
+                if (string.IsNullOrEmpty(href)) continue;
+                if (href.StartsWith("/")) href = BaseUrl + href;
+
+                var cleanHref = href.Split('?')[0];
+                bool isEpisode = EpisodeLinkRegex.IsMatch(cleanHref)
+                    || cleanHref.Contains("/episode/", StringComparison.OrdinalIgnoreCase);
+                if (!isEpisode || !seen.Add(cleanHref)) continue;
+
+                var titleAttr = row[1];
+                var epNum = "";
+                var match = EpisodeTitleRegex.Match(titleAttr);
+                if (match.Success) epNum = match.Groups[1].Value;
+                else
                 {
-                    try
-                    {
-                        var href = await el.GetAttributeAsync("href") ?? "";
-                        if (string.IsNullOrEmpty(href)) continue;
-                        if (href.StartsWith("/")) href = BaseUrl + href;
-
-                        var cleanHref = href.Split('?')[0];
-
-                        bool isEpisode = System.Text.RegularExpressions.Regex.IsMatch(
-                            cleanHref, @"/ep-\d+$")
-                            || cleanHref.Contains("/episode/", StringComparison.OrdinalIgnoreCase);
-
-                        if (!isEpisode) continue;
-                        if (!seen.Add(cleanHref)) continue;
-
-                        var titleAttr = await el.GetAttributeAsync("title") ?? "";
-
-                        var epNum = "";
-                        var match = System.Text.RegularExpressions.Regex.Match(
-                            titleAttr, @"Episodio\s+(\d+)");
-                        if (match.Success)
-                            epNum = match.Groups[1].Value;
-                        else
-                        {
-                            var m2 = System.Text.RegularExpressions.Regex.Match(
-                                cleanHref, @"/ep-(\d+)$");
-                            if (m2.Success) epNum = m2.Groups[1].Value;
-                        }
-
-                        episodes.Add(new Episode
-                        {
-                            Number = epNum,
-                            Title = string.IsNullOrEmpty(titleAttr) ? $"Episodio {epNum}" : titleAttr,
-                            Link = cleanHref
-                        });
-                    }
-                    catch { }
+                    var m2 = EpisodeLinkRegex.Match(cleanHref);
+                    if (m2.Success) epNum = m2.Groups[1].Value;
                 }
+
+                episodes.Add(new Episode
+                {
+                    Number = epNum,
+                    Title = string.IsNullOrEmpty(titleAttr) ? $"Episodio {epNum}" : titleAttr,
+                    Link = cleanHref
+                });
             }
 
             episodes = episodes
@@ -407,6 +374,11 @@ public class AnimeSaturnService : IAnimeSaturnService
         try { return await GetVideoUrlViaBrowserAsync(episodePageUrl, ct); }
         finally { _browserGate.Release(); }
     }
+
+    private static readonly System.Text.RegularExpressions.Regex EpisodeLinkRegex = new(@"/ep-(\d+)$",
+        System.Text.RegularExpressions.RegexOptions.Compiled);
+    private static readonly System.Text.RegularExpressions.Regex EpisodeTitleRegex = new(@"Episodio\s+(\d+)",
+        System.Text.RegularExpressions.RegexOptions.Compiled);
 
     private static readonly System.Text.RegularExpressions.Regex EmbedRegex = new(
         @"(https?:)?//(?<host>[a-z0-9.\-]+)/embed/(?<id>\d+)\?token=(?<token>[A-Za-z0-9]+)&(?:amp;)?expires=(?<exp>\d+)",

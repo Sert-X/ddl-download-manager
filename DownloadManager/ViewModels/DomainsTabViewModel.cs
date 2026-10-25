@@ -3,6 +3,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DownloadManager.Models;
+using DownloadManager.Persistence;
 using DownloadManager.Services.Domains;
 using DownloadManager.Services.Anime.AnimeWorld;
 using DownloadManager.Services.Anime.AnimeSaturn;
@@ -25,6 +26,45 @@ public partial class DomainsTabViewModel : ViewModelBase
     private readonly IAnimeWorldService _animeWorldService;
     private readonly IAnimeSaturnService _animeSaturnService;
     private readonly IStreamingCommunityService _streamingCommunityService;
+    private readonly SettingsService? _settings;
+
+    /// <summary>Scelte per il ricontrollo periodico (minuti; 0 = solo all'avvio).</summary>
+    public static IReadOnlyList<int> CheckIntervals { get; } = new[] { 0, 5, 10, 15, 30, 60 };
+    public IReadOnlyList<string> CheckIntervalLabels { get; } =
+        CheckIntervals.Select(m => m == 0 ? "Solo all'avvio" : $"Ogni {m} minuti").ToList();
+
+    public int CheckIntervalIndex
+    {
+        get
+        {
+            var i = CheckIntervals.ToList().IndexOf(_settings?.Current.DomainCheckIntervalMinutes ?? 10);
+            return i < 0 ? 2 : i;
+        }
+        set
+        {
+            if (_settings == null || value < 0 || value >= CheckIntervals.Count) return;
+            _settings.Current.DomainCheckIntervalMinutes = CheckIntervals[value];
+            _settings.Save();
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(NextCheckText));
+            _intervalChanged?.Cancel();   // riparte subito col nuovo intervallo
+        }
+    }
+
+    [ObservableProperty] private DateTime? _lastAutoCheck;
+    public string NextCheckText
+    {
+        get
+        {
+            var min = _settings?.Current.DomainCheckIntervalMinutes ?? 10;
+            if (min <= 0) return "Controllo automatico solo all'avvio.";
+            var last = LastAutoCheck is { } t ? $"ultimo alle {t:HH:mm}, " : "";
+            return $"Controllo automatico: {last}prossimo tra al massimo {min} minuti.";
+        }
+    }
+    partial void OnLastAutoCheckChanged(DateTime? value) => OnPropertyChanged(nameof(NextCheckText));
+
+    private CancellationTokenSource? _intervalChanged;
 
     public ObservableCollection<DomainConfig> Domains { get; } = new();
 
@@ -40,8 +80,10 @@ public partial class DomainsTabViewModel : ViewModelBase
         IAnimeSaturnService animeSaturnService,
         IStreamingCommunityService streamingCommunityService,
         ILogger<DomainsTabViewModel> logger,
-        SharedState shared)
+        SharedState shared,
+        SettingsService? settings = null)
     {
+        _settings = settings;
         _resolver = resolver;
         _tester = tester;
         _animeWorldService = animeWorldService;
@@ -63,6 +105,7 @@ public partial class DomainsTabViewModel : ViewModelBase
             {
                 _logger.LogWarning(ex, "[DOMAIN] Test startup fallito");
             }
+            await PeriodicCheckLoopAsync();
         });
 
         UpdateHasIssues();
@@ -243,6 +286,46 @@ public partial class DomainsTabViewModel : ViewModelBase
     //  TEST AUTOMATICO ALL'AVVIO
     // ============================================================
 
+    /// <summary>Ricontrolla i domini ogni N minuti (impostazione), finché l'app è aperta.</summary>
+    private async Task PeriodicCheckLoopAsync()
+    {
+        while (true)
+        {
+            var minutes = _settings?.Current.DomainCheckIntervalMinutes ?? 10;
+            _intervalChanged = new CancellationTokenSource();
+            try
+            {
+                // Spento: si attende solo un cambio di impostazione
+                await Task.Delay(minutes > 0 ? TimeSpan.FromMinutes(minutes) : Timeout.InfiniteTimeSpan, _intervalChanged.Token);
+            }
+            catch (OperationCanceledException) { continue; }   // intervallo cambiato: si ricomincia a contare
+
+            if (IsTestingAll || Domains.Count == 0) continue;
+            try
+            {
+                var before = Domains.ToDictionary(d => d, d => d.Status);
+                _tester.InvalidateCache();
+                await _tester.TestManyAsync(Domains.ToList(), concurrency: 4);
+                UpdateHasIssues();
+
+                var changed = Domains.Where(d => before.TryGetValue(d, out var old) && old != d.Status).ToList();
+                int ko = Domains.Count(d => d.Status == DomainStatus.Unreachable);
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    LastAutoCheck = DateTime.Now;
+                    if (changed.Count > 0)
+                        StatusMessage = ko == 0
+                            ? $"Controllo automatico {DateTime.Now:HH:mm}: tutti i domini di nuovo raggiungibili."
+                            : $"Controllo automatico {DateTime.Now:HH:mm}: {ko} domini non raggiungibili ({string.Join(", ", Domains.Where(d => d.Status == DomainStatus.Unreachable).Select(d => d.ProviderName))}).";
+                });
+                if (changed.Count > 0)
+                    _logger.LogInformation("[DOMAIN] Controllo periodico: cambiati {Changed}, {Ko} non raggiungibili",
+                        string.Join(", ", changed.Select(d => $"{d.ProviderName}={d.Status}")), ko);
+            }
+            catch (Exception ex) { _logger.LogWarning(ex, "[DOMAIN] Controllo periodico fallito"); }
+        }
+    }
+
     public async Task TestAllOnStartupAsync()
     {
         await Task.Delay(2500);
@@ -263,6 +346,7 @@ public partial class DomainsTabViewModel : ViewModelBase
 
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
+            LastAutoCheck = DateTime.Now;
             StatusMessage = ko == 0
                 ? $"✅ Tutti i {ok} domini raggiungibili."
                 : $"⚠ {ok} OK, {ko} non raggiungibili.";

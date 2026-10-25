@@ -1,5 +1,52 @@
 # Changelog
 
+## [1.3.0] — 2026-10-25
+
+### 🌐 Proxy (tab rinnovata)
+- **Una lista per ogni provider** (AnimeWorld, AnimeSaturn, StreamingCommunity, CB01 · Maxstream, Download diretti) più l'**Archivio** con tutti i proxy: lo stesso proxy può funzionare su un sito e non su un altro.
+- **Importa** incollando una lista o da file, in tutte le liste o solo in quelle scelte. I doppioni vengono saltati e i proxy esclusi restano esclusi.
+- **Esclusi**: i proxy che falliscono il test escono solo dalla lista di quel sito (si può disattivare) e non vengono più ritestati. "Ripristina" li rimette in lista; "Pulisci archivio" elimina quelli inutilizzabili ovunque.
+- **Riquadro "Proxy attivo"** per ogni provider: indirizzo, tempo di risposta, interruttore "Proxy in uso / Connessione diretta" e i pulsanti:
+  - **Attiva il più veloce**: misura insieme i migliori e attiva quello che risponde più in fretta in quel momento;
+  - **Attiva selezionato**: verifica il proxy prima di attivarlo e mostra chiaramente l'esito;
+  - Ruota al prossimo e Disattiva.
+- **Testa tutti i provider**: ritesta le liste una dopo l'altra, con avanzamento e riepilogo finale.
+- Righe con IP e porta, protocollo, utente, stato, tempo di risposta e data del test, con il proxy attivo in cima. Nuovi badge colorati al posto delle vecchie icone.
+- **Test CB01 · Maxstream reale**: prova home e login di Maxstream (con credenziali di prova, non il tuo account) e CB01, e dice chi blocca. Maxstream rifiuta gli IP di datacenter e VPN.
+
+### 🎬 Film/Serie Download
+- **Riquadro Dettaglio** per film e serie: locandina, anno, provider, qualità e audio scelti, trama (se disponibile), cartella e nome del file che verrà creato.
+- **CB01 · Sub ITA ben visibile**: etichetta "SUB ITA" sulle locandine dei film e nel Dettaglio.
+  - Le stagioni ITA e Sub ITA sono **voci separate**, per esempio "Stagione 1 · ITA (120 ep.)" e "Stagione 1 · Sub ITA (293 ep.)".
+  - Nuova colonna "Lingua" negli episodi.
+  - Nuovi pulsanti **"Scarica tutta la serie ITA"** e **"Scarica tutta la serie Sub ITA"**.
+- **CB01 · pagine con più serie** (es. Beyblade, GTO): ogni spoiler diventa la sua serie, per esempio "Beyblade V-Force · Stagione 1", con cartella propria.
+- CB01: le cartelle con file numerati senza stagione (es. Boruto Sub ITA) non risultano più vuote; dal titolo delle serie è tolto l'ultimo aggiornamento ("Bleach – 17×44 – ITA" → "Bleach"), che finiva anche nel nome della cartella.
+- **StreamingCommunity**: con il pattern `{Series} S{Season:D2}E{Episode:D2}` il file era "I Simpson S01 S01E01.mp4". Ora è "I Simpson S01E01.mp4" e la cartella è "I Simpson".
+
+### ⚡ Anime Download
+- **AnimeWorld molto più veloce**: gli episodi di serie lunghe (es. 1.180 di One Piece) si caricano in circa 1 secondo invece di 6-8; anche la ricerca è più rapida.
+- **AnimeSaturn trova tutti i risultati**: prima leggeva solo la prima pagina (cercando "one piece" la serie principale non c'era). Le pagine si caricano insieme e, ripetendo una ricerca, le locandine non spariscono più.
+- Il browser interno si prepara in anticipo: la prima ricerca non aspetta l'avvio.
+- Il riquadro "Episodi" si chiama **"Dettaglio"** e mostra locandina, provider, numero di episodi e selezionati, cartella e nome del file.
+
+### 🖼 Anime e Film/Serie
+- **Pulsante "Analizza"** sulle locandine al passaggio del mouse: fa come il doppio clic.
+- Pattern e cartella base sono nel riquadro richiudibile **"Nome file e cartella"**, con un riassunto quando è chiuso: più spazio per gli episodi.
+
+### 🗂 Organizza file
+- Nei pattern la **"/" crea davvero una sottocartella** (es. `{Series}/{Series} - {Episode:D3}`): prima diventava "_" nel nome del file. Vale per Riordina, Unisci e Dividi, su PC e via SFTP; l'Annulla rimuove anche le cartelle create.
+- Spiegazione della "/" e di `{Series}` sotto i pattern; esempi aggiornati.
+
+### 🌍 Domini
+- I domini vengono **ricontrollati anche mentre l'app è aperta** (di default ogni 10 minuti, si può cambiare o lasciare solo all'avvio): se uno smette di rispondere il pallino della tab diventa rosso.
+
+### 👤 Account
+- Messaggio chiaro quando Maxstream mette in verifica il login dell'account (troppi accessi ravvicinati o da IP diversi): basta accedere una volta dal browser.
+
+### 🧹 Varie
+- Il **Log globale** parte chiuso.
+
 ## [1.2.0] — 2026-10-25
 
 ### 🎬 Film/Serie Download

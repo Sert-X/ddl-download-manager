@@ -53,7 +53,7 @@ public class Cb01Service : ICb01Service
         RegexOptions.Compiled | RegexOptions.Singleline);
     // "STAGIONE 1 - ITA", "STAGIONE 1 A 37 - ITA - HD"; deve stare all'inizio (esclude spin-off tipo "FORTNITE X ... - STAGIONE 1")
     private static readonly Regex RxSeasonHeader = new(
-        @"^STAGIONE\s+(\d+)(?:\s+A\s+(\d+))?",
+        @"^(?<group>.*?)\bSTAGIONE\s+(?<from>\d+)(?:\s+A\s+(?<to>\d+))?",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
     // Riga episodio dopo la decodifica: "1×01 – ...", "1x01-02 – ..."
     private static readonly Regex RxEpisodeNumber = new(
@@ -64,6 +64,11 @@ public class Cb01Service : ICb01Service
         @"<tr><td>\s*([^<]+?)\s*<td>.*?href='(https?://[^'/]+/msfi/[^']+)'",
         RegexOptions.Compiled | RegexOptions.Singleline);
     // "01x03", "01x01.02" (doppio), "S01E03"; la lookahead evita di leggere "1080p" come episodio
+    /// <summary>Numero "nudo" nel nome (es. "Boruto.001.WEB"): da 1 a 4 cifre, non risoluzione né anno.</summary>
+    private static readonly Regex RxBareNumber = new(
+        @"(?<![\dA-Za-z])(\d{1,4})(?![\dA-Za-z])",
+        RegexOptions.Compiled);
+
     private static readonly Regex RxFileEpisode = new(
         @"(?<!\d)(\d{1,2})x(\d{1,3})(?:\.(\d{1,3}))?(?![\dp])|S(\d{1,2})E(\d{1,3})",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -71,7 +76,60 @@ public class Cb01Service : ICb01Service
         @"(?<!\d)(2160|1440|1080|720|576|480|360)[pi](?![a-z])|\b(4K|UHD)\b",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-    private record SeriesEpisode(int Season, int Episode, string Title, List<Cb01Link> Links);
+    /// <summary>Un episodio con tutti i suoi link (italiani e sottotitolati), già ordinati per la prova.</summary>
+    private record SeriesEpisode(string Group, int GroupOrder, int Season, int Episode, string Title, List<Cb01Link> AllLinks)
+    {
+        public bool HasIta => AllLinks.Any(l => !l.IsSub);
+        public bool HasSub => AllLinks.Any(l => l.IsSub);
+        /// <summary>Nessun link in italiano: solo la versione sottotitolata.</summary>
+        public bool IsSub => AllLinks.Count > 0 && !HasIta;
+
+        /// <summary>Link da provare: solo i sottotitolati se richiesto, altrimenti l'italiano se c'è.</summary>
+        public List<Cb01Link> LinksFor(bool subIta) => subIta
+            ? AllLinks.Where(l => l.IsSub).ToList()
+            : (HasIta ? AllLinks.Where(l => !l.IsSub).ToList() : AllLinks);
+    }
+
+    /// <summary>Valore salvato nel download (campo lingue audio) per la versione sottotitolata.</summary>
+    public const string SubItaTag = "sub-ita";
+
+    /// <summary>
+    /// Versione e serie da ricordare nel download (campo lingue audio, inutilizzato per CB01):
+    /// "sub-ita", "grp=BEYBLADE V-FORCE" o entrambi separati da "|".
+    /// </summary>
+    public static string EncodeTag(bool subIta, string group)
+    {
+        var parts = new List<string>();
+        if (subIta) parts.Add(SubItaTag);
+        if (!string.IsNullOrEmpty(group)) parts.Add("grp=" + group.Replace("|", " "));
+        return string.Join("|", parts);
+    }
+
+    public static (bool SubIta, string Group) DecodeTag(string? tag)
+    {
+        var parts = (tag ?? "").Split('|', StringSplitOptions.RemoveEmptyEntries);
+        return (parts.Contains(SubItaTag),
+                parts.FirstOrDefault(p => p.StartsWith("grp="))?[4..] ?? "");
+    }
+
+    /// <summary>
+    /// "BEYBLADE V-FORCE" → "Beyblade V-Force". Le parole presenti nel titolo della serie ne prendono
+    /// la forma (così "GTO 1998" resta GTO e non diventa "Gto").
+    /// </summary>
+    public static string PrettyGroup(string group, string? reference = null)
+    {
+        if (string.IsNullOrWhiteSpace(group)) return "";
+        var known = Regex.Matches(reference ?? "", @"[\p{L}\p{N}]+").Select(m => m.Value)
+            .GroupBy(w => w, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        var it = System.Globalization.CultureInfo.GetCultureInfo("it-IT");
+        return Regex.Replace(group.Trim(), @"[\p{L}\p{N}]+", m =>
+            known.TryGetValue(m.Value, out var w) ? w
+            : m.Value.Length == 0 ? m.Value
+            : char.ToUpper(m.Value[0], it) + m.Value[1..].ToLower(it));
+    }
+
+    /// <summary>Titolo della pagina della serie (per scrivere bene i nomi dei gruppi).</summary>
+    private readonly Dictionary<string, string> _pageTitles = new();
     private readonly Dictionary<string, (DateTime At, List<SeriesEpisode> Episodes)> _seriesCache = new();
     private static readonly TimeSpan SeriesCacheTtl = TimeSpan.FromMinutes(10);
 
@@ -156,9 +214,18 @@ public class Cb01Service : ICb01Service
                 var cleanTitle = Regex.Replace(rawTitle, @"\s*\[.*?\]\s*", " ").Trim();
                 cleanTitle = Regex.Replace(cleanTitle, @"\s*\(\d{4}\)\s*$", "").Trim();
 
+                bool series = isSeries || link.Contains("/serietv/");
+                // Le serie hanno nel titolo l'ultimo aggiornamento ("Bleach – 17×44 – ITA",
+                // "Lupin – Stagione 1: Parte 4 – COMPLETA"): non è parte del nome (che finisce nelle cartelle)
+                if (series)
+                    cleanTitle = Regex.Replace(cleanTitle,
+                        @"\s+[–—-]\s+(\d+\s*[×x]\s*\d+|stagion[ei]\b|speciale\b|completa\b|serie\s+completa\b).*$",
+                        "", RegexOptions.IgnoreCase).Trim();
                 results.Add(new MovieSearchResult
                 {
                     Title = cleanTitle,
+                    // Per le serie la scritta nel titolo riguarda solo l'ultimo episodio uscito: lì conta la stagione
+                    IsSubIta = !series && Regex.IsMatch(rawTitle, @"sub[\s\-_.]*ita", RegexOptions.IgnoreCase),
                     Link = link,
                     PosterUrl = imgMatch.Success ? imgMatch.Groups[1].Value : null,
                     Year = yearMatch.Success ? yearMatch.Groups[1].Value : null,
@@ -186,10 +253,28 @@ public class Cb01Service : ICb01Service
         try
         {
             var episodes = await GetSeriesEpisodesAsync(seriesLink, ct);
+            string reference;
+            lock (_pageTitles) reference = _pageTitles.GetValueOrDefault(seriesLink, "");
             var seasons = episodes
-                .GroupBy(e => e.Season)
-                .OrderBy(g => g.Key)
-                .Select(g => new Season { Number = g.Key, Title = $"Stagione {g.Key} ({g.Count()} ep.)" })
+                .GroupBy(e => (e.Group, e.Season))
+                .OrderBy(g => g.Min(e => e.GroupOrder)).ThenBy(g => g.Key.Season)
+                .SelectMany(g =>
+                {
+                    var (group, number) = g.Key;
+                    var groupTitle = PrettyGroup(group, reference);
+                    var prefix = group.Length > 0 ? $"{groupTitle} · " : "";
+                    int ita = g.Count(e => e.HasIta), sub = g.Count(e => e.HasSub);
+                    Season Make(string variant, string label, int count) => new()
+                    {
+                        Number = number, Group = group, GroupTitle = groupTitle, Variant = variant,
+                        Title = $"{prefix}Stagione {number}{label} ({count} ep.)",
+                        LanguageTag = variant == "sub" ? "Sub ITA" : ""
+                    };
+                    // Due spoiler distinti (es. "STAGIONE 1 - ITA" e "STAGIONE 1 - SUB ITA"): due voci
+                    if (ita > 0 && sub > 0) return new[] { Make("ita", " · ITA", ita), Make("sub", " · Sub ITA", sub) };
+                    if (sub > 0) return new[] { Make("sub", " · Sub ITA", sub) };
+                    return new[] { Make("", "", ita) };
+                })
                 .ToList();
 
             _logger.LogInformation("[CB01] {Link}: {N} stagioni, {E} episodi", seriesLink, seasons.Count, episodes.Count);
@@ -210,7 +295,7 @@ public class Cb01Service : ICb01Service
 
     /// <summary>Serie: episodi della stagione. Film: un elemento per ogni link trovato nel post.</summary>
     public async Task<List<StreamingEpisode>> GetEpisodesAsync(
-        string contentLink, int seasonNumber, CancellationToken ct = default)
+        string contentLink, int seasonNumber, string variant = "", string group = "", CancellationToken ct = default)
     {
         try
         {
@@ -218,13 +303,19 @@ public class Cb01Service : ICb01Service
             if (IsSeriesLink(contentLink))
             {
                 episodes = (await GetSeriesEpisodesAsync(contentLink, ct))
-                    .Where(e => e.Season == seasonNumber)
-                    .Select(e => new StreamingEpisode
+                    .Where(e => e.Season == seasonNumber && e.Group == group)
+                    .Where(e => variant switch { "sub" => e.HasSub, "ita" => e.HasIta, _ => true })
+                    .Select(e =>
                     {
-                        Number = e.Episode.ToString(),
-                        Title = e.Title,
-                        Link = e.Links[0].Url,
-                        SeasonNumber = e.Season,
+                        bool sub = variant == "sub" || (variant != "ita" && e.IsSub);
+                        return new StreamingEpisode
+                        {
+                            Number = e.Episode.ToString(),
+                            Title = e.Title,
+                            Link = e.LinksFor(sub)[0].Url,
+                            SeasonNumber = e.Season,
+                            IsSubIta = sub,
+                        };
                     })
                     .ToList();
             }
@@ -275,8 +366,11 @@ public class Cb01Service : ICb01Service
         }
 
         var html = await _http.GetStringAsync(seriesLink, ct);
+        var pageTitle = Regex.Match(html, @"<h1[^>]*>(.*?)</h1>", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+        lock (_pageTitles)
+            _pageTitles[seriesLink] = WebUtility.HtmlDecode(Regex.Replace(pageTitle.Groups[1].Value, "<[^>]+>", "")).Trim();
 
-        var sections = new List<(string Header, int From, int To, bool IsSub, bool IsHd, string Body)>();
+        var sections = new List<(string Header, string Group, int Order, int From, int To, bool IsSub, bool IsHd, string Body)>();
         foreach (var block in html.Split("<div class=\"sp-wrap", StringSplitOptions.None).Skip(1))
         {
             var m = RxSpoiler.Match(block);
@@ -290,15 +384,17 @@ public class Cb01Service : ICb01Service
                 continue;
             }
 
-            int from = int.Parse(sm.Groups[1].Value);
-            int to = sm.Groups[2].Success ? int.Parse(sm.Groups[2].Value) : from;
+            int from = int.Parse(sm.Groups["from"].Value);
+            int to = sm.Groups["to"].Success ? int.Parse(sm.Groups["to"].Value) : from;
+            // Pagine con più serie: "BEYBLADE V-FORCE - STAGIONE 1 - ITA" → serie "BEYBLADE V-FORCE"
+            var group = Regex.Replace(sm.Groups["group"].Value, @"[\s\-–—:·]+$", "").Trim();
             bool isSub = header.Contains("SUB", StringComparison.OrdinalIgnoreCase);
             bool isHd = Regex.IsMatch(header, @"\bHD\b", RegexOptions.IgnoreCase);
-            sections.Add((header, from, to, isSub, isHd, m.Groups[2].Value));
+            sections.Add((header, group, sections.Count, from, to, isSub, isHd, m.Groups[2].Value));
         }
 
         // Tutti i link di ogni episodio, da tutte le sezioni: la scelta del migliore avviene al download
-        var byEpisode = new Dictionary<(int, int), (string Title, List<Cb01Link> Links)>();
+        var byEpisode = new Dictionary<(string Group, int Season, int Episode), (int Order, string Title, List<Cb01Link> Links)>();
         foreach (var s in sections)
         {
             int count = 0;
@@ -316,7 +412,7 @@ public class Cb01Service : ICb01Service
                 {
                     foreach (var ep in await ParseFolderAsync(folder.Url, s.From, s.To, ct))
                     {
-                        AddLink(ep.Season, ep.Episode, ep.Title, new Cb01Link(ep.Url, "Maxstream", s.Header, s.IsHd, s.IsSub));
+                        AddLink(s.Group, s.Order, ep.Season, ep.Episode, ep.Title, new Cb01Link(ep.Url, "Maxstream", s.Header, s.IsHd, s.IsSub));
                         count++;
                     }
                     continue;
@@ -329,27 +425,26 @@ public class Cb01Service : ICb01Service
                 if (episode <= 0) continue;
 
                 foreach (var a in anchors)
-                    AddLink(season, episode, $"Episodio {episode}", new Cb01Link(a.Url, a.Label, s.Header, s.IsHd, s.IsSub));
+                    AddLink(s.Group, s.Order, season, episode, $"Episodio {episode}", new Cb01Link(a.Url, a.Label, s.Header, s.IsHd, s.IsSub));
                 count++;
             }
             _logger.LogInformation("[CB01] Sezione '{Header}': {N} episodi", s.Header, count);
         }
 
-        void AddLink(int season, int episode, string title, Cb01Link link)
+        void AddLink(string group, int order, int season, int episode, string title, Cb01Link link)
         {
-            if (!byEpisode.TryGetValue((season, episode), out var e))
-                byEpisode[(season, episode)] = e = (title, new List<Cb01Link>());
+            if (!byEpisode.TryGetValue((group, season, episode), out var e))
+                byEpisode[(group, season, episode)] = e = (order, title, new List<Cb01Link>());
             if (!e.Links.Any(l => l.Url == link.Url)) e.Links.Add(link);
         }
 
         var episodes = byEpisode
             .Select(kv =>
             {
-                // Se c'è la versione italiana, quella sottotitolata non si usa
-                var links = kv.Value.Links.Any(l => !l.IsSub) ? kv.Value.Links.Where(l => !l.IsSub).ToList() : kv.Value.Links;
-                return new SeriesEpisode(kv.Key.Item1, kv.Key.Item2, kv.Value.Title, OrderCandidates(links));
+                // Tutti i link: la versione (italiana o sottotitolata) si sceglie dopo, con LinksFor
+                return new SeriesEpisode(kv.Key.Group, kv.Value.Order, kv.Key.Season, kv.Key.Episode, kv.Value.Title, OrderCandidates(kv.Value.Links));
             })
-            .OrderBy(e => e.Season).ThenBy(e => e.Episode)
+            .OrderBy(e => e.GroupOrder).ThenBy(e => e.Season).ThenBy(e => e.Episode)
             .ToList();
 
         lock (_seriesCache) _seriesCache[seriesLink] = (DateTime.UtcNow, episodes);
@@ -372,6 +467,17 @@ public class Cb01Service : ICb01Service
     /// stagione ed episodio presi dal nome ("Serie.01x03.Titolo.mp4", "S01E03").
     /// Gli episodi 00 (speciali) vengono saltati perché la coda richiede numeri > 0.
     /// </summary>
+    /// <summary>L'unico numero plausibile come episodio nel nome del file, se ce n'è esattamente uno.</summary>
+    private static int? BareEpisodeNumber(string fileName)
+    {
+        var name = Regex.Replace(fileName, @"\.(mp4|mkv|avi)$", "", RegexOptions.IgnoreCase);
+        var numbers = RxBareNumber.Matches(name)
+            .Select(m => int.Parse(m.Groups[1].Value))
+            .Where(n => n > 0 && !(n >= 1900 && n <= 2100))   // anni
+            .ToList();
+        return numbers.Count == 1 ? numbers[0] : null;
+    }
+
     private async Task<List<FolderEpisode>> ParseFolderAsync(string folderUrl, int fromSeason, int toSeason, CancellationToken ct)
     {
         var list = new List<FolderEpisode>();
@@ -389,6 +495,12 @@ public class Cb01Service : ICb01Service
             var em = RxFileEpisode.Match(fileName);
             if (!em.Success)
             {
+                // Cartella di una sola stagione con file numerati e basta ("_SUB-ITA_Boruto.001.WEB.mp4")
+                if (fromSeason == toSeason && BareEpisodeNumber(fileName) is { } bare)
+                {
+                    list.Add(new FolderEpisode(fromSeason, bare, $"Episodio {bare}", row.Groups[2].Value));
+                    continue;
+                }
                 _logger.LogInformation("[CB01] File senza numero episodio, saltato: {File}", fileName);
                 continue;
             }
@@ -466,13 +578,13 @@ public class Cb01Service : ICb01Service
     /// (pagina, stagione, episodio), così funziona anche dopo un riavvio dell'app.
     /// </summary>
     public async Task<MaxstreamDownload?> ResolveBestAsync(
-        string contentLink, bool isSeries, int season, int episode, CancellationToken ct = default)
+        string contentLink, bool isSeries, int season, int episode, bool subIta = false, string group = "", CancellationToken ct = default)
     {
         List<Cb01Link> candidates;
         if (isSeries)
         {
-            var ep = (await GetSeriesEpisodesAsync(contentLink, ct)).FirstOrDefault(e => e.Season == season && e.Episode == episode);
-            candidates = ep?.Links ?? new List<Cb01Link>();
+            var ep = (await GetSeriesEpisodesAsync(contentLink, ct)).FirstOrDefault(e => e.Season == season && e.Episode == episode && e.Group == group);
+            candidates = ep?.LinksFor(subIta) ?? new List<Cb01Link>();
         }
         else
         {
@@ -536,11 +648,12 @@ public class Cb01Service : ICb01Service
         var isSeries = item.IsSeries;
         var season = item.SeasonNumber;
         var episode = item.EpisodeNumber;
+        var (subIta, group) = DecodeTag(item.AudioLanguages);
 
         item.CookieExtractor = null;
         item.UrlExtractor = async ct =>
         {
-            var d = await ResolveBestAsync(link, isSeries, season, episode, ct);
+            var d = await ResolveBestAsync(link, isSeries, season, episode, subIta, group, ct);
             if (d == null) return null;
             item.SourceFileName = d.FileName;
             return d.Url;
@@ -554,7 +667,7 @@ public interface ICb01Service
     string Name { get; }
     Task<List<MovieSearchResult>> SearchAsync(string query, CancellationToken ct = default);
     Task<List<Season>> GetSeasonsAsync(string seriesLink, CancellationToken ct = default);
-    Task<List<StreamingEpisode>> GetEpisodesAsync(string contentLink, int seasonNumber, CancellationToken ct = default);
-    Task<MaxstreamDownload?> ResolveBestAsync(string contentLink, bool isSeries, int season, int episode, CancellationToken ct = default);
+    Task<List<StreamingEpisode>> GetEpisodesAsync(string contentLink, int seasonNumber, string variant = "", string group = "", CancellationToken ct = default);
+    Task<MaxstreamDownload?> ResolveBestAsync(string contentLink, bool isSeries, int season, int episode, bool subIta = false, string group = "", CancellationToken ct = default);
     void AttachExtractor(DownloadItem item);
 }

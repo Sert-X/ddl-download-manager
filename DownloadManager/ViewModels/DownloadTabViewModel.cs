@@ -59,6 +59,42 @@ public partial class DownloadTabViewModel : ViewModelBase
 
     public bool HasSelectedAnime => SelectedAnime != null;
 
+    // === Riquadro dettaglio dell'anime ===
+    [ObservableProperty] private string _detailFolder = "";
+    [ObservableProperty] private string _detailFileName = "";
+    public string EpisodesCountPill => Episodes.Count == 0 ? "" : $"{Episodes.Count} episodi";
+    public bool HasEpisodesCountPill => Episodes.Count > 0;
+    public string SelectedCountPill => Episodes.Count(e => e.IsSelected) is var n and > 0 ? $"{n} selezionati" : "";
+    public bool HasSelectedCountPill => SelectedCountPill.Length > 0;
+    public string AnimeDetailHint => IsLoadingEpisodes
+        ? "Caricamento degli episodi..."
+        : Episodes.Count == 0
+            ? "Fai doppio clic sull'anime a sinistra per caricare gli episodi."
+            : "Spunta gli episodi (Ctrl/Maiusc per selezioni multiple) e premi \"Scarica selezionati\".";
+
+    private void UpdateAnimeDetail()
+    {
+        OnPropertyChanged(nameof(EpisodesCountPill));
+        OnPropertyChanged(nameof(HasEpisodesCountPill));
+        OnPropertyChanged(nameof(SelectedCountPill));
+        OnPropertyChanged(nameof(HasSelectedCountPill));
+        OnPropertyChanged(nameof(AnimeDetailHint));
+
+        var a = SelectedAnime;
+        if (a == null) { DetailFolder = ""; DetailFileName = ""; return; }
+        try
+        {
+            var first = Episodes.FirstOrDefault();
+            var probe = new DownloadItem { SeriesName = a.Name, EpisodeNumber = int.TryParse(first?.Number, out var n0) ? n0 : 1, EpisodeTitle = first?.Title ?? "Episodio 1" };
+            var path = _fileNameBuilder.BuildDestinationPath(probe, "", probe.EpisodeTitle);
+            DetailFolder = Path.GetDirectoryName(path) ?? "";
+            DetailFileName = NamingPattern.Contains("{OriginalFileName}")
+                ? "nome originale del file sul sito (noto al via)"
+                : Path.GetFileName(path);
+        }
+        catch { DetailFolder = ""; DetailFileName = ""; }
+    }
+
     // ============================================================
     //  Selezione provider
     // ============================================================
@@ -124,7 +160,7 @@ public partial class DownloadTabViewModel : ViewModelBase
             try
             {
                 var preview = FileNameBuilder.ApplyPattern(
-                    NamingPattern, "Naruto Shippuden", 1, "Episodio 1", "NarutoShippuden_Ep_001_SUB_ITA");
+                    NamingPattern, "Frieren", 1, "Episodio 1", "Frieren_Ep_001_SUB_ITA");
                 return preview + ".mp4";
             }
             catch { return "(pattern non valido)"; }
@@ -303,6 +339,7 @@ public partial class DownloadTabViewModel : ViewModelBase
             OnPropertyChanged(nameof(CanInteractWithEpisodes));
             OnPropertyChanged(nameof(EpisodesCountText));
             OnPropertyChanged(nameof(EpisodesSelectedCountText));
+            if (Episodes.Count <= 1 || Episodes.Count % 25 == 0 || e.Action != System.Collections.Specialized.NotifyCollectionChangedAction.Add) UpdateAnimeDetail();
 
             // Ascolta il cambio IsSelected di ogni episodio
             if (e.NewItems != null)
@@ -324,9 +361,11 @@ public partial class DownloadTabViewModel : ViewModelBase
             {
                 case nameof(SharedState.BaseDownloadFolder):
                     OnPropertyChanged(nameof(BaseDownloadFolder));
+                    UpdateAnimeDetail();
                     break;
                 case nameof(SharedState.CreateSeriesFolder):
                     OnPropertyChanged(nameof(CreateSeriesFolder));
+                    UpdateAnimeDetail();
                     break;
             }
         };
@@ -399,6 +438,17 @@ public partial class DownloadTabViewModel : ViewModelBase
         Episodes.Clear();
         SelectedAnime = null;
         StatusMessage = $"Provider: {value.Name}. Premi 'Cerca' per iniziare.";
+
+        // Avvia il browser del provider in anticipo: la prima ricerca non aspetta l'avvio (0,5-3 s)
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(3000);
+                if (ReferenceEquals(SelectedProvider, value)) await value.InitializeAsync(headless: true);
+            }
+            catch (Exception ex) { _logger.LogDebug(ex, "Preavvio del browser di {Provider} non riuscito", value.Name); }
+        });
     }
 
     public string SelectedProviderName => SelectedProvider?.Name ?? "—";
@@ -410,6 +460,7 @@ public partial class DownloadTabViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(SelectedAnimeName));
         OnPropertyChanged(nameof(HasSelectedAnime));
+        UpdateAnimeDetail();
     }
 
     // ============================================================
@@ -426,6 +477,7 @@ public partial class DownloadTabViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(PatternPreview));
         _settings.Current.NamingPattern = value;
+        UpdateAnimeDetail();
         _settings.Save();
     }
 
@@ -468,6 +520,8 @@ public partial class DownloadTabViewModel : ViewModelBase
     partial void OnIsLoadingEpisodesChanged(bool value)
     {
         OnPropertyChanged(nameof(CanInteractWithEpisodes));
+        OnPropertyChanged(nameof(AnimeDetailHint));
+        if (!value) UpdateAnimeDetail();   // conteggi definitivi a caricamento finito
     }
 
     [RelayCommand]
@@ -595,7 +649,11 @@ public partial class DownloadTabViewModel : ViewModelBase
     private void OnEpisodePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(Episode.IsSelected))
+        {
             OnPropertyChanged(nameof(EpisodesSelectedCountText));
+            OnPropertyChanged(nameof(SelectedCountPill));
+            OnPropertyChanged(nameof(HasSelectedCountPill));
+        }
     }
 
     [RelayCommand]

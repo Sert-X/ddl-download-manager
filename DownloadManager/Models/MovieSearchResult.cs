@@ -16,6 +16,10 @@ public partial class MovieSearchResult : ObservableObject
     public bool IsSeries { get; set; }
     public string TitleId { get; set; } = string.Empty;
     public string Type => IsSeries ? "Serie" : "Film";
+    /// <summary>"2025 · Film", oppure solo "Serie" se l'anno manca.</summary>
+    public string YearAndType => string.IsNullOrWhiteSpace(Year) ? Type : $"{Year} · {Type}";
+    /// <summary>Film in lingua originale con sottotitoli italiani (CB01 lo scrive nel titolo: "[Sub-ITA]").</summary>
+    public bool IsSubIta { get; set; }
 
     /// <summary>
     /// Bitmap del poster, caricato in background dopo la ricerca.

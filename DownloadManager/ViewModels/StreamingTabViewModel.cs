@@ -127,7 +127,87 @@ public partial class StreamingTabViewModel : ViewModelBase
     public bool HasSelectedResult => SelectedResult != null;
     public bool IsSelectedResultSeries => SelectedResult?.IsSeries == true;
     public bool IsSelectedResultMovie => SelectedResult != null && !SelectedResult.IsSeries;
+
+    // === Riquadro dettaglio del film ===
+    public string SelectedResultYear => SelectedResult?.Year ?? "";
+    public bool SelectedResultIsSubIta => SelectedResult?.IsSubIta == true;
+    public bool HasSelectedResultYear => !string.IsNullOrWhiteSpace(SelectedResult?.Year);
+    public string ProviderDisplayName => IsCb01 ? "CB01 · Maxstream" : "StreamingCommunity";
+    /// <summary>Trama, se il provider la fornisce (CB01 mette solo "Film"/"Serie TV": non conta).</summary>
+    public string SelectedResultDescription =>
+        SelectedResult?.Description is { } d && d.Trim().Length > 12 ? d.Trim() : "";
+    public bool HasSelectedResultDescription => SelectedResultDescription.Length > 0;
+    [ObservableProperty] private string _detailFileName = "";
+    [ObservableProperty] private string _detailFolder = "";
+    public string DetailFileLabel => IsSelectedResultSeries ? "Esempio file" : "File";
+    public string SeasonsCountText => Seasons.Count switch { 0 => "", 1 => "1 stagione", var n => $"{n} stagioni" };
+    public bool HasSeasonsCount => Seasons.Count > 0;
+    public string SeasonEpisodesText => SelectedSeason == null || Episodes.Count == 0
+        ? "" : $"Stagione {SelectedSeason.Number} · {Episodes.Count} episodi";
+    public bool HasSeasonEpisodes => SeasonEpisodesText.Length > 0;
+    public bool HasSelectedEpisodes => Episodes.Any(e => e.IsSelected);
+    public string SeriesDetailHint => IsLoadingEpisodes
+        ? "Caricamento di stagioni ed episodi..."
+        : IsQualitiesLoading ? "Analisi delle qualità e delle tracce in corso..."
+        : Episodes.Count == 0 ? "Fai doppio clic sulla serie a sinistra per caricare stagioni ed episodi."
+        : "Scegli la stagione in alto, spunta gli episodi e premi \"Scarica selezionati\" (oppure stagione o serie intera).";
+    public string MovieReadyHint => IsCb01
+        ? (IsLoadingEpisodes ? "Analisi del post in corso..." : "Il link migliore (HD/SD) viene scelto al via del download.")
+        : (IsQualitiesLoading ? "Analisi delle qualità e delle tracce in corso..."
+           : AvailableQualities.Count > 0 ? "Pronto: scegli qualità, audio e sottotitoli qui sopra."
+           : "Fai doppio clic sul film a sinistra per analizzarlo.");
+
+    /// <summary>Cartella e nome file che avrà il film (o il primo episodio della stagione scelta).</summary>
+    private void UpdateMoviePreview()
+    {
+        OnPropertyChanged(nameof(DetailFileLabel));
+        OnPropertyChanged(nameof(SeasonsCountText));
+        OnPropertyChanged(nameof(HasSeasonsCount));
+        OnPropertyChanged(nameof(SeasonEpisodesText));
+        OnPropertyChanged(nameof(HasSeasonEpisodes));
+        OnPropertyChanged(nameof(SeriesDetailHint));
+
+        var m = SelectedResult;
+        if (m == null) { DetailFileName = ""; DetailFolder = ""; return; }
+        try
+        {
+            bool series = m.IsSeries;
+            var pattern = IsCb01
+                ? (series ? Cb01SeriesNamingPattern : Cb01MovieNamingPattern)
+                : (series ? SeriesNamingPattern : MovieNamingPattern);
+            var firstEp = series ? Episodes.FirstOrDefault() : null;
+            var epTitle = series ? (firstEp?.Title is { Length: > 0 } t ? t : "Episodio 1") : m.Title;
+            var probe = new DownloadItem
+            {
+                SeriesName = series && SelectedSeason != null ? QueueGroupName(m, SelectedSeason) : m.Title,
+                EpisodeNumber = int.TryParse(firstEp?.Number, out var n0) ? n0 : 1, EpisodeTitle = epTitle, Year = m.Year ?? "",
+                SeasonNumber = series ? (SelectedSeason?.Number ?? 1) : 0,
+                Category = CategoryName, IsSeries = series, ProviderKey = IsCb01 ? "CB01" : "StreamingCommunity"
+            };
+            var path = _fileNameBuilder.BuildDestinationPath(probe, "https://placeholder/video.mp4", epTitle, patternOverride: pattern);
+            DetailFolder = Path.GetDirectoryName(path) ?? "";
+            DetailFileName = IsCb01 && pattern.Contains("{OriginalFileName}")
+                ? "nome originale del file su Maxstream (noto al via)"
+                : Path.GetFileName(path);
+        }
+        catch { DetailFileName = ""; DetailFolder = ""; }
+    }
+
+    private void NotifyMovieCard()
+    {
+        OnPropertyChanged(nameof(SelectedResultYear));
+        OnPropertyChanged(nameof(SelectedResultIsSubIta));
+        OnPropertyChanged(nameof(HasSelectedResultYear));
+        OnPropertyChanged(nameof(SelectedResultDescription));
+        OnPropertyChanged(nameof(HasSelectedResultDescription));
+        OnPropertyChanged(nameof(ProviderDisplayName));
+        OnPropertyChanged(nameof(MovieReadyHint));
+        OnPropertyChanged(nameof(SeriesDetailHint));
+        UpdateMoviePreview();
+    }
     public bool HasSeasons => Seasons.Count > 0;
+    /// <summary>Ci sono sia stagioni in italiano sia sottotitolate: due pulsanti "Scarica tutta la serie".</summary>
+    public bool HasItaAndSubSeasons => Seasons.Any(s => s.IsSubVariant) && Seasons.Any(s => !s.IsSubVariant);
     public bool HasFailedStreamingItems =>
         _queueService.AllItems.Any(i =>
             i.Category == CategoryName &&
@@ -163,6 +243,7 @@ public partial class StreamingTabViewModel : ViewModelBase
             _settings.Current.StreamingBaseDownloadFolder = value;
             _settings.Save();
             OnPropertyChanged();
+            UpdateMoviePreview();
         }
     }
 
@@ -174,6 +255,7 @@ public partial class StreamingTabViewModel : ViewModelBase
             _settings.Current.StreamingCreateSeriesFolder = value;
             _settings.Save();
             OnPropertyChanged();
+            UpdateMoviePreview();
         }
     }
 
@@ -345,6 +427,10 @@ public partial class StreamingTabViewModel : ViewModelBase
             OnPropertyChanged(nameof(CanInteractWithEpisodes));
             OnPropertyChanged(nameof(EpisodesCountText));
             OnPropertyChanged(nameof(EpisodesSelectedCountText));
+            if (e.Action != NotifyCollectionChangedAction.Add || Episodes.Count == 1) UpdateMoviePreview();
+            OnPropertyChanged(nameof(SeasonEpisodesText));
+            OnPropertyChanged(nameof(HasSeasonEpisodes));
+            OnPropertyChanged(nameof(HasSelectedEpisodes));
 
             if (e.NewItems != null)
                 foreach (StreamingEpisode ep in e.NewItems)
@@ -357,6 +443,8 @@ public partial class StreamingTabViewModel : ViewModelBase
         AvailableQualities.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(CanDownloadMovie));
+            OnPropertyChanged(nameof(MovieReadyHint));
+        OnPropertyChanged(nameof(SeriesDetailHint));
         };
 
         // Sync con SharedState SOLO per il badge globale — non per la cartella
@@ -480,7 +568,10 @@ public partial class StreamingTabViewModel : ViewModelBase
     private void OnEpisodePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(StreamingEpisode.IsSelected))
+        {
             OnPropertyChanged(nameof(EpisodesSelectedCountText));
+            OnPropertyChanged(nameof(HasSelectedEpisodes));
+        }
     }
 
     // ============================================================
@@ -517,15 +608,17 @@ public partial class StreamingTabViewModel : ViewModelBase
         SelectedQuality = null;
         ClearTracks();
         IsQualitiesLoading = false;   // ← NUOVO (reset nel caso rimanesse appeso)
-        OnPropertyChanged(nameof(HasSeasons));
+        OnPropertyChanged(nameof(HasSeasons)); OnPropertyChanged(nameof(HasItaAndSubSeasons));
+        NotifyMovieCard();
     }
 
     partial void OnSelectedSeasonChanged(Season? value)
     {
+        UpdateMoviePreview();
         if (value == null) return;
         if (SelectedResult == null || !SelectedResult.IsSeries) return;
 
-        _ = LoadEpisodesForSeasonAsync(SelectedResult.Link, value.Number);
+        _ = LoadEpisodesForSeasonAsync(SelectedResult.Link, value);
         if (!IsCb01)
             _ = LoadQualitiesForCurrentSelectionAsync();
     }
@@ -535,6 +628,7 @@ public partial class StreamingTabViewModel : ViewModelBase
         _settings.Current.StreamingMovieNamingPattern = value;
         _settings.Save();
         OnPropertyChanged(nameof(MoviePatternPreview));
+        UpdateMoviePreview();
     }
 
     partial void OnSeriesNamingPatternChanged(string value)
@@ -542,6 +636,7 @@ public partial class StreamingTabViewModel : ViewModelBase
         _settings.Current.StreamingSeriesNamingPattern = value;
         _settings.Save();
         OnPropertyChanged(nameof(SeriesPatternPreview));
+        UpdateMoviePreview();
     }
 
     partial void OnCb01MovieNamingPatternChanged(string value)
@@ -549,6 +644,7 @@ public partial class StreamingTabViewModel : ViewModelBase
         _settings.Current.Cb01MovieNamingPattern = value;
         _settings.Save();
         OnPropertyChanged(nameof(Cb01MoviePatternPreview));
+        UpdateMoviePreview();
     }
 
     partial void OnCb01SeriesNamingPatternChanged(string value)
@@ -556,6 +652,7 @@ public partial class StreamingTabViewModel : ViewModelBase
         _settings.Current.Cb01SeriesNamingPattern = value;
         _settings.Save();
         OnPropertyChanged(nameof(Cb01SeriesPatternPreview));
+        UpdateMoviePreview();
     }
 
     partial void OnSeasonFolderPatternChanged(string value)
@@ -563,6 +660,7 @@ public partial class StreamingTabViewModel : ViewModelBase
         _settings.Current.SeasonFolderPattern = value;
         _settings.Save();
         OnPropertyChanged(nameof(SeasonFolderPreview));
+        UpdateMoviePreview();
     }
 
     partial void OnMaxConcurrencyChanged(int value)
@@ -678,12 +776,17 @@ public partial class StreamingTabViewModel : ViewModelBase
     partial void OnIsLoadingEpisodesChanged(bool value)
     {
         OnPropertyChanged(nameof(CanInteractWithEpisodes));
+        OnPropertyChanged(nameof(MovieReadyHint));
+        if (!value) UpdateMoviePreview();   // conteggi definitivi a caricamento finito
+        OnPropertyChanged(nameof(SeriesDetailHint));
     }
 
     partial void OnIsQualitiesLoadingChanged(bool value)
     {
         OnPropertyChanged(nameof(CanInteractWithEpisodes));
         OnPropertyChanged(nameof(CanDownloadMovie));
+        OnPropertyChanged(nameof(MovieReadyHint));
+        OnPropertyChanged(nameof(SeriesDetailHint));
     }
 
     [RelayCommand]
@@ -708,6 +811,7 @@ public partial class StreamingTabViewModel : ViewModelBase
                 result.IsSeries = false;
                 OnPropertyChanged(nameof(IsSelectedResultSeries));
                 OnPropertyChanged(nameof(IsSelectedResultMovie));
+                NotifyMovieCard();
 
                 StatusMessage = IsCb01
                     ? $"Film selezionato: '{result.Title}'. Clicca 'Scarica film' per procedere (Maxstream)."
@@ -719,10 +823,11 @@ public partial class StreamingTabViewModel : ViewModelBase
             result.IsSeries = true;
             OnPropertyChanged(nameof(IsSelectedResultSeries));
             OnPropertyChanged(nameof(IsSelectedResultMovie));
+            NotifyMovieCard();
 
             Seasons.Clear();
             foreach (var s in seasons) Seasons.Add(s);
-            OnPropertyChanged(nameof(HasSeasons));
+            OnPropertyChanged(nameof(HasSeasons)); OnPropertyChanged(nameof(HasItaAndSubSeasons));
 
             SelectedSeason = Seasons[0];
             StatusMessage = $"'{result.Title}': {seasons.Count} stagioni caricate.";
@@ -735,15 +840,16 @@ public partial class StreamingTabViewModel : ViewModelBase
         finally { if (seq == _seasonsSeq) IsLoadingEpisodes = false; }
     }
 
-    private async Task LoadEpisodesForSeasonAsync(string seriesLink, int seasonNumber)
+    private async Task LoadEpisodesForSeasonAsync(string seriesLink, Season season)
     {
         int seq = ++_episodesSeq;
+        int seasonNumber = season.Number;
         IsLoadingEpisodes = true;
         try
         {
             StatusMessage = $"Caricamento episodi stagione {seasonNumber}...";
             var episodes = IsCb01
-                ? await _cb01.GetEpisodesAsync(seriesLink, seasonNumber)
+                ? await _cb01.GetEpisodesAsync(seriesLink, seasonNumber, season.Variant, season.Group)
                 : await _service.GetEpisodesAsync(seriesLink, seasonNumber);
             if (seq != _episodesSeq) return;
 
@@ -962,9 +1068,7 @@ public partial class StreamingTabViewModel : ViewModelBase
 
         try
         {
-            var seriesName = SelectedResult.Title;
-            if (Seasons.Count > 1)
-                seriesName = $"{SelectedResult.Title} S{SelectedSeason.Number:D2}";
+            var seriesName = QueueGroupName(SelectedResult, SelectedSeason);
 
             var seasonNumber = SelectedSeason.Number;
 
@@ -984,7 +1088,7 @@ public partial class StreamingTabViewModel : ViewModelBase
             }
 
             var queued = await EnqueueEpisodesAsync(
-                SelectedResult.Link, seasonNumber, seriesName, toDownload, token);
+                SelectedResult.Link, seasonNumber, seriesName, toDownload, token, SelectedSeason.Group);
 
             var msg = $"{queued} episodi accodati";
             if (skipped > 0) msg += $", {skipped} già in coda";
@@ -1014,7 +1118,7 @@ public partial class StreamingTabViewModel : ViewModelBase
         var series = SelectedResult;
 
         if (Episodes.Count == 0)
-            await LoadEpisodesForSeasonAsync(series.Link, season.Number);
+            await LoadEpisodesForSeasonAsync(series.Link, season);
 
         if (Episodes.Count == 0)
         {
@@ -1028,9 +1132,7 @@ public partial class StreamingTabViewModel : ViewModelBase
 
         try
         {
-            var seriesName = Seasons.Count > 1
-                ? $"{series.Title} S{season.Number:D2}"
-                : series.Title;
+            var seriesName = QueueGroupName(series, season);
 
             var toAdd = new List<StreamingEpisode>();
             foreach (var ep in Episodes)
@@ -1042,7 +1144,7 @@ public partial class StreamingTabViewModel : ViewModelBase
             }
 
             var queued = await EnqueueEpisodesAsync(
-                series.Link, season.Number, seriesName, toAdd, token);
+                series.Link, season.Number, seriesName, toAdd, token, season.Group);
 
             StatusMessage = queued > 0
                 ? $"Stagione {season.Number}: {queued} episodi accodati."
@@ -1063,10 +1165,13 @@ public partial class StreamingTabViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private async Task DownloadAllSeasonsAsync()
+    private async Task DownloadAllSeasonsAsync(string? only)
     {
         if (SelectedResult == null) return;
         if (Seasons.Count == 0) { StatusMessage = "Nessuna stagione."; return; }
+        // "ita" = tutte le stagioni in italiano, "sub" = solo quelle sottotitolate, null = tutte
+        var chosen = Seasons.Where(s => only switch { "sub" => s.IsSubVariant, "ita" => !s.IsSubVariant, _ => true }).ToList();
+        if (chosen.Count == 0) { StatusMessage = "Nessuna stagione in questa lingua."; return; }
         if (IsBatchActive) { StatusMessage = "Accodamento già in corso."; return; }
 
         var series = SelectedResult;
@@ -1079,28 +1184,26 @@ public partial class StreamingTabViewModel : ViewModelBase
 
         try
         {
-            foreach (var season in Seasons)
+            foreach (var season in chosen)
             {
                 token.ThrowIfCancellationRequested();
                 seasonIdx++;
 
-                var seriesName = Seasons.Count > 1
-                    ? $"{series.Title} S{season.Number:D2}"
-                    : series.Title;
+                var seriesName = QueueGroupName(series, season);
 
-                StatusMessage = $"Stagione {season.Number} ({seasonIdx}/{Seasons.Count})...";
+                StatusMessage = $"{season.DisplayName} ({seasonIdx}/{chosen.Count})...";
 
                 try
                 {
                     var eps = IsCb01
-                        ? await _cb01.GetEpisodesAsync(series.Link, season.Number)
+                        ? await _cb01.GetEpisodesAsync(series.Link, season.Number, season.Variant, season.Group)
                         : await _service.GetEpisodesAsync(series.Link, season.Number);
                     var toAdd = IsCb01
                         ? eps.Where(ep => int.TryParse(ep.Number, out var n) && n > 0).ToList()
                         : eps.Where(ep => ep.EpisodeId > 0).ToList();
 
                     var queued = await EnqueueEpisodesAsync(
-                        series.Link, season.Number, seriesName, toAdd, token);
+                        series.Link, season.Number, seriesName, toAdd, token, season.Group);
 
                     totalQueued += queued;
                     StatusMessage = $"Accodati: {totalQueued} episodi ({seasonIdx}/{Seasons.Count} stagioni)";
@@ -1139,7 +1242,7 @@ public partial class StreamingTabViewModel : ViewModelBase
     /// </summary>
     private async Task<int> EnqueueEpisodesAsync(
         string seriesLink, int seasonNumber, string seriesName,
-        List<StreamingEpisode> episodes, CancellationToken ct)
+        List<StreamingEpisode> episodes, CancellationToken ct, string group = "")
     {
         if (episodes.Count == 0) return 0;
 
@@ -1176,7 +1279,9 @@ public partial class StreamingTabViewModel : ViewModelBase
                 contentLink: seriesLink,
                 episodeId: ep.EpisodeId,
                 isSeries: true,
-                providerKey: provKey));
+                providerKey: provKey,
+                subIta: IsCb01 && ep.IsSubIta,
+                cb01Group: IsCb01 ? group : ""));
         }
 
         await _queueService.EnqueueManyAsync(items);
@@ -1197,6 +1302,18 @@ public partial class StreamingTabViewModel : ViewModelBase
     //  HELPER
     // ============================================================
 
+    /// <summary>
+    /// Nome del gruppo in coda: "Titolo S01" con più stagioni, "+ Sub ITA" per la versione sottotitolata
+    /// (così ITA e Sub ITA della stessa stagione restano separati e non si scartano a vicenda).
+    /// </summary>
+    private string QueueGroupName(MovieSearchResult series, Season season)
+    {
+        // Pagine con più serie (es. Beyblade): ogni serie col suo nome, "Beyblade V-Force S01"
+        var title = season.GroupTitle.Length > 0 ? season.GroupTitle : series.Title;
+        var name = Seasons.Count > 1 ? $"{title} S{season.Number:D2}" : title;
+        return season.IsSubVariant ? $"{name} Sub ITA" : name;
+    }
+
     private DownloadItem BuildDownloadItem(
         string videoUrl, string seriesName,
         int episodeNumber, string title,
@@ -1207,7 +1324,9 @@ public partial class StreamingTabViewModel : ViewModelBase
         int episodeId = 0,
         bool isSeries = false,
         string year = "",
-        string providerKey = "StreamingCommunity")
+        string providerKey = "StreamingCommunity",
+        bool subIta = false,
+        string cb01Group = "")
     {
         var isCb01Provider = providerKey == "CB01";
         var pattern = isCb01Provider
@@ -1232,7 +1351,10 @@ public partial class StreamingTabViewModel : ViewModelBase
             },
             QualityName = isCb01Provider ? "" : (SelectedQuality?.Name ?? ""),
             ProviderKey = providerKey,
-            AudioLanguages = isCb01Provider ? "" : string.Join("|", AudioTracks.Where(t => t.IsSelected).Select(t => t.Key)),
+            // CB01: qui si ricorda se scaricare la versione sottotitolata (vedi Cb01Service.SubItaTag)
+            AudioLanguages = isCb01Provider
+                ? Cb01Service.EncodeTag(subIta, cb01Group)
+                : string.Join("|", AudioTracks.Where(t => t.IsSelected).Select(t => t.Key)),
             SubtitleLanguages = isCb01Provider ? "" : string.Join("|", SubtitleTracks.Where(t => t.IsSelected).Select(t => t.Key)),
             BurnSubtitles = isCb01Provider ? false : (BurnSubtitles && SubtitleTracks.Any(t => t.IsSelected)),
 
@@ -1391,5 +1513,6 @@ public partial class StreamingTabViewModel : ViewModelBase
         _settings.Current.StreamingBaseDownloadFolder = folder;
         _settings.Save();
         OnPropertyChanged(nameof(BaseDownloadFolder));
+        UpdateMoviePreview();
     }
 }

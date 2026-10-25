@@ -20,6 +20,8 @@ using DownloadManager.Services.Domains;
 using Microsoft.Extensions.Logging;
 using Avalonia.Controls;
 
+using DownloadManager.Services.Proxy;
+
 namespace DownloadManager.ViewModels;
 
 public partial class MainWindowViewModel : ViewModelBase
@@ -72,11 +74,12 @@ public partial class MainWindowViewModel : ViewModelBase
         {
             var s = _settings.Current;
             var providers = new List<string>();
-            if (s.UseProxyForAnimeWorld && Proxy.Proxies.Any(p => p.IsEnabledForAnimeWorld)) providers.Add("AW");
-            if (s.UseProxyForAnimeSaturn && Proxy.Proxies.Any(p => p.IsEnabledForAnimeSaturn)) providers.Add("AS");
-            if (s.UseProxyForStreamingCommunity && Proxy.Proxies.Any(p => p.IsEnabledForStreamingCommunity)) providers.Add("SC");
-            if (s.UseProxyForDownloads && Proxy.Proxies.Any(p => p.IsEnabledForDownloads)) providers.Add("DL");
-            if (s.UseProxyForCb01 && Proxy.Proxies.Any(p => p.IsEnabledForCb01)) providers.Add("CB");
+            bool Active(string key) => Proxy.Proxies.Any(p => DownloadManager.Services.Proxy.ProxyService.IsEnabledFor(p, key));
+            if (s.UseProxyForAnimeWorld && Active(ProviderKeys.AnimeWorld)) providers.Add("AW");
+            if (s.UseProxyForAnimeSaturn && Active(ProviderKeys.AnimeSaturn)) providers.Add("AS");
+            if (s.UseProxyForStreamingCommunity && Active(ProviderKeys.StreamingCommunity)) providers.Add("SC");
+            if (s.UseProxyForDownloads && Active(ProviderKeys.Downloads)) providers.Add("DL");
+            if (s.UseProxyForCb01 && Active(ProviderKeys.Cb01)) providers.Add("CB");
 
             if (providers.Count == 0) return "🌐 Off";
             return $"🌐 {string.Join("+", providers)}";
@@ -88,12 +91,12 @@ public partial class MainWindowViewModel : ViewModelBase
         get
         {
             var s = _settings.Current;
-            return Proxy.Proxies.Any(p =>
-                (s.UseProxyForAnimeWorld && p.IsEnabledForAnimeWorld) ||
-                (s.UseProxyForAnimeSaturn && p.IsEnabledForAnimeSaturn) ||
-                (s.UseProxyForStreamingCommunity && p.IsEnabledForStreamingCommunity) ||
-                (s.UseProxyForDownloads && p.IsEnabledForDownloads) ||
-                (s.UseProxyForCb01 && p.IsEnabledForCb01));
+            bool Active(string key) => Proxy.Proxies.Any(p => DownloadManager.Services.Proxy.ProxyService.IsEnabledFor(p, key));
+            return (s.UseProxyForAnimeWorld && Active(ProviderKeys.AnimeWorld)) ||
+                   (s.UseProxyForAnimeSaturn && Active(ProviderKeys.AnimeSaturn)) ||
+                   (s.UseProxyForStreamingCommunity && Active(ProviderKeys.StreamingCommunity)) ||
+                   (s.UseProxyForDownloads && Active(ProviderKeys.Downloads)) ||
+                   (s.UseProxyForCb01 && Active(ProviderKeys.Cb01));
         }
     }
 
@@ -217,7 +220,8 @@ public partial class MainWindowViewModel : ViewModelBase
             _animeSaturnService,
             _streamingCommunityService,
             domainsLogger,
-            Shared);
+            Shared,
+            _settings);
 
         Shared.RequestSftpRefresh = () => _ = Sftp.SftpRefreshCommand.ExecuteAsync(null);
 

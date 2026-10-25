@@ -136,7 +136,7 @@ public class AnimeWorldService : IAnimeWorldService
 
             if (_context == null) throw new InvalidOperationException("Servizio non inizializzato.");
 
-            var page = await _context.NewPageAsync();
+            var page = await LightPage.OpenAsync(_context);
             try
             {
                 _logger.LogInformation("[AW] Ricerca HTML per '{Query}'", query);
@@ -160,7 +160,7 @@ public class AnimeWorldService : IAnimeWorldService
                 try
                 {
                     await page.WaitForSelectorAsync("div.film-list div.item, div.film-list .alert",
-                        new PageWaitForSelectorOptions { Timeout = 10000 });
+                        new PageWaitForSelectorOptions { Timeout = 10000, State = WaitForSelectorState.Attached });
                 }
                 catch
                 {
@@ -168,83 +168,43 @@ public class AnimeWorldService : IAnimeWorldService
                     return results;
                 }
 
-                if (await page.QuerySelectorAsync("div.film-list div.item") == null)
+                // Tutti i risultati in una sola chiamata al browser (prima: 4-5 chiamate per risultato)
+                var rows = await page.EvaluateAsync<string[][]>(@"() => {
+                    let anchors = [...document.querySelectorAll('div.film-list div.item > div.inner > a.name')];
+                    if (anchors.length === 0) anchors = [...document.querySelectorAll('div.film-list div.item a.name')];
+                    return anchors.map(a => {
+                        const item = a.closest('.item') || a.parentElement;
+                        const img = a.querySelector('img') || (item ? item.querySelector('img') : null);
+                        const poster = img ? (img.getAttribute('data-src') || img.getAttribute('src') || '') : '';
+                        return [(a.innerText || a.textContent || '').trim(), a.getAttribute('href') || '', poster];
+                    });
+                }");
+
+                _logger.LogInformation("[AW] Trovati {N} anchor", rows.Length);
+
+                foreach (var row in rows)
                 {
-                    _logger.LogInformation("[AW] Nessun risultato per '{Query}'", query);
-                    return results;
-                }
+                    var name = row[0];
+                    var href = row[1];
+                    if (string.IsNullOrEmpty(href)) continue;
+                    if (href.StartsWith("/")) href = BaseUrl + href;
 
-                var anchors = await page.QuerySelectorAllAsync("div.film-list div.item > div.inner > a.name");
-                if (anchors == null || anchors.Count == 0)
-                    anchors = await page.QuerySelectorAllAsync("div.film-list div.item a.name");
+                    if (!href.Contains("/play/", StringComparison.OrdinalIgnoreCase) &&
+                        !href.Contains("/anime/", StringComparison.OrdinalIgnoreCase))
+                        continue;
 
-                _logger.LogInformation("[AW] Trovati {N} anchor", anchors?.Count ?? 0);
+                    var key = href.Split('?')[0].ToLowerInvariant();
+                    if (!seenLinks.Add(key)) continue;
 
-                if (anchors != null)
-                {
-                    foreach (var a in anchors)
-                    {
-                        try
-                        {
-                            var name = (await a.InnerTextAsync()).Trim();
-                            var href = await a.GetAttributeAsync("href") ?? "";
+                    string? posterUrl = row[2];
+                    if (!string.IsNullOrEmpty(posterUrl) && posterUrl.StartsWith("/"))
+                        posterUrl = BaseUrl + posterUrl;
+                    if (string.IsNullOrEmpty(posterUrl) ||
+                        posterUrl.StartsWith("data:", StringComparison.OrdinalIgnoreCase) ||
+                        posterUrl.Contains("placeholder", StringComparison.OrdinalIgnoreCase))
+                        posterUrl = null;
 
-                            if (string.IsNullOrEmpty(href)) continue;
-                            if (href.StartsWith("/")) href = BaseUrl + href;
-
-                            if (!href.Contains("/play/", StringComparison.OrdinalIgnoreCase) &&
-                                !href.Contains("/anime/", StringComparison.OrdinalIgnoreCase))
-                                continue;
-
-                            var key = href.Split('?')[0].ToLowerInvariant();
-                            if (!seenLinks.Add(key)) continue;
-
-                            // === ESTRAZIONE POSTER ===
-                            string? posterUrl = null;
-                            try
-                            {
-                                var img = await a.QuerySelectorAsync("img");
-                                if (img == null)
-                                {
-                                    // Cerca nel contenitore padre
-                                    var parent = await a.EvaluateHandleAsync(
-                                        "el => el.closest('.item') || el.parentElement");
-                                    if (parent != null)
-                                    {
-                                        var parentEl = parent.AsElement();
-                                        if (parentEl != null)
-                                            img = await parentEl.QuerySelectorAsync("img");
-                                    }
-                                }
-
-                                if (img != null)
-                                {
-                                    posterUrl = await img.GetAttributeAsync("data-src")
-                                            ?? await img.GetAttributeAsync("src");
-
-                                    if (!string.IsNullOrEmpty(posterUrl) && posterUrl.StartsWith("/"))
-                                        posterUrl = BaseUrl + posterUrl;
-
-                                    if (!string.IsNullOrEmpty(posterUrl) &&
-                                        (posterUrl.StartsWith("data:", StringComparison.OrdinalIgnoreCase) ||
-                                        posterUrl.Contains("placeholder", StringComparison.OrdinalIgnoreCase)))
-                                        posterUrl = null;
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger.LogDebug(ex, "[AW] Errore poster per {Href}", href);
-                            }
-
-                            results.Add(new AnimeSearchResult
-                            {
-                                Name = name,
-                                Link = href,
-                                PosterUrl = posterUrl
-                            });
-                        }
-                        catch { }
-                    }
+                    results.Add(new AnimeSearchResult { Name = name, Link = href, PosterUrl = posterUrl });
                 }
 
                 _logger.LogInformation("[AW] Trovati {N} risultati per '{Query}'",
@@ -281,19 +241,36 @@ public class AnimeWorldService : IAnimeWorldService
             var episodes = new List<Episode>();
             if (_context == null) throw new InvalidOperationException("Servizio non inizializzato.");
 
-            var page = await _context.NewPageAsync();
+            var page = await LightPage.OpenAsync(_context);
             try
             {
                 _logger.LogInformation("Recupero episodi da: {Url}", animeUrl);
-                await page.GotoAsync(animeUrl);
-                await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-
-                var episodeElements = await page.QuerySelectorAllAsync("li.episode > a");
-
-                foreach (var element in episodeElements)
+                // L'elenco è già nell'HTML: niente attesa della "rete ferma" (pubblicità e script
+                // esterni la ritardavano di secondi)
+                await page.GotoAsync(animeUrl, new PageGotoOptions
                 {
-                    var number = await element.GetAttributeAsync("data-episode-num") ?? "";
-                    var href = await element.GetAttributeAsync("href") ?? "";
+                    WaitUntil = WaitUntilState.DOMContentLoaded,
+                    Timeout = 30000
+                });
+                try
+                {
+                    await page.WaitForSelectorAsync("li.episode > a",
+                        new PageWaitForSelectorOptions { Timeout = 10000, State = WaitForSelectorState.Attached });
+                }
+                catch
+                {
+                    _logger.LogWarning("Nessun episodio trovato in {Url}", animeUrl);
+                    return episodes;
+                }
+
+                // Tutti gli episodi in una sola chiamata (prima: 2 chiamate per episodio)
+                var rows = await page.EvalOnSelectorAllAsync<string[][]>("li.episode > a",
+                    "els => els.map(e => [e.getAttribute('data-episode-num') || '', e.getAttribute('href') || ''])");
+
+                foreach (var row in rows)
+                {
+                    var number = row[0];
+                    var href = row[1];
 
                     if (string.IsNullOrEmpty(href)) continue;
                     if (href.StartsWith("/")) href = BaseUrl + href;

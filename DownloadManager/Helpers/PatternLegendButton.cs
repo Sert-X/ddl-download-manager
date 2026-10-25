@@ -40,12 +40,12 @@ public class PatternLegendButton : Button
     // Valori d'esempio usati in tutte le legende
     private static readonly Token[] AnimeTokens =
     {
-        new("{Series}", "Nome della serie", "Naruto Shippuden"),
+        new("{Series}", "Nome della serie", "Frieren"),
         new("{Episode}", "Numero dell'episodio", "5"),
         new("{Episode:D2}", "Numero con 2 cifre (zeri davanti)", "05"),
         new("{Episode:D3}", "Numero con 3 cifre (zeri davanti)", "005"),
         new("{Title}", "Titolo dell'episodio", "Episodio 5"),
-        new("{OriginalFileName}", "Nome del file sul sito, senza estensione", "NarutoShippuden_Ep_005_SUB_ITA"),
+        new("{OriginalFileName}", "Nome del file sul sito, senza estensione", "Frieren_Ep_005_SUB_ITA"),
     };
 
     private static readonly Token[] MovieTokens =
@@ -75,12 +75,12 @@ public class PatternLegendButton : Button
 
     private static readonly Token[] OrganizeTokens =
     {
-        new("{Series}", "Nome della serie, ricavato dal file (o dalla cartella)", "Naruto Shippuden"),
+        new("{Series}", "Nome della serie, ricavato dal file (o dalla cartella)", "Frieren"),
         new("{Episode}", "Numero dell'episodio (nuovo numero se riordini/unisci)", "5"),
         new("{Episode:D2}", "Numero con 2 cifre", "05"),
         new("{Episode:D3}", "Numero con 3 cifre", "005"),
         new("{Title}", "Titolo trovato nel nome del file (se c'è)", "Il ritorno"),
-        new("{OriginalFileName}", "Nome attuale del file, senza estensione", "NarutoShippuden_Ep_005_SUB_ITA"),
+        new("{OriginalFileName}", "Nome attuale del file, senza estensione", "Frieren_Ep_005_SUB_ITA"),
     };
 
     private static readonly Token[] SplitFolderTokens =
@@ -122,11 +122,11 @@ public class PatternLegendButton : Button
             "SeasonFolder" => ("Segnaposto per la cartella della stagione", SeasonFolderTokens, new[] { "Lascia vuoto per non creare sottocartelle per le stagioni." }),
             "Organize" => ("Segnaposto per il nome dei file", OrganizeTokens, new[]
             {
-                "Una \"/\" crea sottocartelle: {Series}/{Episode:D3} → Naruto Shippuden\\005.mp4",
+                "Una \"/\" crea sottocartelle: {Series}/{Episode:D3} → Frieren\\005.mp4",
                 "File con più episodi (es. Ep 01-02): {Episode:D2} diventa 01-02.",
             }),
             "SplitFolder" => ("Segnaposto per il nome delle sottocartelle", SplitFolderTokens, new[] { "Esempio: Puntate {Start}-{End} → Puntate 26-50" }),
-            _ => ("Segnaposto per il nome dei file", AnimeTokens, new[] { "Esempio: {Series} - {Episode:D3} → Naruto Shippuden - 005" }),
+            _ => ("Segnaposto per il nome dei file", AnimeTokens, new[] { "Esempio: {Series} - {Episode:D3} → Frieren - 005" }),
         };
 
         var list = new StackPanel { Spacing = 2 };

@@ -71,9 +71,12 @@ public class FileNameBuilder
             ext = "mp4";
         }
 
+        // La coda raggruppa le stagioni come "Titolo S01": nel nome file e nella cartella serve il titolo puro
+        var seriesTitle = SeriesTitle(item.SeriesName, item.SeasonNumber);
+
         var fileNameWithoutExt = ApplyPattern(
             pattern,
-            series: item.SeriesName,
+            series: seriesTitle,
             episodeNumber: item.EpisodeNumber,
             title: episodeTitle,
             originalFileName: originalFileName,
@@ -96,9 +99,9 @@ public class FileNameBuilder
             ? settings.BaseDownloadFolder
             : baseFolder;
 
-        if (createFolder && !string.IsNullOrWhiteSpace(item.SeriesName))
+        if (createFolder && !string.IsNullOrWhiteSpace(seriesTitle))
         {
-            var seriesFolder = SanitizeFileName(item.SeriesName);
+            var seriesFolder = SanitizeFileName(seriesTitle);
             folder = Path.Combine(folder, seriesFolder);
 
             if (item.SeasonNumber > 0 &&
@@ -112,6 +115,23 @@ public class FileNameBuilder
         }
 
         return Path.Combine(folder, fileNameWithoutExt + "." + ext);
+    }
+
+    /// <summary>
+    /// Nome del gruppo in coda → titolo per file e cartella: "I Simpson S01" → "I Simpson",
+    /// "Boruto S01 Sub ITA" → "Boruto (Sub ITA)" (cartella separata dalla versione italiana).
+    /// </summary>
+    public static string SeriesTitle(string? seriesName, int season)
+    {
+        var name = seriesName ?? "";
+        bool sub = name.EndsWith(" Sub ITA", StringComparison.Ordinal);
+        if (sub) name = name[..^" Sub ITA".Length].TrimEnd();
+        if (season > 0)
+        {
+            var suffix = $" S{season:D2}";
+            if (name.EndsWith(suffix, StringComparison.Ordinal)) name = name[..^suffix.Length].TrimEnd();
+        }
+        return sub ? $"{name} (Sub ITA)" : name;
     }
 
     private static string BuildSeasonFolderName(string pattern, int seasonNumber)

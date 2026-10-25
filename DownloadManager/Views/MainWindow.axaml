@@ -225,7 +225,7 @@
                                     <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}">
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Come si usa</Run><LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 1. Cerca:</Run> scegli il provider (AnimeWorld o AnimeSaturn), scrivi il titolo e premi Cerca o Invio. Le ricerche recenti restano nel menu a tendina.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 2. Episodi:</Run> fai doppio clic su un risultato: gli episodi compaiono nella tabella a destra.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 2. Dettaglio:</Run> fai doppio clic su un risultato: gli episodi compaiono nel riquadro Dettaglio a destra.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 3. Selezione:</Run> spunta gli episodi (o usa Seleziona tutti / Deseleziona / Inverti) e premi "Scarica selezionati". Gli episodi già in coda vengono saltati.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 4. Coda:</Run> i download sono raggruppati per serie: espandi un gruppo per vedere ogni episodio, usa i pulsanti del gruppo per avviarlo, metterlo in pausa o annullarlo.<LineBreak/>
                                         <LineBreak/>
@@ -265,23 +265,41 @@
                             </Grid>
                         </Border>
 
-                        <Border Classes="cardElevated" Margin="0,0,0,12">
-                            <Grid ColumnDefinitions="Auto, *, Auto, Auto, Auto" RowDefinitions="Auto, Auto">
-                                <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0"><TextBlock Text="Pattern" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="Anime" Target="{Binding #AnimePatternBox}"/></StackPanel>
-                                <ComboBox x:Name="AnimePatternBox" Grid.Row="0" Grid.Column="1" IsEditable="True" ItemsSource="{Binding NamingPresets}" Text="{Binding NamingPattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,0,10,0"/>
-                                <Border Grid.Row="0" Grid.Column="2" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,0,10,0" MaxWidth="380">
-                                    <TextBlock Text="{Binding PatternPreview}" FontFamily="Consolas,Menlo,monospace" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                        <Border Classes="cardElevated" Margin="0,0,0,12" Padding="0" ClipToBounds="True">
+                            <StackPanel>
+                                <ToggleButton Classes="guideToggle" x:Name="ToggleNamingAnime" IsChecked="False" ToolTip.Tip="Mostra o nascondi pattern del nome file e cartella di destinazione">
+                                    <Grid ColumnDefinitions="Auto, *, Auto">
+                                        <StackPanel Classes="bi" VerticalAlignment="Center">
+                                            <Path Classes="icon accent" Data="{StaticResource IconSettings}"/>
+                                            <TextBlock Text="Nome file e cartella" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AppTextBrush}"/>
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="1" FontSize="12" Margin="16,0,12,0" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding !#ToggleNamingAnime.IsChecked}">
+                                            <Run Text="{Binding PatternPreview}" FontFamily="Consolas,Menlo,monospace" Foreground="{DynamicResource AppAccentBrush}"/>
+                                            <Run Text="  ·  "/>
+                                            <Run Text="{Binding BaseDownloadFolder}"/>
+                                        </TextBlock>
+                                        <Path Grid.Column="2" Classes="chevron"/>
+                                    </Grid>
+                                </ToggleButton>
+                                <Border IsVisible="{Binding #ToggleNamingAnime.IsChecked}" Margin="16,0,16,16">
+                                    <Grid ColumnDefinitions="Auto, *, Auto, Auto, Auto" RowDefinitions="Auto, Auto">
+                                        <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0"><TextBlock Text="Pattern" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="Anime" Target="{Binding #AnimePatternBox}"/></StackPanel>
+                                        <ComboBox x:Name="AnimePatternBox" Grid.Row="0" Grid.Column="1" IsEditable="True" ItemsSource="{Binding NamingPresets}" Text="{Binding NamingPattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,0,10,0"/>
+                                        <Border Grid.Row="0" Grid.Column="2" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,0,10,0" MaxWidth="380">
+                                            <TextBlock Text="{Binding PatternPreview}" FontFamily="Consolas,Menlo,monospace" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                        </Border>
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Cartella base" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,10,10,0" ToolTip.Tip="La cartella locale dove verranno salvati i video"/>
+                                        <TextBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding BaseDownloadFolder}" Margin="0,10,10,0"/>
+                                        <Button Grid.Row="1" Grid.Column="3" Classes="iconCircle" Click="OnBrowseBaseFolderClick" Margin="0,10,8,0" ToolTip.Tip="Sfoglia">
+                                            <Path Classes="icon" Data="{StaticResource IconFolder}"/>
+                                        </Button>
+                                        <CheckBox Grid.Row="1" Grid.Column="4" Content="Crea sottocartella per serie" IsChecked="{Binding CreateSeriesFolder}" VerticalAlignment="Center" Margin="0,10,0,0" ToolTip.Tip="Crea una cartella dedicata per questa serie"/>
+                                    </Grid>
                                 </Border>
-                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Cartella base" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,10,10,0" ToolTip.Tip="La cartella locale dove verranno salvati i video"/>
-                                <TextBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding BaseDownloadFolder}" Margin="0,10,10,0"/>
-                                <Button Grid.Row="1" Grid.Column="3" Classes="iconCircle" Click="OnBrowseBaseFolderClick" Margin="0,10,8,0" ToolTip.Tip="Sfoglia">
-                                    <Path Classes="icon" Data="{StaticResource IconFolder}"/>
-                                </Button>
-                                <CheckBox Grid.Row="1" Grid.Column="4" Content="Crea sottocartella per serie" IsChecked="{Binding CreateSeriesFolder}" VerticalAlignment="Center" Margin="0,10,0,0" ToolTip.Tip="Crea una cartella dedicata per questa serie"/>
-                            </Grid>
+                            </StackPanel>
                         </Border>
 
-                        <Grid ColumnDefinitions="1*, 1*" Height="480" Margin="0,0,0,12">
+                        <Grid ColumnDefinitions="1*, 1*" Height="720" Margin="0,0,0,12">
                             <Border Grid.Column="0" Classes="cardElevated" Margin="0,0,6,0">
                                 <DockPanel>
                                     <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto, Auto, *" Margin="0,0,0,8">
@@ -314,6 +332,10 @@
                                                         <Border Classes="poster" Width="140" Height="200">
                                                             <Image Source="{Binding Poster}" Stretch="UniformToFill"/>
                                                         </Border>
+                                                        <Border Classes="posterShade" Width="140" Height="200"/>
+                                                        <Button Classes="posterAnalyze" Click="OnAnalyzeAnimeClick">
+                                                            <TextBlock Text="Analizza"/>
+                                                        </Button>
                                                         <Button Classes="iconCircle" Width="28" Height="28" Padding="0" Margin="0,6,6,0" HorizontalAlignment="Right" VerticalAlignment="Top" Opacity="0.85" ToolTip.Tip="Apri il post nel browser" Click="OnOpenResultInBrowserClick">
                                                             <Path Classes="icon" Data="{StaticResource IconGlobe}" Width="14" Height="14"/>
                                                         </Button>
@@ -331,17 +353,41 @@
                                     <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto, Auto, Auto, Auto, *" Margin="0,0,0,8">
                                         <StackPanel Grid.Column="0" Classes="bi" VerticalAlignment="Center">
                                             <Path Classes="icon accent" Data="{StaticResource IconTv}"/>
-                                            <TextBlock Text="Episodi" FontWeight="Bold" FontSize="14"/>
+                                            <TextBlock Text="Dettaglio" FontWeight="Bold" FontSize="14"/>
                                         </StackPanel>
-                                        <TextBlock Grid.Column="1" Text="{Binding SelectedAnimeName}" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource AppAccentBrush}" Margin="8,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="360" IsVisible="{Binding HasSelectedAnime}" ToolTip.Tip="{Binding SelectedAnimeName}"/>
-                                        <TextBlock Grid.Column="2" Text="{Binding EpisodesCountText}" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" Margin="12,0,0,0" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Column="3" Text="{Binding EpisodesSelectedCountText}" FontSize="12" Foreground="{DynamicResource AppAccentBrush}" Margin="12,0,0,0" VerticalAlignment="Center" FontWeight="SemiBold"/>
                                         <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" IsVisible="{Binding IsLoadingEpisodes}">
                                             <ProgressBar IsIndeterminate="True" Width="80" Height="4" VerticalAlignment="Center"/>
                                             <TextBlock Text="Caricamento..." FontSize="11" FontStyle="Italic" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Grid>
 
+                                    <Border DockPanel.Dock="Top" Background="{DynamicResource AppSurface2Brush}" CornerRadius="12" Padding="12" Margin="0,0,0,10" IsVisible="{Binding HasSelectedAnime}">
+                                        <Grid ColumnDefinitions="Auto, *">
+                                            <Border Classes="poster" Width="84" Height="120" VerticalAlignment="Top" Margin="0,0,14,0" Background="{DynamicResource AppHoverBrush}">
+                                                <Panel>
+                                                    <Path Classes="icon" Data="{StaticResource IconTv}" Width="28" Height="28" Stroke="{DynamicResource AppTextMutedBrush}" HorizontalAlignment="Center"/>
+                                                    <Image Source="{Binding SelectedAnime.Poster, FallbackValue={x:Null}}" Stretch="UniformToFill"/>
+                                                </Panel>
+                                            </Border>
+                                            <StackPanel Grid.Column="1" Spacing="8">
+                                                <TextBlock Text="{Binding SelectedAnimeName}" FontSize="17" FontWeight="Bold" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
+                                                <WrapPanel Orientation="Horizontal" ItemSpacing="6" LineSpacing="6">
+                                                    <Border Classes="moviePill accent"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTv}"/><TextBlock Text="Anime"/></StackPanel></Border>
+                                                    <Border Classes="moviePill"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconGlobe}"/><TextBlock Text="{Binding SelectedProviderName}"/></StackPanel></Border>
+                                                    <Border Classes="moviePill" IsVisible="{Binding HasEpisodesCountPill}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconList}"/><TextBlock Text="{Binding EpisodesCountPill}"/></StackPanel></Border>
+                                                    <Border Classes="moviePill accent" IsVisible="{Binding HasSelectedCountPill}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCheck}"/><TextBlock Text="{Binding SelectedCountPill}"/></StackPanel></Border>
+                                                </WrapPanel>
+
+                                                <Grid ColumnDefinitions="Auto, *" RowDefinitions="Auto, Auto">
+                                                    <TextBlock Grid.Row="0" Text="Cartella" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center" Margin="0,0,12,4"/>
+                                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding DetailFolder}" FontSize="12" TextTrimming="CharacterEllipsis" Margin="0,0,0,4" ToolTip.Tip="{Binding DetailFolder}"/>
+                                                    <TextBlock Grid.Row="1" Text="Esempio file" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding DetailFileName}" FontFamily="Consolas,Menlo,monospace" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource AppAccentBrush}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DetailFileName}"/>
+                                                </Grid>
+                                                <TextBlock Text="{Binding AnimeDetailHint}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
                                     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="6" Margin="0,0,0,8">
                                         <Button ToolTip.Tip="Accoda tutti gli episodi spuntati (quelli già in coda vengono saltati)" Classes="success" Command="{Binding DownloadSelectedEpisodesCommand}" IsEnabled="{Binding CanInteractWithEpisodes}">
                                             <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconDownload}"/><TextBlock Text="Scarica selezionati"/></StackPanel>
@@ -553,45 +599,63 @@
                             </Grid>
                         </Border>
 
-                        <Border Classes="cardElevated" Margin="0,0,0,12">
-                            <Grid ColumnDefinitions="Auto, *, Auto, Auto, Auto" RowDefinitions="Auto, Auto, Auto, Auto, Auto, Auto">
-                                <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0" ToolTip.Tip="Nome dei film scaricati da StreamingCommunity"><TextBlock Text="Film · StreamingCommunity" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="Movie" Target="{Binding #MoviePatternBox}"/></StackPanel>
-                                <ComboBox x:Name="MoviePatternBox" Grid.Row="0" Grid.Column="1" IsEditable="True" ItemsSource="{Binding MovieNamingPresets}" Text="{Binding MovieNamingPattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,0,10,0"/>
-                                <Border Grid.Row="0" Grid.Column="2" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,0,10,0" MaxWidth="380">
-                                    <TextBlock Text="{Binding MoviePatternPreview}" FontFamily="Consolas,Menlo,monospace" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                        <Border Classes="cardElevated" Margin="0,0,0,12" Padding="0" ClipToBounds="True">
+                            <StackPanel>
+                                <ToggleButton Classes="guideToggle" x:Name="ToggleNamingStreaming" IsChecked="False" ToolTip.Tip="Mostra o nascondi pattern del nome file e cartella di destinazione">
+                                    <Grid ColumnDefinitions="Auto, *, Auto">
+                                        <StackPanel Classes="bi" VerticalAlignment="Center">
+                                            <Path Classes="icon accent" Data="{StaticResource IconSettings}"/>
+                                            <TextBlock Text="Nome file e cartella" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AppTextBrush}"/>
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="1" FontSize="12" Margin="16,0,12,0" VerticalAlignment="Center" HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding !#ToggleNamingStreaming.IsChecked}">
+                                            <Run Text="{Binding SeriesPatternPreview}" FontFamily="Consolas,Menlo,monospace" Foreground="{DynamicResource AppAccentBrush}"/>
+                                            <Run Text="  ·  "/>
+                                            <Run Text="{Binding BaseDownloadFolder}"/>
+                                        </TextBlock>
+                                        <Path Grid.Column="2" Classes="chevron"/>
+                                    </Grid>
+                                </ToggleButton>
+                                <Border IsVisible="{Binding #ToggleNamingStreaming.IsChecked}" Margin="16,0,16,16">
+                                    <Grid ColumnDefinitions="Auto, *, Auto, Auto, Auto" RowDefinitions="Auto, Auto, Auto, Auto, Auto, Auto">
+                                        <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0" ToolTip.Tip="Nome dei film scaricati da StreamingCommunity"><TextBlock Text="Film · StreamingCommunity" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="Movie" Target="{Binding #MoviePatternBox}"/></StackPanel>
+                                        <ComboBox x:Name="MoviePatternBox" Grid.Row="0" Grid.Column="1" IsEditable="True" ItemsSource="{Binding MovieNamingPresets}" Text="{Binding MovieNamingPattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,0,10,0"/>
+                                        <Border Grid.Row="0" Grid.Column="2" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,0,10,0" MaxWidth="380">
+                                            <TextBlock Text="{Binding MoviePatternPreview}" FontFamily="Consolas,Menlo,monospace" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                        </Border>
+
+                                        <StackPanel Grid.Row="1" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,10,4,0" ToolTip.Tip="Nome degli episodi scaricati da StreamingCommunity"><TextBlock Text="Serie · StreamingCommunity" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="Series" Target="{Binding #SeriesPatternBox}"/></StackPanel>
+                                        <ComboBox x:Name="SeriesPatternBox" Grid.Row="1" Grid.Column="1" IsEditable="True" ItemsSource="{Binding SeriesNamingPresets}" Text="{Binding SeriesNamingPattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,10,10,0"/>
+                                        <Border Grid.Row="1" Grid.Column="2" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,10,10,0" MaxWidth="380">
+                                            <TextBlock Text="{Binding SeriesPatternPreview}" FontFamily="Consolas,Menlo,monospace" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                        </Border>
+
+                                        <StackPanel Grid.Row="2" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,10,4,0" ToolTip.Tip="Nome dei film scaricati da CB01. {OriginalFileName} = nome del file su Maxstream"><TextBlock Text="Film · CB01" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="Movie" Target="{Binding #Cb01MoviePatternBox}"/></StackPanel>
+                                        <ComboBox x:Name="Cb01MoviePatternBox" Grid.Row="2" Grid.Column="1" IsEditable="True" ItemsSource="{Binding MovieNamingPresets}" Text="{Binding Cb01MovieNamingPattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,10,10,0"/>
+                                        <Border Grid.Row="2" Grid.Column="2" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,10,10,0" MaxWidth="380">
+                                            <TextBlock Text="{Binding Cb01MoviePatternPreview}" FontFamily="Consolas,Menlo,monospace" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                        </Border>
+
+                                        <StackPanel Grid.Row="3" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,10,4,0" ToolTip.Tip="Nome degli episodi scaricati da CB01. {OriginalFileName} = nome del file su Maxstream"><TextBlock Text="Serie · CB01" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="Series" Target="{Binding #Cb01SeriesPatternBox}"/></StackPanel>
+                                        <ComboBox x:Name="Cb01SeriesPatternBox" Grid.Row="3" Grid.Column="1" IsEditable="True" ItemsSource="{Binding SeriesNamingPresets}" Text="{Binding Cb01SeriesNamingPattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,10,10,0"/>
+                                        <Border Grid.Row="3" Grid.Column="2" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,10,10,0" MaxWidth="380">
+                                            <TextBlock Text="{Binding Cb01SeriesPatternPreview}" FontFamily="Consolas,Menlo,monospace" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                        </Border>
+
+                                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Cartella base" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,10,10,0"/>
+                                        <TextBox Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding BaseDownloadFolder, Mode=TwoWay}" Margin="0,10,10,0"/>
+                                        <Button Grid.Row="4" Grid.Column="3" Classes="iconCircle" Click="OnStreamingBrowseBaseFolderClick" Margin="0,10,8,0" ToolTip.Tip="Sfoglia">
+                                            <Path Classes="icon" Data="{StaticResource IconFolder}"/>
+                                        </Button>
+                                        <CheckBox ToolTip.Tip="Salva ogni serie in una sottocartella con il suo nome dentro la cartella base" Grid.Row="4" Grid.Column="4" Content="Crea sottocartella per serie" IsChecked="{Binding CreateSeriesFolder, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+
+                                        <StackPanel Grid.Row="5" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,10,4,0"><TextBlock Text="Sottocartella stagione" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="SeasonFolder" Target="{Binding #SeasonFolderBox}"/></StackPanel>
+                                        <TextBox x:Name="SeasonFolderBox" Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding SeasonFolderPattern}" PlaceholderText="Stagione {number} (vuoto = nessuna)" Margin="0,10,10,0"/>
+                                    </Grid>
                                 </Border>
-
-                                <StackPanel Grid.Row="1" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,10,4,0" ToolTip.Tip="Nome degli episodi scaricati da StreamingCommunity"><TextBlock Text="Serie · StreamingCommunity" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="Series" Target="{Binding #SeriesPatternBox}"/></StackPanel>
-                                <ComboBox x:Name="SeriesPatternBox" Grid.Row="1" Grid.Column="1" IsEditable="True" ItemsSource="{Binding SeriesNamingPresets}" Text="{Binding SeriesNamingPattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,10,10,0"/>
-                                <Border Grid.Row="1" Grid.Column="2" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,10,10,0" MaxWidth="380">
-                                    <TextBlock Text="{Binding SeriesPatternPreview}" FontFamily="Consolas,Menlo,monospace" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                </Border>
-
-                                <StackPanel Grid.Row="2" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,10,4,0" ToolTip.Tip="Nome dei film scaricati da CB01. {OriginalFileName} = nome del file su Maxstream"><TextBlock Text="Film · CB01" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="Movie" Target="{Binding #Cb01MoviePatternBox}"/></StackPanel>
-                                <ComboBox x:Name="Cb01MoviePatternBox" Grid.Row="2" Grid.Column="1" IsEditable="True" ItemsSource="{Binding MovieNamingPresets}" Text="{Binding Cb01MovieNamingPattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,10,10,0"/>
-                                <Border Grid.Row="2" Grid.Column="2" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,10,10,0" MaxWidth="380">
-                                    <TextBlock Text="{Binding Cb01MoviePatternPreview}" FontFamily="Consolas,Menlo,monospace" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                </Border>
-
-                                <StackPanel Grid.Row="3" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,10,4,0" ToolTip.Tip="Nome degli episodi scaricati da CB01. {OriginalFileName} = nome del file su Maxstream"><TextBlock Text="Serie · CB01" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="Series" Target="{Binding #Cb01SeriesPatternBox}"/></StackPanel>
-                                <ComboBox x:Name="Cb01SeriesPatternBox" Grid.Row="3" Grid.Column="1" IsEditable="True" ItemsSource="{Binding SeriesNamingPresets}" Text="{Binding Cb01SeriesNamingPattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,10,10,0"/>
-                                <Border Grid.Row="3" Grid.Column="2" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,10,10,0" MaxWidth="380">
-                                    <TextBlock Text="{Binding Cb01SeriesPatternPreview}" FontFamily="Consolas,Menlo,monospace" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                </Border>
-
-                                <TextBlock Grid.Row="4" Grid.Column="0" Text="Cartella base" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,10,10,0"/>
-                                <TextBox Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding BaseDownloadFolder, Mode=TwoWay}" Margin="0,10,10,0"/>
-                                <Button Grid.Row="4" Grid.Column="3" Classes="iconCircle" Click="OnStreamingBrowseBaseFolderClick" Margin="0,10,8,0" ToolTip.Tip="Sfoglia">
-                                    <Path Classes="icon" Data="{StaticResource IconFolder}"/>
-                                </Button>
-                                <CheckBox ToolTip.Tip="Salva ogni serie in una sottocartella con il suo nome dentro la cartella base" Grid.Row="4" Grid.Column="4" Content="Crea sottocartella per serie" IsChecked="{Binding CreateSeriesFolder, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,10,0,0"/>
-
-                                <StackPanel Grid.Row="5" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,10,4,0"><TextBlock Text="Sottocartella stagione" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="SeasonFolder" Target="{Binding #SeasonFolderBox}"/></StackPanel>
-                                <TextBox x:Name="SeasonFolderBox" Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding SeasonFolderPattern}" PlaceholderText="Stagione {number} (vuoto = nessuna)" Margin="0,10,10,0"/>
-                            </Grid>
+                            </StackPanel>
                         </Border>
 
-                        <Grid ColumnDefinitions="1*, 1*" Height="500" Margin="0,0,0,12">
+                        <Grid ColumnDefinitions="1*, 1*" Height="800" Margin="0,0,0,12">
                             <Border Grid.Column="0" Classes="cardElevated" Margin="0,0,6,0">
                                 <DockPanel>
                                     <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto, Auto, *" Margin="0,0,0,8">
@@ -624,15 +688,18 @@
                                                         <Border Classes="poster" Width="140" Height="200">
                                                             <Image Source="{Binding Poster}" Stretch="UniformToFill"/>
                                                         </Border>
+                                                        <Border Classes="subBadge" Margin="6,8,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" IsVisible="{Binding IsSubIta}" ToolTip.Tip="Lingua originale con sottotitoli italiani"><TextBlock Text="SUB ITA"/></Border>
+                                                        <Border Classes="posterShade" Width="140" Height="200"/>
+                                                        <Button Classes="posterAnalyze" Click="OnAnalyzeStreamingClick">
+                                                            <TextBlock Text="Analizza"/>
+                                                        </Button>
                                                         <Button Classes="iconCircle" Width="28" Height="28" Padding="0" Margin="0,6,6,0" HorizontalAlignment="Right" VerticalAlignment="Top" Opacity="0.85" ToolTip.Tip="Apri il post nel browser" Click="OnOpenResultInBrowserClick">
                                                             <Path Classes="icon" Data="{StaticResource IconGlobe}" Width="14" Height="14"/>
                                                         </Button>
                                                     </Panel>
                                                     <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" TextAlignment="Center"/>
                                                     <TextBlock FontSize="11" TextAlignment="Center" Foreground="{DynamicResource AppTextMutedBrush}">
-                                                        <Run Text="{Binding Year}"/>
-                                                        <Run Text=" · "/>
-                                                        <Run Text="{Binding Type}"/>
+                                                        <Run Text="{Binding YearAndType}"/>
                                                     </TextBlock>
                                                 </StackPanel>
                                             </DataTemplate>
@@ -648,7 +715,6 @@
                                             <Path Classes="icon accent" Data="{StaticResource IconTv}"/>
                                             <TextBlock Text="Dettaglio" FontWeight="Bold" FontSize="14"/>
                                         </StackPanel>
-                                        <TextBlock Grid.Column="1" Text="{Binding SelectedResultName}" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource AppAccentBrush}" Margin="8,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="320" IsVisible="{Binding HasSelectedResult}" ToolTip.Tip="{Binding SelectedResultName}"/>
                                         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" HorizontalAlignment="Right" VerticalAlignment="Center">
                                             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" IsVisible="{Binding IsLoadingEpisodes}">
                                                 <ProgressBar IsIndeterminate="True" Width="80" Height="4" VerticalAlignment="Center"/>
@@ -664,6 +730,36 @@
                                         </StackPanel>
                                     </Grid>
 
+                                    <Border DockPanel.Dock="Top" Background="{DynamicResource AppSurface2Brush}" CornerRadius="12" Padding="12" Margin="0,0,0,10" IsVisible="{Binding IsSelectedResultSeries}">
+                                        <Grid ColumnDefinitions="Auto, *">
+                                            <Border Classes="poster" Width="84" Height="120" VerticalAlignment="Top" Margin="0,0,14,0" Background="{DynamicResource AppHoverBrush}">
+                                                <Panel>
+                                                    <Path Classes="icon" Data="{StaticResource IconTv}" Width="28" Height="28" Stroke="{DynamicResource AppTextMutedBrush}" HorizontalAlignment="Center"/>
+                                                    <Image Source="{Binding SelectedResult.Poster, FallbackValue={x:Null}}" Stretch="UniformToFill"/>
+                                                </Panel>
+                                            </Border>
+                                            <StackPanel Grid.Column="1" Spacing="8">
+                                                <TextBlock Text="{Binding SelectedResultName}" FontSize="17" FontWeight="Bold" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"/>
+                                                <WrapPanel Orientation="Horizontal" ItemSpacing="6" LineSpacing="6">
+                                                    <Border Classes="moviePill accent"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTv}"/><TextBlock Text="Serie"/></StackPanel></Border>
+                                                    <Border Classes="moviePill" IsVisible="{Binding HasSelectedResultYear}"><TextBlock Text="{Binding SelectedResultYear}"/></Border>
+                                                    <Border Classes="moviePill"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconGlobe}"/><TextBlock Text="{Binding ProviderDisplayName}"/></StackPanel></Border>
+                                                    <Border Classes="moviePill" IsVisible="{Binding HasSeasonsCount}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconLayers}"/><TextBlock Text="{Binding SeasonsCountText}"/></StackPanel></Border>
+                                                    <Border Classes="moviePill" IsVisible="{Binding HasSeasonEpisodes}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconList}"/><TextBlock Text="{Binding SeasonEpisodesText}"/></StackPanel></Border>
+                                                    <Border Classes="moviePill warn" IsVisible="{Binding SelectedSeason.HasLanguageTag, FallbackValue=False}" ToolTip.Tip="Episodi disponibili solo in lingua originale con sottotitoli italiani (segnati nella tabella)"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconList}"/><TextBlock Text="{Binding SelectedSeason.LanguageTag, FallbackValue=''}"/></StackPanel></Border>
+                                                    <Border Classes="moviePill accent" IsVisible="{Binding HasSelectedEpisodes}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCheck}"/><TextBlock Text="{Binding EpisodesSelectedCountText}"/></StackPanel></Border>
+                                                </WrapPanel>
+                                                <TextBlock Text="{Binding SelectedResultDescription}" TextWrapping="Wrap" MaxLines="3" TextTrimming="CharacterEllipsis" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding HasSelectedResultDescription}"/>
+                                                <Grid ColumnDefinitions="Auto, *" RowDefinitions="Auto, Auto">
+                                                    <TextBlock Grid.Row="0" Text="Cartella" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center" Margin="0,0,12,4"/>
+                                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding DetailFolder}" FontSize="12" TextTrimming="CharacterEllipsis" Margin="0,0,0,4" ToolTip.Tip="{Binding DetailFolder}"/>
+                                                    <TextBlock Grid.Row="1" Text="Esempio file" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding DetailFileName}" FontFamily="Consolas,Menlo,monospace" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource AppAccentBrush}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DetailFileName}"/>
+                                                </Grid>
+                                                <TextBlock Text="{Binding SeriesDetailHint}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
                                     <WrapPanel DockPanel.Dock="Top" Orientation="Horizontal" ItemSpacing="14" LineSpacing="8" Margin="0,0,0,8" IsVisible="{Binding HasSelectedResult}">
                                         <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding !IsCb01}">
                                             <TextBlock Text="Qualità:" VerticalAlignment="Center" FontWeight="SemiBold"/>
@@ -773,19 +869,60 @@
                                         </StackPanel>
                                     </WrapPanel>
 
-                                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="6" Margin="0,0,0,8" IsVisible="{Binding IsSelectedResultSeries}">
+                                    <WrapPanel DockPanel.Dock="Top" Orientation="Horizontal" ItemSpacing="6" LineSpacing="6" Margin="0,0,0,8" IsVisible="{Binding IsSelectedResultSeries}">
                                         <Button ToolTip.Tip="Accoda tutti gli episodi spuntati (quelli già in coda vengono saltati)" Classes="success" Command="{Binding DownloadSelectedEpisodesCommand}" IsEnabled="{Binding CanInteractWithEpisodes}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconDownload}"/><TextBlock Text="Scarica selezionati"/></StackPanel></Button>
                                         <Button Classes="accent" Command="{Binding DownloadCurrentSeasonCommand}" IsEnabled="{Binding CanInteractWithEpisodes}" ToolTip.Tip="Accoda tutti gli episodi della stagione corrente"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconDownload}"/><TextBlock Text="Scarica stagione"/></StackPanel></Button>
-                                        <Button Classes="info" Command="{Binding DownloadAllSeasonsCommand}" IsEnabled="{Binding CanInteractWithEpisodes}" ToolTip.Tip="Accoda tutti gli episodi di tutte le stagioni"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconLayers}"/><TextBlock Text="Scarica tutta la serie"/></StackPanel></Button>
+                                        <Button Classes="info" Command="{Binding DownloadAllSeasonsCommand}" IsEnabled="{Binding CanInteractWithEpisodes}" IsVisible="{Binding !HasItaAndSubSeasons}" ToolTip.Tip="Accoda tutti gli episodi di tutte le stagioni"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconLayers}"/><TextBlock Text="Scarica tutta la serie"/></StackPanel></Button>
+                                        <Button Classes="info" Command="{Binding DownloadAllSeasonsCommand}" CommandParameter="ita" IsEnabled="{Binding CanInteractWithEpisodes}" IsVisible="{Binding HasItaAndSubSeasons}" ToolTip.Tip="Accoda tutte le stagioni in italiano"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconLayers}"/><TextBlock Text="Scarica tutta la serie ITA"/></StackPanel></Button>
+                                        <Button Classes="warning" Command="{Binding DownloadAllSeasonsCommand}" CommandParameter="sub" IsEnabled="{Binding CanInteractWithEpisodes}" IsVisible="{Binding HasItaAndSubSeasons}" ToolTip.Tip="Accoda tutte le stagioni sottotitolate in italiano"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconLayers}"/><TextBlock Text="Scarica tutta la serie Sub ITA"/></StackPanel></Button>
                                         <Button ToolTip.Tip="Seleziona tutti gli episodi della lista" Content="Seleziona tutti" Click="OnStreamingSelectAllEpisodesClick" IsEnabled="{Binding CanInteractWithEpisodes}"/>
                                         <Button ToolTip.Tip="Toglie la selezione a tutti gli episodi" Content="Deseleziona" Click="OnStreamingDeselectAllEpisodesClick" IsEnabled="{Binding CanInteractWithEpisodes}"/>
                                         <Button ToolTip.Tip="Inverte la selezione degli episodi" Content="Inverti" Click="OnStreamingInvertEpisodeSelectionClick" IsEnabled="{Binding CanInteractWithEpisodes}"/>
                                         <Button ToolTip.Tip="Interrompe l'accodamento in corso (gli episodi già accodati restano in coda)" Classes="danger" Command="{Binding CancelBatchCommand}" IsVisible="{Binding IsBatchActive}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconStop}"/><TextBlock Text="Stop accodamento"/></StackPanel></Button>
-                                    </StackPanel>
+                                    </WrapPanel>
 
-                                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="6" Margin="0,0,0,8" IsVisible="{Binding IsSelectedResultMovie}">
-                                        <Button ToolTip.Tip="Accoda il film selezionato" Classes="success" Command="{Binding DownloadMovieCommand}" CommandParameter="{Binding SelectedResult}" IsEnabled="{Binding CanDownloadMovie}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconDownload}"/><TextBlock Text="Scarica film"/></StackPanel></Button>
-                                    </StackPanel>
+                                    <Panel>
+                                    <!-- DETTAGLIO FILM -->
+                                    <ScrollViewer IsVisible="{Binding IsSelectedResultMovie}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                        <Grid ColumnDefinitions="Auto, *" Margin="0,4,0,0">
+                                            <Border Grid.Column="0" Classes="poster" Width="170" Height="245" VerticalAlignment="Top" Margin="0,0,18,0" Background="{DynamicResource AppSurface2Brush}">
+                                                <Panel>
+                                                    <Path Classes="icon" Data="{StaticResource IconFilm}" Width="40" Height="40" Stroke="{DynamicResource AppTextMutedBrush}" HorizontalAlignment="Center"/>
+                                                    <Image Source="{Binding SelectedResult.Poster, FallbackValue={x:Null}}" Stretch="UniformToFill"/>
+                                                </Panel>
+                                            </Border>
+                                            <StackPanel Grid.Column="1" Spacing="12">
+                                                <TextBlock Text="{Binding SelectedResultName}" FontSize="20" FontWeight="Bold" TextWrapping="Wrap"/>
+                                                <WrapPanel Orientation="Horizontal" ItemSpacing="6" LineSpacing="6">
+                                                    <Border Classes="moviePill accent"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconFilm}"/><TextBlock Text="Film"/></StackPanel></Border>
+                                                    <Border Classes="moviePill warn" IsVisible="{Binding SelectedResultIsSubIta}" ToolTip.Tip="Lingua originale con sottotitoli italiani"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconList}"/><TextBlock Text="Sub ITA"/></StackPanel></Border>
+                                                    <Border Classes="moviePill" IsVisible="{Binding HasSelectedResultYear}"><TextBlock Text="{Binding SelectedResultYear}"/></Border>
+                                                    <Border Classes="moviePill"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconGlobe}"/><TextBlock Text="{Binding ProviderDisplayName}"/></StackPanel></Border>
+                                                    <Border Classes="moviePill" IsVisible="{Binding SelectedQuality, Converter={x:Static ObjectConverters.IsNotNull}}"><TextBlock Text="{Binding SelectedQuality.DisplayName, FallbackValue=''}"/></Border>
+                                                    <Border Classes="moviePill" IsVisible="{Binding HasAudioTracks}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconPlayCircle}"/><TextBlock Text="{Binding AudioSelectionText}"/></StackPanel></Border>
+                                                </WrapPanel>
+                                                <TextBlock Text="{Binding SelectedResultDescription}" TextWrapping="Wrap" MaxLines="6" TextTrimming="CharacterEllipsis" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding HasSelectedResultDescription}"/>
+
+                                                <Border Background="{DynamicResource AppSurface2Brush}" CornerRadius="10" Padding="14,12">
+                                                    <Grid ColumnDefinitions="Auto, *" RowDefinitions="Auto, Auto">
+                                                        <TextBlock Grid.Row="0" Text="File" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center" Margin="0,0,14,8"/>
+                                                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding DetailFileName}" FontFamily="Consolas,Menlo,monospace" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource AppAccentBrush}" TextTrimming="CharacterEllipsis" Margin="0,0,0,8" ToolTip.Tip="{Binding DetailFileName}"/>
+                                                        <TextBlock Grid.Row="1" Text="Cartella" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding DetailFolder}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DetailFolder}"/>
+                                                    </Grid>
+                                                </Border>
+
+                                                <StackPanel Orientation="Horizontal" Spacing="12">
+                                                    <Button ToolTip.Tip="Accoda il film selezionato" Classes="success" Padding="20,10" FontSize="14" Command="{Binding DownloadMovieCommand}" CommandParameter="{Binding SelectedResult}" IsEnabled="{Binding CanDownloadMovie}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconDownload}"/><TextBlock Text="Scarica film" FontWeight="SemiBold"/></StackPanel></Button>
+                                                    <Button ToolTip.Tip="Apri la pagina del film nel browser" Click="OnOpenSelectedResultInBrowserClick"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconGlobe}"/><TextBlock Text="Apri nel browser"/></StackPanel></Button>
+                                                </StackPanel>
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <ProgressBar IsIndeterminate="True" Width="60" Height="4" MinHeight="4" VerticalAlignment="Center" IsVisible="{Binding IsQualitiesLoading}"/>
+                                                    <TextBlock Text="{Binding MovieReadyHint}" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" TextWrapping="Wrap"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Grid>
+                                    </ScrollViewer>
 
                                     <DataGrid Name="StreamingEpisodesGrid" ItemsSource="{Binding Episodes}" AutoGenerateColumns="False" SelectionMode="Extended" IsReadOnly="False" IsVisible="{Binding IsSelectedResultSeries}" SelectionChanged="OnStreamingEpisodesSelectionChanged" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False">
                                         <DataGrid.Columns>
@@ -798,10 +935,18 @@
                                             </DataGridTemplateColumn>
                                             <DataGridTextColumn Header="N." Binding="{Binding Number}" Width="60"/>
                                             <DataGridTextColumn Header="Titolo" Binding="{Binding Title}" Width="*"/>
+                                            <DataGridTemplateColumn Header="Lingua" Width="90">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate x:DataType="models:StreamingEpisode">
+                                                        <Border Classes="subBadge" HorizontalAlignment="Left" Margin="8,0,0,0" IsVisible="{Binding IsSubIta}" ToolTip.Tip="Solo in lingua originale con sottotitoli italiani"><TextBlock Text="SUB ITA"/></Border>
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
                                         </DataGrid.Columns>
                                     </DataGrid>
 
-                                    <TextBlock Text="Seleziona un risultato e premi doppio click per i dettagli." FontStyle="Italic" Foreground="{DynamicResource AppTextMutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !HasSelectedResult}"/>
+                                    <TextBlock Text="Fai doppio clic su un risultato, o passaci sopra e premi «Analizza»." FontStyle="Italic" Foreground="{DynamicResource AppTextMutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !HasSelectedResult}"/>
+                                    </Panel>
                                 </DockPanel>
                             </Border>
                         </Grid>
@@ -1079,7 +1224,7 @@
                                         Rinomina, unisce e divide cartelle di episodi in blocco, sia sul PC (Locale) sia sul server (Remoto, serve la connessione SFTP). Ogni operazione si vede prima in anteprima e si può annullare.<LineBreak/>
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Le tre modalità</Run><LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Singola cartella:</Run> rinomina i file di una cartella secondo il pattern (es. "ep1.mp4" diventa "Naruto - 001.mp4"). "Episodio iniziale" fissa il numero da cui partire.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Singola cartella:</Run> rinomina i file di una cartella secondo il pattern (es. "ep1.mp4" diventa "Frieren - 001.mp4"). "Episodio iniziale" fissa il numero da cui partire.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Unisci cartelle:</Run> prende i file da più cartelle, nell'ordine dell'elenco, e li sposta in un'unica destinazione rinumerandoli in sequenza.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Dividi cartella:</Run> divide una cartella con molti episodi in sottocartelle: in parti uguali (es. 50 episodi per cartella) oppure a segmenti personalizzati.<LineBreak/>
                                         <LineBreak/>
@@ -1135,6 +1280,10 @@
                                                         <TextBlock Text="{Binding OrganizePatternPreview}" FontFamily="Consolas,Menlo,monospace" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                                     </Border>
                                                 </Grid>
+
+                                                <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,-4,0,0">
+                                                    <Run>La «/» crea una sottocartella nella destinazione: «{Series}/{Episode:D3}» mette i file in «Frieren\005.mp4». {Series} è il nome ricavato dal file (se manca, quello della cartella).</Run>
+                                                </TextBlock>
 
                                                 <StackPanel Orientation="Horizontal" Spacing="10">
                                                     <TextBlock Text="Episodio iniziale:" VerticalAlignment="Center" FontWeight="SemiBold" ToolTip.Tip="Da che numero vuoi iniziare a contare? (es. 1 o 15)"/>
@@ -1226,6 +1375,10 @@
                                                         <TextBlock Text="{Binding MergePatternPreview}" FontFamily="Consolas,Menlo,monospace" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                                     </Border>
                                                 </Grid>
+
+                                                <TextBlock FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,-4,0,0">
+                                                    <Run>La «/» crea una sottocartella nella destinazione: «{Series}/{Episode:D3}» mette i file in «Frieren\005.mp4». {Series} è il nome ricavato dal file (se manca, quello della cartella).</Run>
+                                                </TextBlock>
 
                                                 <StackPanel Orientation="Horizontal" Spacing="10">
                                                     <TextBlock Text="Episodio iniziale:" VerticalAlignment="Center" FontWeight="SemiBold" ToolTip.Tip="Da che numero vuoi iniziare a contare? (es. 1 o 15)"/>
@@ -2492,7 +2645,105 @@
                 <Panel IsVisible="{Binding #MainTabs.SelectedIndex, Converter={x:Static vm:IndexEqualsConverter.Default}, ConverterParameter=6}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" DataContext="{Binding Proxy}">
                     <DockPanel Margin="0,10,0,0">
-                        <!-- STATUS (in alto, sopra la guida) -->
+                        <DockPanel.Styles>
+                            <!-- Pillole di stato (stesso linguaggio visivo dei pulsanti colorati dell'app) -->
+                            <Style Selector="Border.pill">
+                                <Setter Property="CornerRadius" Value="11"/>
+                                <Setter Property="Padding" Value="9,3"/>
+                                <Setter Property="Background" Value="{DynamicResource AppSurface2Brush}"/>
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                            </Style>
+                            <Style Selector="Border.pill TextBlock">
+                                <Setter Property="FontSize" Value="12"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}"/>
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                            </Style>
+                            <Style Selector="Border.pill Path.icon">
+                                <Setter Property="Width" Value="11"/>
+                                <Setter Property="Height" Value="11"/>
+                                <Setter Property="StrokeThickness" Value="2.2"/>
+                                <Setter Property="Stroke" Value="{DynamicResource AppTextMutedBrush}"/>
+                            </Style>
+                            <Style Selector="Border.pill StackPanel.bi"><Setter Property="Spacing" Value="4"/></Style>
+                            <Style Selector="Border.pill.ok"><Setter Property="Background" Value="{DynamicResource AppSuccessSoftBrush}"/></Style>
+                            <Style Selector="Border.pill.ok TextBlock"><Setter Property="Foreground" Value="{DynamicResource AppSuccessBrush}"/></Style>
+                            <Style Selector="Border.pill.ok Path.icon"><Setter Property="Stroke" Value="{DynamicResource AppSuccessBrush}"/></Style>
+                            <Style Selector="Border.pill.failed"><Setter Property="Background" Value="{DynamicResource AppDangerSoftBrush}"/></Style>
+                            <Style Selector="Border.pill.failed TextBlock"><Setter Property="Foreground" Value="{DynamicResource AppDangerBrush}"/></Style>
+                            <Style Selector="Border.pill.failed Path.icon"><Setter Property="Stroke" Value="{DynamicResource AppDangerBrush}"/></Style>
+                            <Style Selector="Border.pill.untested"><Setter Property="Background" Value="{DynamicResource AppWarningSoftBrush}"/></Style>
+                            <Style Selector="Border.pill.untested TextBlock"><Setter Property="Foreground" Value="{DynamicResource AppWarningBrush}"/></Style>
+                            <Style Selector="Border.pill.untested Path.icon"><Setter Property="Stroke" Value="{DynamicResource AppWarningBrush}"/></Style>
+                            <Style Selector="Border.pill.info"><Setter Property="Background" Value="{DynamicResource AppInfoSoftBrush}"/></Style>
+                            <Style Selector="Border.pill.info TextBlock"><Setter Property="Foreground" Value="{DynamicResource AppInfoBrush}"/></Style>
+                            <Style Selector="Border.pill.info Path.icon"><Setter Property="Stroke" Value="{DynamicResource AppInfoBrush}"/></Style>
+                            <Style Selector="Border.pill.active"><Setter Property="Background" Value="{DynamicResource AppAccentBrush}"/></Style>
+                            <Style Selector="Border.pill.active TextBlock"><Setter Property="Foreground" Value="White"/></Style>
+                            <Style Selector="Border.pill.active Path.icon"><Setter Property="Stroke" Value="White"/></Style>
+                            <Style Selector="Border.pill.absent">
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>
+                                <Setter Property="BorderThickness" Value="1"/>
+                                <Setter Property="Opacity" Value="0.45"/>
+                            </Style>
+                            <Style Selector="Border.pill.ring">
+                                <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}"/>
+                                <Setter Property="BorderThickness" Value="1.5"/>
+                            </Style>
+
+                            <!-- Pallino "ha un proxy attivo" sulle schede -->
+                            <Style Selector="Ellipse.dot">
+                                <Setter Property="Width" Value="8"/>
+                                <Setter Property="Height" Value="8"/>
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                                <Setter Property="Fill" Value="{DynamicResource AppBorderBrush}"/>
+                            </Style>
+                            <Style Selector="Ellipse.dot.on"><Setter Property="Fill" Value="{DynamicResource AppSuccessBrush}"/></Style>
+
+                            <!-- Icona tonda del riquadro "proxy attivo" -->
+                            <Style Selector="Border.badgeIcon">
+                                <Setter Property="Width" Value="42"/>
+                                <Setter Property="Height" Value="42"/>
+                                <Setter Property="CornerRadius" Value="21"/>
+                                <Setter Property="Background" Value="{DynamicResource AppSurface2Brush}"/>
+                                <Setter Property="VerticalAlignment" Value="Top"/>
+                            </Style>
+                            <Style Selector="Border.badgeIcon Path.icon">
+                                <Setter Property="Width" Value="20"/>
+                                <Setter Property="Height" Value="20"/>
+                                <Setter Property="HorizontalAlignment" Value="Center"/>
+                                <Setter Property="Stroke" Value="{DynamicResource AppTextMutedBrush}"/>
+                            </Style>
+                            <Style Selector="Border.badgeIcon.on"><Setter Property="Background" Value="{DynamicResource AppSuccessSoftBrush}"/></Style>
+                            <Style Selector="Border.badgeIcon.on Path.icon"><Setter Property="Stroke" Value="{DynamicResource AppSuccessBrush}"/></Style>
+
+                            <!-- Esito dell'attivazione -->
+                            <Style Selector="Border.result">
+                                <Setter Property="CornerRadius" Value="8"/>
+                                <Setter Property="Padding" Value="12,8"/>
+                                <Setter Property="BorderThickness" Value="1"/>
+                                <Setter Property="Background" Value="{DynamicResource AppDangerSoftBrush}"/>
+                                <Setter Property="BorderBrush" Value="{DynamicResource AppDangerBrush}"/>
+                            </Style>
+                            <Style Selector="Border.result Path.icon"><Setter Property="Stroke" Value="{DynamicResource AppDangerBrush}"/></Style>
+                            <Style Selector="Border.result.ok">
+                                <Setter Property="Background" Value="{DynamicResource AppSuccessSoftBrush}"/>
+                                <Setter Property="BorderBrush" Value="{DynamicResource AppSuccessBrush}"/>
+                            </Style>
+                            <Style Selector="Border.result.ok Path.icon"><Setter Property="Stroke" Value="{DynamicResource AppSuccessBrush}"/></Style>
+
+                            <Style Selector="TextBlock.mono">
+                                <Setter Property="FontFamily" Value="Consolas,Cascadia Mono,Menlo,monospace"/>
+                            </Style>
+                            <Style Selector="TextBlock.section">
+                                <Setter Property="FontSize" Value="11"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}"/>
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                            </Style>
+                        </DockPanel.Styles>
+
                         <ContentControl DockPanel.Dock="Top" Theme="{StaticResource StatusBannerTheme}" Content="{Binding ProxyStatusMessage}"/>
 
                         <!-- GUIDA PROXY -->
@@ -2509,165 +2760,314 @@
                                 </ToggleButton>
                                 <Border IsVisible="{Binding #ToggleGuideProxy.IsChecked}" Background="Transparent" Margin="16,0,16,16" Padding="12">
                                     <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}">
-                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">A cosa serve</Run><LineBreak/>
-                                        Fa passare il traffico dei provider (AnimeWorld, AnimeSaturn, StreamingCommunity) e dei download da un proxy, utile contro blocchi per IP o Cloudflare. Ogni provider ha il suo proxy attivo.<LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Come è organizzata</Run><LineBreak/>
+                                        Tutti i proxy stanno nell'<Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">Archivio</Run>. Ogni provider ha la sua <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">lista</Run>, con l'esito dei test solo per quel sito e un solo proxy attivo, mostrato nel riquadro "Proxy attivo" in cima alla scheda. Lo stesso proxy può funzionare per un sito e non per un altro.<LineBreak/>
                                         <LineBreak/>
-                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Come si usa</Run><LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Aggiungi:</Run> "Nuovo" per inserirne uno a mano, oppure importa un file .txt (una riga per proxy, formati host:porta, host:porta:utente:password, protocollo://...).<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Testa:</Run> scegli il provider in alto e premi "Test tutti" o "Test selezionati": l'esito compare accanto a ogni proxy. Con "httpbin" provi solo che il proxy funzioni e vedi l'IP di uscita.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Attiva:</Run> seleziona un proxy e premi "Attiva per provider"; se non ha già un test OK viene testato prima. Il badge in alto a destra mostra i provider con un proxy attivo.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Rotazione:</Run> "Ruota al prossimo" passa al proxy successivo funzionante. Se un proxy fallisce durante l'uso, l'app ruota da sola.<LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Stati</Run><LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppSuccessBrush}">• Funziona:</Run> ha superato l'ultimo test su questo sito (con il tempo di risposta).<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppWarningBrush}">• Da testare:</Run> mai provato su questo sito.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppDangerBrush}">• Fallito:</Run> l'ultimo test non è andato, ma è ancora in lista (succede se l'esclusione automatica è spenta).<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Escluso:</Run> tolto solo dalla lista di questo sito (fallito al test o escluso a mano). Non viene più testato né riaggiunto quando importi; resta valido per gli altri siti. "Ripristina" lo rimette in lista.<LineBreak/>
                                         <LineBreak/>
-                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Pulizia delle liste</Run><LineBreak/>
-                                        Nel riquadro "Rimuovi solo dalla lista corrente", "Rimuovi selezionati" e "Rimuovi falliti" nascondono i proxy solo per il provider corrente, senza cancellarli; "Reset filtri" li fa ricomparire. I pulsanti "Elimina" invece cancellano in modo definitivo.<LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Attivare</Run><LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Attiva il più veloce:</Run> riprova i funzionanti dal più rapido e attiva il primo che risponde ancora.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Attiva selezionato:</Run> verifica il proxy scelto nella lista e lo attiva solo se funziona.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Interruttore:</Run> spento, il sito usa la connessione diretta anche se c'è un proxy attivo.<LineBreak/>
                                         <LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Opzioni globali:</Run> le caselle dei provider (AnimeWorld, AnimeSaturn, StreamingCommunity, Download) accendono o spengono l'uso del proxy per ogni provider senza perdere la configurazione.
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Testare</Run><LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Testa da testare / Ritesta tutti:</Run> solo la lista aperta. <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">Testa tutti i provider:</Run> ritesta tutte le liste una dopo l'altra (anche dall'Archivio); "Stop" ferma tutto.<LineBreak/>
+                                        <LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Aggiungere e togliere</Run><LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Importa:</Run> incolla una lista o caricala da file, per tutte le liste o solo per alcune. I doppioni vengono saltati.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Togli da tutte le liste:</Run> resta solo nell'archivio. <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">Elimina</Run> lo cancella definitivamente; "Pulisci archivio" elimina in un colpo i proxy falliti o esclusi ovunque.
                                     </TextBlock>
                                 </Border>
                             </StackPanel>
                         </Border>
 
-                        <Border DockPanel.Dock="Top" Classes="cardElevated" Margin="0,0,0,12">
-                            <StackPanel Spacing="8">
-                                <StackPanel Classes="bi">
-                                    <Path Classes="icon accent" Data="{StaticResource IconGlobe}"/>
-                                    <TextBlock Text="Interruttore proxy per provider" FontWeight="Bold" FontSize="14"/>
+                        <!-- SCHEDE: una lista per provider + archivio -->
+                        <Border DockPanel.Dock="Top" Classes="cardElevated" Margin="0,0,0,12" Padding="8">
+                            <ListBox ItemsSource="{Binding Tabs}" SelectedItem="{Binding SelectedTab, Mode=TwoWay}" Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <ListBox.ItemsPanel>
+                                    <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                </ListBox.ItemsPanel>
+                                <ListBox.Styles>
+                                    <Style Selector="ListBoxItem">
+                                        <Setter Property="Margin" Value="0,0,6,0"/>
+                                        <Setter Property="Padding" Value="14,8"/>
+                                        <Setter Property="CornerRadius" Value="8"/>
+                                    </Style>
+                                </ListBox.Styles>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ProxyListTab">
+                                        <StackPanel Spacing="6">
+                                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                                <Ellipse Classes="dot" Classes.on="{Binding HasActive}" IsVisible="{Binding !IsArchive}" ToolTip.Tip="Verde = c'è un proxy attivo"/>
+                                                <Path Classes="icon" Data="{StaticResource IconLayers}" Width="12" Height="12" IsVisible="{Binding IsArchive}"/>
+                                                <TextBlock Text="{Binding Title}" FontWeight="Bold"/>
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <Border Classes="pill ok" IsVisible="{Binding HasOk}" ToolTip.Tip="Funzionanti"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCheck}"/><TextBlock Text="{Binding OkCount}"/></StackPanel></Border>
+                                                <Border Classes="pill untested" IsVisible="{Binding HasUntested}" ToolTip.Tip="Da testare"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconClock}"/><TextBlock Text="{Binding UntestedCount}"/></StackPanel></Border>
+                                                <Border Classes="pill failed" IsVisible="{Binding HasFailed}" ToolTip.Tip="Falliti"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconAlertCircle}"/><TextBlock Text="{Binding FailedCount}"/></StackPanel></Border>
+                                                <Border Classes="pill" IsVisible="{Binding IsEmpty}"><TextBlock Text="vuota"/></Border>
+                                                <Border Classes="pill" IsVisible="{Binding IsArchive}"><TextBlock Text="{Binding CountsText}"/></Border>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Border>
+
+                        <!-- PROXY ATTIVO DEL PROVIDER -->
+                        <Border DockPanel.Dock="Top" Classes="cardElevated" Margin="0,0,0,12" IsVisible="{Binding IsProviderTab}">
+                            <StackPanel Spacing="12">
+                                <Grid ColumnDefinitions="Auto, *, Auto">
+                                    <Border Classes="badgeIcon" Classes.on="{Binding HasActiveProxy}" Margin="0,0,14,0">
+                                        <Path Classes="icon" Data="{StaticResource IconGlobe}"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                                        <TextBlock Classes="section">
+                                            <Run Text="PROXY ATTIVO · "/><Run Text="{Binding CurrentListTitle}"/>
+                                        </TextBlock>
+                                        <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding HasActiveProxy}">
+                                            <TextBlock Classes="mono" Text="{Binding ActiveProxy.Address, FallbackValue=''}" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
+                                            <Border Classes="pill active"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconBolt}"/><TextBlock Text="ATTIVO"/></StackPanel></Border>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding ActiveDetailText}" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding HasActiveProxy}"/>
+                                        <TextBlock Text="Nessun proxy attivo" FontSize="18" FontWeight="Bold" IsVisible="{Binding NoActiveProxy}"/>
+                                        <TextBlock Text="Il sito usa la connessione diretta. Premi &quot;Attiva il più veloce&quot; per sceglierne uno." FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding NoActiveProxy}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Top" HorizontalAlignment="Right" ToolTip.Tip="{Binding UseProxyHint}">
+                                        <ToggleSwitch IsChecked="{Binding CurrentUseProxy, Mode=TwoWay}" OnContent="Proxy in uso" OffContent="Connessione diretta"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <TextBlock Text="{Binding UseProxyHint}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" TextWrapping="Wrap"/>
+
+                                <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="6">
+                                    <Button Classes="success" Command="{Binding ProxyActivateFastestCommand}" IsEnabled="{Binding !IsActivating}" ToolTip.Tip="Riprova i proxy funzionanti dal più veloce e attiva il primo che risponde"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconBolt}"/><TextBlock Text="Attiva il più veloce"/></StackPanel></Button>
+                                    <Button Classes="accent" Command="{Binding ProxyActivateCommand}" IsEnabled="{Binding !IsActivating}" ToolTip.Tip="Verifica il proxy selezionato nella lista e lo attiva se funziona"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconPlay}"/><TextBlock Text="Attiva selezionato"/></StackPanel></Button>
+                                    <Button Command="{Binding ProxyRotateNextCommand}" IsEnabled="{Binding !IsActivating}" ToolTip.Tip="Passa al prossimo proxy funzionante, dal più veloce"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconRepeat}"/><TextBlock Text="Ruota al prossimo"/></StackPanel></Button>
+                                    <Button Classes="warning" Command="{Binding ProxyDeactivateCommand}" IsEnabled="{Binding HasActiveProxy}" ToolTip.Tip="Toglie il proxy attivo: il sito va in connessione diretta"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconBoltOff}"/><TextBlock Text="Disattiva"/></StackPanel></Button>
+                                </WrapPanel>
+
+                                <StackPanel Spacing="6" IsVisible="{Binding IsActivating}">
+                                    <ProgressBar IsIndeterminate="True" Height="4" MinHeight="4"/>
+                                    <TextBlock Text="{Binding ActivatingText}" FontSize="12" Foreground="{DynamicResource AppInfoBrush}"/>
                                 </StackPanel>
-                                <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}">
-                                    Ogni checkbox attiva/disattiva l'uso del proxy per quel provider.
-                                    Se disattivato, il provider ignora qualsiasi proxy e va in connessione
-                                    diretta (utile se un provider non tollera i proxy). Ogni provider può
-                                    avere un proxy diverso: usa il pulsante <Run FontWeight="Bold">Attiva per provider</Run>
-                                    più sotto, dopo aver scelto il provider nella ComboBox della toolbar.
-                                </TextBlock>
-                                <WrapPanel Orientation="Horizontal" ItemSpacing="20" Margin="0,4,0,0">
-                                    <CheckBox Content="AnimeWorld" IsChecked="{Binding UseProxyAnimeWorld, Mode=TwoWay}" ToolTip.Tip="Se attivo, usa il proxy per questo provider"/>
-                                    <CheckBox Content="AnimeSaturn" IsChecked="{Binding UseProxyAnimeSaturn, Mode=TwoWay}" ToolTip.Tip="Se attivo, usa il proxy per questo provider"/>
-                                    <CheckBox Content="StreamingCommunity" IsChecked="{Binding UseProxyStreamingCommunity, Mode=TwoWay}" ToolTip.Tip="Se attivo, usa il proxy per questo provider"/>
-                                    <CheckBox Content="Download diretti" IsChecked="{Binding UseProxyDownloads, Mode=TwoWay}" ToolTip.Tip="Se attivo, usa il proxy per i download"/>
-                                    <CheckBox Content="CB01/Maxstream" IsChecked="{Binding UseProxyCb01, Mode=TwoWay}" ToolTip.Tip="Se attivo, usa il proxy per CB01 e Maxstream"/>
-                                </WrapPanel>
+
+                                <Border Classes="result" Classes.ok="{Binding ActivationResultOk}" IsVisible="{Binding HasActivationResult}">
+                                    <Grid ColumnDefinitions="Auto, *">
+                                        <Panel Margin="0,0,10,0" VerticalAlignment="Center">
+                                            <Path Classes="icon" Data="{StaticResource IconCheckCircle}" Width="16" Height="16" IsVisible="{Binding ActivationResultOk}"/>
+                                            <Path Classes="icon" Data="{StaticResource IconAlertCircle}" Width="16" Height="16" IsVisible="{Binding !ActivationResultOk}"/>
+                                        </Panel>
+                                        <TextBlock Grid.Column="1" Text="{Binding ActivationResultText}" TextWrapping="Wrap" FontSize="12" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </Border>
                             </StackPanel>
                         </Border>
 
+                        <!-- RIEPILOGO ARCHIVIO -->
+                        <Border DockPanel.Dock="Top" Classes="cardElevated" Margin="0,0,0,12" IsVisible="{Binding IsArchiveTab}">
+                            <Grid ColumnDefinitions="Auto, *, Auto">
+                                <Border Classes="badgeIcon" Margin="0,0,14,0"><Path Classes="icon" Data="{StaticResource IconLayers}"/></Border>
+                                <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                                    <TextBlock Classes="section" Text="ARCHIVIO"/>
+                                    <TextBlock Text="{Binding ArchiveSummary}" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                    <TextBlock Text="Le sigle su ogni riga indicano le liste del proxy e il suo stato in ciascuna (bordo blu = attivo lì)." FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <Button Grid.Column="2" Classes="danger" Click="OnProxyCleanupArchiveClick" VerticalAlignment="Center" ToolTip.Tip="Elimina i proxy falliti o esclusi in tutte le loro liste"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTrash}"/><TextBlock Text="Pulisci archivio"/></StackPanel></Button>
+                            </Grid>
+                        </Border>
+
+                        <!-- AZIONI -->
                         <Border DockPanel.Dock="Top" Classes="cardElevated" Margin="0,0,0,12">
-                            <StackPanel Spacing="8">
+                            <StackPanel Spacing="10">
                                 <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="6">
-                                    <Button ToolTip.Tip="Aggiunge un nuovo proxy vuoto: compila i campi e premi Salva" Classes="accent" Command="{Binding ProxyNewCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconPlus}"/><TextBlock Text="Nuovo"/></StackPanel></Button>
-                                    <Button Click="OnProxyImportFileClick" ToolTip.Tip="Importa da file .txt o .csv"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconFolder}"/><TextBlock Text="Importa"/></StackPanel></Button>
-                                    <Button ToolTip.Tip="Salva le modifiche al proxy selezionato" Command="{Binding ProxySaveCommand}" IsEnabled="{Binding !IsProxyBusy}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconSave}"/><TextBlock Text="Salva"/></StackPanel></Button>
-                                    <Button ToolTip.Tip="Usa il proxy selezionato per il provider scelto in alto (se non ha un test OK lo testa prima)" Classes="success" Command="{Binding ProxyActivateCommand}" IsEnabled="{Binding CanActivateForProvider}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconBolt}"/><TextBlock Text="Attiva per provider"/></StackPanel></Button>
-                                    <Button ToolTip.Tip="Smette di usare un proxy per il provider scelto" Classes="danger" Command="{Binding ProxyDeactivateCommand}" IsEnabled="{Binding CanDeactivateForProvider}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconBoltOff}"/><TextBlock Text="Disattiva per provider"/></StackPanel></Button>
-                                    <Button Classes="accent" Command="{Binding ProxyRotateNextCommand}" IsEnabled="{Binding CanRotateForProvider}" ToolTip.Tip="Passa al proxy successivo per il provider selezionato"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconRepeat}"/><TextBlock Text="Ruota al prossimo"/></StackPanel></Button>
+                                    <TextBlock Classes="section" Text="PROXY" Width="64"/>
+                                    <Button Classes="accent" Command="{Binding ProxyNewCommand}" ToolTip.Tip="Inserisci un proxy a mano"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconPlus}"/><TextBlock Text="Nuovo"/></StackPanel></Button>
+                                    <Button Click="OnProxyImportFileClick" IsEnabled="{Binding !IsProxyBusy}" ToolTip.Tip="Incolla una lista o caricala da file, in tutte le liste o solo in alcune"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconUpload}"/><TextBlock Text="Importa"/></StackPanel></Button>
+                                    <Button Command="{Binding ProxySaveCommand}" IsEnabled="{Binding !IsProxyBusy}" ToolTip.Tip="Salva le modifiche al proxy selezionato"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconSave}"/><TextBlock Text="Salva"/></StackPanel></Button>
                                 </WrapPanel>
 
                                 <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="6">
-                                    <TextBlock Text="Selezione:" VerticalAlignment="Center" Foreground="{DynamicResource AppTextMutedBrush}" FontSize="12"/>
-                                    <Button ToolTip.Tip="Spunta tutti i proxy visibili" Command="{Binding ProxySelectAllCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCheck}"/><TextBlock Text="Tutti"/></StackPanel></Button>
-                                    <Button ToolTip.Tip="Toglie la spunta a tutti i proxy" Command="{Binding ProxyDeselectAllCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconBan}"/><TextBlock Text="Nessuno"/></StackPanel></Button>
-                                    <TextBlock Text="Provider:" VerticalAlignment="Center" Foreground="{DynamicResource AppTextMutedBrush}" FontSize="12"/>
-                                    <ComboBox ItemsSource="{Binding TestProviders}" SelectedItem="{Binding SelectedTestProvider, Mode=TwoWay}" MinWidth="180" VerticalAlignment="Center"/>
-                                    <TextBlock Text="Bot:" VerticalAlignment="Center" Foreground="{DynamicResource AppTextMutedBrush}" FontSize="12"/>
-                                    <Slider Value="{Binding ProxyTestConcurrency}" Minimum="1" Maximum="20" Width="100" TickFrequency="1" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{Binding ProxyTestConcurrency}" Width="20" VerticalAlignment="Center" FontWeight="Bold" Foreground="{DynamicResource AppAccentBrush}"/>
-                                    <Button ToolTip.Tip="Testa i proxy spuntati sul provider scelto" Classes="info" Command="{Binding ProxyTestSelectedCommand}" IsEnabled="{Binding !IsProxyBusy}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconPlug}"/><TextBlock Text="Test selezionati"/></StackPanel></Button>
-                                    <Button ToolTip.Tip="Testa tutti i proxy visibili sul provider scelto" Classes="info" Command="{Binding ProxyTestAllCommand}" IsEnabled="{Binding !IsProxyBusy}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconPlug}"/><TextBlock Text="Test tutti"/></StackPanel></Button>
-                                    <Button ToolTip.Tip="Interrompe i test in corso" Classes="danger" Command="{Binding ProxyStopTestCommand}" IsEnabled="{Binding IsProxyBusy}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconStop}"/><TextBlock Text="Stop test"/></StackPanel></Button>
+                                    <TextBlock Classes="section" Text="TEST" Width="64"/>
+                                    <Button Classes="info" Command="{Binding ProxyTestUntestedCommand}" IsEnabled="{Binding !IsProxyBusy}" IsVisible="{Binding IsProviderTab}" ToolTip.Tip="Prova solo i proxy mai testati in questa lista"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconClock}"/><TextBlock Text="Testa da testare"/></StackPanel></Button>
+                                    <Button Command="{Binding ProxyTestSelectedCommand}" IsEnabled="{Binding !IsProxyBusy}" IsVisible="{Binding IsProviderTab}" ToolTip.Tip="Prova i proxy spuntati"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCheck}"/><TextBlock Text="Testa selezionati"/></StackPanel></Button>
+                                    <Button Command="{Binding ProxyRetestAllCommand}" IsEnabled="{Binding !IsProxyBusy}" IsVisible="{Binding IsProviderTab}" ToolTip.Tip="Riprova tutti i proxy della lista (non gli esclusi)"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconRefresh}"/><TextBlock Text="Ritesta tutti"/></StackPanel></Button>
+                                    <Button Classes="accent" Command="{Binding ProxyTestAllProvidersCommand}" IsEnabled="{Binding !IsProxyBusy}" ToolTip.Tip="Ritesta i proxy di tutte le liste (AnimeWorld, AnimeSaturn, StreamingCommunity, CB01, Download), un provider dopo l'altro. Gli esclusi non vengono testati."><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconLayers}"/><TextBlock Text="Testa tutti i provider"/></StackPanel></Button>
+                                    <Button Classes="danger" Command="{Binding ProxyStopTestCommand}" IsVisible="{Binding IsProxyBusy}" ToolTip.Tip="Interrompe i test in corso"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconStop}"/><TextBlock Text="Stop"/></StackPanel></Button>
+                                    <Border Width="1" Background="{DynamicResource AppBorderBrush}" Margin="4,2"/>
+                                    <TextBlock Text="In parallelo" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                    <Slider Value="{Binding ProxyTestConcurrency}" Minimum="1" Maximum="30" Width="110" TickFrequency="1" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding ProxyTestConcurrency}" Width="22" VerticalAlignment="Center" FontWeight="Bold" Foreground="{DynamicResource AppAccentBrush}"/>
+                                    <CheckBox Content="Escludi automaticamente i falliti" IsChecked="{Binding AutoExcludeFailed, Mode=TwoWay}" VerticalAlignment="Center" Margin="4,0,0,0" ToolTip.Tip="Un proxy che fallisce il test esce dalla lista di questo sito e non viene più testato"/>
                                 </WrapPanel>
 
                                 <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="6">
-                                    <TextBlock Text="Rimuovi solo dalla lista corrente:" VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AppTextMutedBrush}"/>
-                                    <Button Command="{Binding ProxyRemoveFromCurrentListCommand}" ToolTip.Tip="Rimuove il proxy solo dalla lista del provider corrente"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconMinus}"/><TextBlock Text="Rimuovi selezionati"/></StackPanel></Button>
-                                    <Button Command="{Binding ProxyClearFailedFromCurrentListCommand}" ToolTip.Tip="Rimuove i proxy falliti solo dalla lista del provider corrente"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconMinus}"/><TextBlock Text="Rimuovi falliti"/></StackPanel></Button>
-                                    <Button Classes="warning" Command="{Binding ProxyResetFiltersCommand}" ToolTip.Tip="Ri-mostra tutti i proxy nascosti in tutte le liste"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconUndo}"/><TextBlock Text="Reset filtri"/></StackPanel></Button>
-                                </WrapPanel>
-
-                                <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="6">
-                                    <TextBlock Text="Elimina da tutte le liste:" VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AppTextMutedBrush}"/>
-                                    <Button ToolTip.Tip="Elimina definitivamente i proxy spuntati" Classes="danger" Command="{Binding ProxyDeleteSelectedCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTrash}"/><TextBlock Text="Elimina selezionati"/></StackPanel></Button>
-                                    <Button ToolTip.Tip="Elimina definitivamente i proxy con test fallito" Classes="danger" Command="{Binding ProxyDeleteFailedCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTrash}"/><TextBlock Text="Elimina falliti"/></StackPanel></Button>
-                                    <Button ToolTip.Tip="Elimina definitivamente tutti i proxy" Classes="danger" Command="{Binding ProxyDeleteAllCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTrash}"/><TextBlock Text="Elimina tutti"/></StackPanel></Button>
+                                    <TextBlock Classes="section" Text="SPUNTATI" Width="64"/>
+                                    <Button Command="{Binding ProxySelectAllCommand}" ToolTip.Tip="Spunta tutti i proxy visibili"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCheck}"/><TextBlock Text="Tutti"/></StackPanel></Button>
+                                    <Button Command="{Binding ProxyDeselectAllCommand}" ToolTip.Tip="Toglie tutte le spunte"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconClose}"/><TextBlock Text="Nessuno"/></StackPanel></Button>
+                                    <Border Width="1" Background="{DynamicResource AppBorderBrush}" Margin="4,2"/>
+                                    <Button Command="{Binding ProxyExcludeSelectedCommand}" IsVisible="{Binding IsProviderTab}" ToolTip.Tip="Toglie i proxy spuntati solo da questa lista: non verranno più testati qui"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconMinusCircle}"/><TextBlock Text="Escludi"/></StackPanel></Button>
+                                    <Button Command="{Binding ProxyExcludeFailedCommand}" IsVisible="{Binding IsProviderTab}" ToolTip.Tip="Esclude da questa lista tutti i proxy falliti"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconAlertCircle}"/><TextBlock Text="Escludi falliti"/></StackPanel></Button>
+                                    <Button Command="{Binding ProxyRestoreSelectedCommand}" IsVisible="{Binding IsProviderTab}" ToolTip.Tip="Riporta in lista gli esclusi spuntati (filtro Esclusi), da testare"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconUndo}"/><TextBlock Text="Ripristina"/></StackPanel></Button>
+                                    <Button Classes="warning" Command="{Binding ProxyRemoveFromAllListsCommand}" ToolTip.Tip="Toglie i proxy spuntati da tutte le liste: restano solo nell'archivio"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconLayers}"/><TextBlock Text="Togli da tutte le liste"/></StackPanel></Button>
+                                    <Button Classes="danger" Click="OnProxyDeleteCheckedClick" ToolTip.Tip="Elimina definitivamente i proxy spuntati"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTrash}"/><TextBlock Text="Elimina"/></StackPanel></Button>
                                 </WrapPanel>
                             </StackPanel>
                         </Border>
 
-                        <Grid ColumnDefinitions="2*, 3*">
+                        <Grid ColumnDefinitions="3*, 2*">
+                            <!-- LISTA -->
                             <Border Grid.Column="0" Classes="cardElevated" Margin="0,0,6,0">
                                 <DockPanel>
-                                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
-                                        <TextBlock Text="Lista proxy" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
-                                        <TextBlock Text="{Binding VisibleCountText}" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                    <ScrollViewer MaxHeight="600" VerticalScrollBarVisibility="Auto">
-                                        <ListBox ItemsSource="{Binding VisibleProxies}" SelectedItem="{Binding SelectedProxy, Mode=TwoWay}" SelectionMode="Multiple" SelectionChanged="OnProxyListSelectionChanged">
-                                            <ListBox.Styles>
-                                                <Style Selector="ListBoxItem">
-                                                    <Setter Property="BorderThickness" Value="2"/>
-                                                    <Setter Property="BorderBrush" Value="Transparent"/>
-                                                    <Setter Property="Margin" Value="2"/>
-                                                    <Setter Property="Padding" Value="6,4"/>
-                                                </Style>
-                                                <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
-                                                    <Setter Property="Background" Value="{DynamicResource AppSurface2Brush}"/>
-                                                </Style>
-                                            </ListBox.Styles>
-                                            <ListBox.ItemTemplate>
-                                                <DataTemplate DataType="models:ProxyConfig">
-                                                    <Border CornerRadius="6" Padding="8,6" BorderThickness="2" BorderBrush="Transparent">
-                                                        <Grid ColumnDefinitions="Auto, Auto, *, Auto, Auto">
-                                                            <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected, Mode=TwoWay}" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                                            <Ellipse Grid.Column="1" Width="12" Height="12" Margin="0,0,8,0" VerticalAlignment="Center" Fill="{Binding IsActiveForSelectedProvider, Converter={x:Static vm:EnabledProxyToBrushConverter.Default}}"/>
-                                                            <StackPanel Grid.Column="2">
-                                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
-                                                                <TextBlock Text="{Binding DisplayText}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto, Auto, *, 280" Margin="0,0,0,12">
+                                        <TextBlock Text="{Binding CurrentListTitle}" FontWeight="Bold" FontSize="16" VerticalAlignment="Center"/>
+                                        <Border Grid.Column="1" Classes="pill" Margin="10,0,0,0"><TextBlock Text="{Binding VisibleCountText}"/></Border>
+                                        <TextBox Grid.Column="3" Text="{Binding SearchText, Mode=TwoWay}" PlaceholderText="Cerca IP, host o nome..."/>
+                                    </Grid>
+                                    <ListBox DockPanel.Dock="Top" ItemsSource="{Binding Filters}" SelectedItem="{Binding SelectedFilter, Mode=TwoWay}" Background="Transparent" Margin="0,0,0,10" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                        <ListBox.ItemsPanel>
+                                            <ItemsPanelTemplate><WrapPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                        </ListBox.ItemsPanel>
+                                        <ListBox.Styles>
+                                            <Style Selector="ListBoxItem">
+                                                <Setter Property="Margin" Value="0,0,8,0"/>
+                                                <Setter Property="Padding" Value="18,8"/>
+                                                <Setter Property="MinWidth" Value="90"/>
+                                                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                                                <Setter Property="CornerRadius" Value="16"/>
+                                                <Setter Property="FontSize" Value="13"/>
+                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                                <Setter Property="BorderThickness" Value="1"/>
+                                                <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>
+                                            </Style>
+                                        </ListBox.Styles>
+                                    </ListBox>
+                                    <Border DockPanel.Dock="Top" Background="{DynamicResource AppInfoSoftBrush}" CornerRadius="8" Padding="10,6" Margin="0,0,0,8"
+                                            IsVisible="{Binding FilterHint, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                        <Grid ColumnDefinitions="Auto, *">
+                                            <Path Classes="icon" Data="{StaticResource IconInfo}" Stroke="{DynamicResource AppInfoBrush}" Width="13" Height="13" Margin="0,0,8,0" VerticalAlignment="Top"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding FilterHint}" FontSize="12" TextWrapping="Wrap"/>
+                                        </Grid>
+                                    </Border>
+                                    <ListBox Height="600" ItemsSource="{Binding VisibleProxies}" SelectedItem="{Binding SelectedProxy, Mode=TwoWay}" SelectionMode="Multiple" SelectionChanged="OnProxyListSelectionChanged">
+                                        <ListBox.Styles>
+                                            <Style Selector="ListBoxItem">
+                                                <Setter Property="Margin" Value="0,2"/>
+                                                <Setter Property="Padding" Value="10,9"/>
+                                                <Setter Property="CornerRadius" Value="8"/>
+                                            </Style>
+                                        </ListBox.Styles>
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate x:DataType="models:ProxyConfig">
+                                                <Grid ColumnDefinitions="Auto, *, Auto">
+                                                    <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected, Mode=TwoWay}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                                            <TextBlock Classes="mono" Text="{Binding Address}" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
+                                                            <Border Classes="pill active" IsVisible="{Binding IsActiveForSelectedProvider}" ToolTip.Tip="Proxy attivo per questo provider">
+                                                                <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconBolt}"/><TextBlock Text="ATTIVO"/></StackPanel>
+                                                            </Border>
+                                                        </StackPanel>
+                                                        <TextBlock Text="{Binding DetailText}" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="8,0,12,0">
+                                                        <ItemsControl ItemsSource="{Binding ListBadges}" IsVisible="{Binding !ShowStatus}" VerticalAlignment="Center">
+                                                            <ItemsControl.ItemsPanel>
+                                                                <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="5"/></ItemsPanelTemplate>
+                                                            </ItemsControl.ItemsPanel>
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate x:DataType="models:ProxyListBadge">
+                                                                    <Border Classes="pill" MinWidth="56" Classes.absent="{Binding IsAbsent}" Classes.ok="{Binding StatusOk}" Classes.failed="{Binding StatusFailed}" Classes.untested="{Binding StatusUntested}" Classes.ring="{Binding IsActive}" ToolTip.Tip="{Binding Tooltip}">
+                                                                        <StackPanel Classes="bi" HorizontalAlignment="Center">
+                                                                            <Path Classes="icon" Data="{StaticResource IconCheckCircle}" IsVisible="{Binding StatusOk}"/>
+                                                                            <Path Classes="icon" Data="{StaticResource IconAlertCircle}" IsVisible="{Binding StatusFailed}"/>
+                                                                            <Path Classes="icon" Data="{StaticResource IconBan}" IsVisible="{Binding StatusExcluded}"/>
+                                                                            <Path Classes="icon" Data="{StaticResource IconClock}" IsVisible="{Binding StatusUntested}"/>
+                                                                            <TextBlock Text="{Binding Short}"/>
+                                                                        </StackPanel>
+                                                                    </Border>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                        <Border Classes="pill info" IsVisible="{Binding IsTesting}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconRefresh}"/><TextBlock Text="Test..."/></StackPanel></Border>
+                                                        <Border Classes="pill" IsVisible="{Binding LatencyText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" ToolTip.Tip="Tempo di risposta all'ultimo test">
+                                                            <TextBlock Classes="mono" Text="{Binding LatencyText}"/>
+                                                        </Border>
+                                                        <Border Classes="pill" Classes.ok="{Binding StatusOk}" Classes.failed="{Binding StatusFailed}" Classes.untested="{Binding StatusUntested}" IsVisible="{Binding ShowStatus}" MinWidth="104">
+                                                            <StackPanel Classes="bi" HorizontalAlignment="Center">
+                                                                <Path Classes="icon" Data="{StaticResource IconCheckCircle}" IsVisible="{Binding StatusOk}"/>
+                                                                <Path Classes="icon" Data="{StaticResource IconAlertCircle}" IsVisible="{Binding StatusFailed}"/>
+                                                                <Path Classes="icon" Data="{StaticResource IconBan}" IsVisible="{Binding StatusExcluded}"/>
+                                                                <Path Classes="icon" Data="{StaticResource IconClock}" IsVisible="{Binding StatusUntested}"/>
+                                                                <TextBlock Text="{Binding StatusText}"/>
                                                             </StackPanel>
-                                                            <TextBlock Grid.Column="3" Text="{Binding TestResult}" FontSize="11" MaxWidth="220" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="8,0"/>
-                                                            <TextBlock Grid.Column="4" Text="{Binding ActiveProvidersText}" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource AppAccentBrush}" VerticalAlignment="Center" Margin="8,0,0,0" ToolTip.Tip="Provider per cui è attivo (AW=AnimeWorld, AS=AnimeSaturn, SC=StreamingCommunity, DL=Download diretti)"/>
-                                                        </Grid>
-                                                    </Border>
-                                                </DataTemplate>
-                                            </ListBox.ItemTemplate>
-                                        </ListBox>
-                                    </ScrollViewer>
+                                                        </Border>
+                                                        <TextBlock Text="{Binding LastTestedText}" FontSize="12" Width="78" TextAlignment="Right" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center" ToolTip.Tip="Ultimo test"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
                                 </DockPanel>
                             </Border>
 
+                            <!-- DETTAGLI -->
                             <Border Grid.Column="1" Classes="cardElevated" Margin="6,0,0,0">
-                                <ScrollViewer>
-                                    <StackPanel Spacing="10" DataContext="{Binding SelectedProxy}">
-                                        <TextBlock Text="Dettagli proxy selezionato" FontWeight="Bold" FontSize="14"/>
-                                        <Grid ColumnDefinitions="120, *" RowDefinitions="Auto, Auto, Auto, Auto, Auto, Auto, Auto">
-                                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Nome:" VerticalAlignment="Center" Margin="0,0,10,4"/>
-                                            <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Name}" Margin="0,0,0,4"/>
-                                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Protocollo:" VerticalAlignment="Center" Margin="0,0,10,4"/>
-                                            <ComboBox Grid.Row="1" Grid.Column="1" SelectedIndex="{Binding ProtocolIndex, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,0,0,4">
-                                                <ComboBoxItem>HTTP</ComboBoxItem>
-                                                <ComboBoxItem>SOCKS5</ComboBoxItem>
-                                            </ComboBox>
-                                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Host:" VerticalAlignment="Center" Margin="0,0,10,4"/>
-                                            <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Host}" Margin="0,0,0,4"/>
-                                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Porta:" VerticalAlignment="Center" Margin="0,0,10,4"/>
-                                            <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding Port}" Margin="0,0,0,4"/>
-                                            <TextBlock Grid.Row="4" Grid.Column="0" Text="Autenticazione:" VerticalAlignment="Center" Margin="0,0,10,4"/>
-                                            <ComboBox Grid.Row="4" Grid.Column="1" SelectedIndex="{Binding AuthIndex, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,0,0,4">
-                                                <ComboBoxItem>Nessuna</ComboBoxItem>
-                                                <ComboBoxItem>Username + Password</ComboBoxItem>
-                                            </ComboBox>
-                                            <TextBlock Grid.Row="5" Grid.Column="0" Text="Username:" VerticalAlignment="Center" Margin="0,0,10,4"/>
-                                            <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding Username}" Margin="0,0,0,4"/>
-                                            <TextBlock Grid.Row="6" Grid.Column="0" Text="Password:" VerticalAlignment="Center" Margin="0,0,10,4"/>
-                                            <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding Password, Mode=TwoWay}" PasswordChar="•" HorizontalAlignment="Stretch" Margin="0,0,0,4"/>
-                                        </Grid>
+                                <StackPanel Spacing="12">
+                                    <TextBlock Classes="section" Text="PROXY SELEZIONATO"/>
+                                    <TextBlock Text="Seleziona un proxy dalla lista per vederne i dettagli." FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding SelectedProxy, Converter={x:Static ObjectConverters.IsNull}}"/>
+                                    <TextBlock Classes="mono" Text="{Binding SelectedProxy.Address, FallbackValue=''}" FontSize="18" FontWeight="Bold" IsVisible="{Binding SelectedProxy, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                                    <Panel IsVisible="{Binding SelectedProxy, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                    <Grid ColumnDefinitions="110, *" RowDefinitions="Auto, Auto, Auto, Auto, Auto, Auto, Auto" DataContext="{Binding SelectedProxy}">
+                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Nome" VerticalAlignment="Center" Margin="0,0,10,6"/>
+                                        <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding Name}" Margin="0,0,0,6"/>
+                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Protocollo" VerticalAlignment="Center" Margin="0,0,10,6"/>
+                                        <ComboBox Grid.Row="1" Grid.Column="1" SelectedIndex="{Binding ProtocolIndex, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,0,0,6">
+                                            <ComboBoxItem>HTTP</ComboBoxItem>
+                                            <ComboBoxItem>SOCKS5</ComboBoxItem>
+                                        </ComboBox>
+                                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Host" VerticalAlignment="Center" Margin="0,0,10,6"/>
+                                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding Host}" Margin="0,0,0,6"/>
+                                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Porta" VerticalAlignment="Center" Margin="0,0,10,6"/>
+                                        <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding Port}" Margin="0,0,0,6"/>
+                                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Autenticazione" VerticalAlignment="Center" Margin="0,0,10,6"/>
+                                        <ComboBox Grid.Row="4" Grid.Column="1" SelectedIndex="{Binding AuthIndex, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,0,0,6">
+                                            <ComboBoxItem>Nessuna</ComboBoxItem>
+                                            <ComboBoxItem>Username + Password</ComboBoxItem>
+                                        </ComboBox>
+                                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Username" VerticalAlignment="Center" Margin="0,0,10,6"/>
+                                        <TextBox Grid.Row="5" Grid.Column="1" Text="{Binding Username}" Margin="0,0,0,6"/>
+                                        <TextBlock Grid.Row="6" Grid.Column="0" Text="Password" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                        <TextBox Grid.Row="6" Grid.Column="1" Text="{Binding Password, Mode=TwoWay}" PasswordChar="•"/>
+                                    </Grid>
+                                    </Panel>
 
-                                        <Border Background="{DynamicResource AppSurface2Brush}" CornerRadius="8" Padding="10">
-                                            <StackPanel Spacing="4">
-                                                <TextBlock Text="{Binding TestResult}" FontFamily="Consolas,Menlo,monospace" TextWrapping="Wrap"/>
-                                                <TextBlock Text="{Binding LastTested, StringFormat='Ultimo test: {0:dd/MM/yyyy HH:mm:ss}'}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}"/>
-                                                <TextBlock Text="{Binding ProviderResultsText, StringFormat='Provider: {0}'}" FontSize="11" Foreground="{DynamicResource AppAccentBrush}" TextWrapping="Wrap" Margin="0,4,0,0"/>
-                                            </StackPanel>
-                                        </Border>
-                                    </StackPanel>
-                                </ScrollViewer>
+                                    <Border Background="{DynamicResource AppSurface2Brush}" CornerRadius="8" Padding="12" IsVisible="{Binding SelectedProxy, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                        <StackPanel Spacing="8">
+                                            <TextBlock Classes="section" Text="LISTE IN CUI COMPARE"/>
+                                            <ItemsControl ItemsSource="{Binding Memberships}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:ProxyMembershipItem">
+                                                        <Grid ColumnDefinitions="*, Auto, Auto, Auto" Margin="0,2">
+                                                            <CheckBox Content="{Binding Title}" IsChecked="{Binding IsMember, Mode=TwoWay}" ToolTip.Tip="Spunta per aggiungerlo a questa lista, togli la spunta per toglierlo"/>
+                                                            <Border Grid.Column="1" Classes="pill active" Margin="0,0,4,0" IsVisible="{Binding IsActive}"><TextBlock Text="ATTIVO"/></Border>
+                                                            <TextBlock Grid.Column="2" Classes="mono" Text="{Binding StateText}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                            <Border Grid.Column="3" Classes="pill" Classes.ok="{Binding StatusOk}" Classes.failed="{Binding StatusFailed}" Classes.untested="{Binding StatusUntested}"
+                                                                    IsVisible="{Binding StatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                                                <TextBlock Text="{Binding StatusText}"/>
+                                                            </Border>
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
                             </Border>
                         </Grid>
                     </DockPanel>
@@ -2711,6 +3111,13 @@
                                 <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="6">
                                     <Button ToolTip.Tip="Verifica che tutti i domini rispondano (stato HTTP e tempo di risposta)" Classes="info" Command="{Binding TestAllCommand}" IsEnabled="{Binding !IsTestingAll}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconPlug}"/><TextBlock Text="Test tutti"/></StackPanel></Button>
                                     <Button ToolTip.Tip="Interrompe il test dei domini" Classes="danger" Command="{Binding StopTestAllCommand}" IsVisible="{Binding IsTestingAll}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconStop}"/><TextBlock Text="Stop"/></StackPanel></Button>
+                                    <Border Width="1" Background="{DynamicResource AppBorderBrush}" Margin="6,2"/>
+                                    <StackPanel Classes="bi" ToolTip.Tip="Ricontrolla i domini in background mentre l'app è aperta; se uno smette di rispondere il pallino della tab diventa rosso">
+                                        <Path Classes="icon accent" Data="{StaticResource IconClock}"/>
+                                        <TextBlock Text="Ricontrolla" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                        <ComboBox ItemsSource="{Binding CheckIntervalLabels}" SelectedIndex="{Binding CheckIntervalIndex, Mode=TwoWay}" MinWidth="160" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding NextCheckText}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center"/>
                                 </WrapPanel>
                             </Border>
 
@@ -2769,14 +3176,14 @@
                 BorderThickness="1"
                 CornerRadius="14"
                 MinHeight="43"
-                MaxHeight="400"
-                Height="150"
+                MaxHeight="43"
+                Height="43"
                 Margin="12,6,12,0"
                 ClipToBounds="True">
             <DockPanel>
                 <Grid DockPanel.Dock="Top" Height="40" ColumnDefinitions="*, Auto, Auto, Auto, Auto, Auto" Margin="0,0,8,0">
                     <ToggleButton Grid.Column="0" x:Name="ToggleLogButton" Classes="guideToggle"
-                                IsChecked="True" Height="40" Padding="14,0"
+                                IsChecked="False" Height="40" Padding="14,0"
                                 Click="OnToggleLogClick" ToolTip.Tip="Comprimi / espandi log">
                         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                             <Path Classes="chevron" Margin="0"/>
@@ -2794,7 +3201,7 @@
                     <Button Grid.Column="5" FontSize="11" Padding="10,0" Height="28" Command="{Binding ClearLogsCommand}" Classes="ghost" ToolTip.Tip="Svuota il log"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTrash}"/><TextBlock Text="Pulisci"/></StackPanel></Button>
                 </Grid>
                 <Border DockPanel.Dock="Top" Height="1" Background="{DynamicResource AppBorderBrush}"/>
-                <ScrollViewer x:Name="LogScrollViewer" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                <ScrollViewer x:Name="LogScrollViewer" IsVisible="False" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
                     <!-- VirtualizingStackPanel: vengono create solo le righe visibili (il log arriva a 2000 voci) -->
                     <ItemsControl x:Name="LogItems" ItemsSource="{Binding FilteredLogs}">
                         <ItemsControl.ItemsPanel>
