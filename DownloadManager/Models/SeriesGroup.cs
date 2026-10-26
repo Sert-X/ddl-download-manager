@@ -22,31 +22,67 @@ public partial class SeriesGroup : ObservableObject
 
     partial void OnIsExpandedChanged(bool value) => OnPropertyChanged(nameof(ExpandedItems));
 
+    // Totali calcolati in un solo passaggio sugli episodi e tenuti finché qualcosa non cambia.
+    // Prima ogni proprietà rileggeva tutti gli episodi (una quindicina di passaggi a ogni cambio
+    // di stato): con serie lunghe e "Riscarica" su centinaia di episodi l'app quasi si bloccava.
+    private bool _statsDirty = true;
+    private int _completed, _active, _pending, _paused, _failed, _cancelled;
+    private long _totalBytes, _downloadedBytes;
+    private double _speed;
+
+    private void EnsureStats()
+    {
+        if (!_statsDirty) return;
+        _statsDirty = false;
+        _completed = _active = _pending = _paused = _failed = _cancelled = 0;
+        _totalBytes = _downloadedBytes = 0;
+        _speed = 0;
+        foreach (var i in Items)
+        {
+            switch (i.Status)
+            {
+                case DownloadStatus.Completed: _completed++; break;
+                case DownloadStatus.Downloading: _active++; break;
+                case DownloadStatus.Pending: _pending++; break;
+                case DownloadStatus.Paused: _paused++; break;
+                case DownloadStatus.Failed: _failed++; break;
+                case DownloadStatus.Cancelled: _cancelled++; break;
+            }
+            _totalBytes += i.TotalBytes;
+            _downloadedBytes += i.DownloadedBytes;
+            _speed += i.SpeedBytesPerSecond;
+        }
+    }
+
+    public SeriesGroup()
+    {
+        Items.CollectionChanged += (_, _) => _statsDirty = true;
+    }
+
     public int TotalCount => Items.Count;
-    public int CompletedCount => Items.Count(i => i.Status == DownloadStatus.Completed);
-    public int ActiveCount => Items.Count(i => i.Status == DownloadStatus.Downloading);
-    public int PendingCount => Items.Count(i => i.Status == DownloadStatus.Pending);
-    public int PausedCount => Items.Count(i => i.Status == DownloadStatus.Paused);
-    public int FailedCount => Items.Count(i => i.Status == DownloadStatus.Failed);
-    public int CancelledCount => Items.Count(i => i.Status == DownloadStatus.Cancelled);
-    public bool HasFailed => Items.Any(i => i.Status == DownloadStatus.Failed);
-    public bool HasCancelled => Items.Any(i => i.Status == DownloadStatus.Cancelled);
+    public int CompletedCount { get { EnsureStats(); return _completed; } }
+    public int ActiveCount { get { EnsureStats(); return _active; } }
+    public int PendingCount { get { EnsureStats(); return _pending; } }
+    public int PausedCount { get { EnsureStats(); return _paused; } }
+    public int FailedCount { get { EnsureStats(); return _failed; } }
+    public int CancelledCount { get { EnsureStats(); return _cancelled; } }
+    public bool HasFailed => FailedCount > 0;
+    public bool HasCancelled => CancelledCount > 0;
 
     public double OverallPercentage
     {
         get
         {
             if (TotalCount == 0) return 0;
-            long totalBytes = Items.Sum(i => i.TotalBytes);
-            long downloadedBytes = Items.Sum(i => i.DownloadedBytes);
-            return totalBytes > 0 ? (double)downloadedBytes / totalBytes * 100 : 0;
+            EnsureStats();
+            return _totalBytes > 0 ? (double)_downloadedBytes / _totalBytes * 100 : 0;
         }
     }
 
-    public long TotalBytes => Items.Sum(i => i.TotalBytes);
-    public long TotalDownloadedBytes => Items.Sum(i => i.DownloadedBytes);
+    public long TotalBytes { get { EnsureStats(); return _totalBytes; } }
+    public long TotalDownloadedBytes { get { EnsureStats(); return _downloadedBytes; } }
 
-    public double TotalSpeedBytesPerSecond => Items.Sum(i => i.SpeedBytesPerSecond);
+    public double TotalSpeedBytesPerSecond { get { EnsureStats(); return _speed; } }
 
     public string TotalSpeedText => TotalSpeedBytesPerSecond > 0
         ? $"{TotalSpeedBytesPerSecond / 1024 / 1024:F2} MB/s"
@@ -95,8 +131,27 @@ public partial class SeriesGroup : ObservableObject
         }
     }
 
+    private bool _refreshScheduled;
+
+    /// <summary>
+    /// Ricalcolo raggruppato: tanti cambi di stato ravvicinati (es. "Riscarica" su centinaia di
+    /// episodi) producono un solo aggiornamento della UI invece di uno per episodio.
+    /// </summary>
+    public void ScheduleRefresh()
+    {
+        _statsDirty = true;
+        if (_refreshScheduled) return;
+        _refreshScheduled = true;
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            _refreshScheduled = false;
+            RefreshStats();
+        }, Avalonia.Threading.DispatcherPriority.Background);
+    }
+
     public void RefreshStats()
     {
+        _statsDirty = true;
         OnPropertyChanged(nameof(TotalCount));
         OnPropertyChanged(nameof(CompletedCount));
         OnPropertyChanged(nameof(ActiveCount));

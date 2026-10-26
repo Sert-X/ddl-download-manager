@@ -416,14 +416,24 @@ public partial class VideoboxTabViewModel : ObservableObject
     [RelayCommand] private void EnableAllSources() { foreach (var x in Sources) x.IsEnabled = true; }
     [RelayCommand] private void EnableNoSources() { foreach (var x in Sources) x.IsEnabled = false; }
 
-    /// <summary>Sorgenti da caricare per la categoria selezionata (tutte se non c'è una scelta salvata).</summary>
+    /// <summary>
+    /// Le spunte delle sorgenti sono una sola scelta per tutte le categorie: cambiare categoria cambia
+    /// solo i post, spunte e alberi caricati restano. (Prima ogni categoria aveva le sue spunte e,
+    /// cambiandola, sparivano gli alberi delle sorgenti non spuntate.)
+    /// </summary>
+    private const string SourcesKey = "global";
+
+    /// <summary>Spunte salvate (tutte attive se non c'è una scelta salvata). Si applicano all'avvio.</summary>
     private void ApplyCategorySources()
     {
-        var key = (SelectedCategory?.Id ?? 0).ToString();
+        // Prima volta con la scelta unica: si parte da quella salvata per la categoria corrente
+        var s = _settingsService.Current;
+        var key = s.VideoboxCategoryDisabledSources.ContainsKey(SourcesKey) || s.VideoboxCategorySources.ContainsKey(SourcesKey)
+            ? SourcesKey
+            : (SelectedCategory?.Id ?? 0).ToString();
         _applyingCategorySources = true;
         try
         {
-            var s = _settingsService.Current;
             if (s.VideoboxCategoryDisabledSources.TryGetValue(key, out var disabled))
                 foreach (var src in Sources) src.IsEnabled = !disabled.Contains(src.Id);
             else
@@ -441,17 +451,10 @@ public partial class VideoboxTabViewModel : ObservableObject
 
     private void SaveCategorySources()
     {
-        var key = (SelectedCategory?.Id ?? 0).ToString();
+        const string key = SourcesKey;
         _settingsService.Current.VideoboxCategorySources[key] = Sources.Where(x => x.IsEnabled).Select(x => x.Id).ToList();
         _settingsService.Current.VideoboxCategoryDisabledSources[key] = Sources.Where(x => !x.IsEnabled).Select(x => x.Id).ToList();
         _settingsService.Save();
-    }
-
-    // Mentre l'elenco delle categorie si ricarica la tendina passa per "nessuna": lì non si tocca niente
-    // (si applicavano per un attimo le sorgenti di "Tutti i media" alla categoria scelta)
-    partial void OnSelectedCategoryChanged(CategoryItem? value)
-    {
-        if (value != null) ApplyCategorySources();
     }
 
     [RelayCommand] public void AddSecondaryDomain() => SecondaryDomains.Add(new DomainItem());
@@ -731,19 +734,24 @@ public partial class VideoboxTabViewModel : ObservableObject
             if (remoteServer?.online == null || remoteServer.online.Count == 0) { StatusMessage = "Nessun link trovato."; return; }
             _currentServerId = remoteServer.id.ToString();
 
-            var episodes = remoteServer.online.Values.OrderBy(e => e.vbo_id).ToList();
-            MappingItems.Clear();
-            foreach (var ep in episodes)
-            {
-                var item = new EpisodeMappingItem { EpisodeId = ep.vbo_id, OldUrl = ep.vbo_url };
-                item.EvaluateStatus(_settingsService.Current.AllValidStorageDomains);
-                MappingItems.Add(item);
-            }
+            FillMappingItems(remoteServer.online.Values);
 
             StatusMessage = $"Caricati {MappingItems.Count} episodi.";
         }
         catch (Exception ex) { StatusMessage = $"Errore: {ex.Message}"; }
         finally { IsBusy = false; }
+    }
+
+    /// <summary>Tabella degli episodi con i link del post, nell'ordine del forum.</summary>
+    private void FillMappingItems(IEnumerable<VideoboxEpisodeDto> links)
+    {
+        MappingItems.Clear();
+        foreach (var ep in links.OrderBy(e => e.vbo_id))
+        {
+            var item = new EpisodeMappingItem { EpisodeId = ep.vbo_id, OldUrl = ep.vbo_url };
+            item.EvaluateStatus(_settingsService.Current.AllValidStorageDomains);
+            MappingItems.Add(item);
+        }
     }
 
     /// <summary>Aggiorna nella lista il post con i dati appena letti dal sito.</summary>
@@ -1150,7 +1158,7 @@ public partial class VideoboxTabViewModel : ObservableObject
                         catch (Exception ex)
                         {
                             // Connessione probabilmente bloccata: si chiude, al prossimo giro si riapre
-                            await _pool.ResetAsync(source.ProfileId);
+                            if (ShouldResetConnection(ex)) await _pool.ResetAsync(source.ProfileId);
                             StatusMessage = $"Aggiornamento di '{source.DisplayName}' non riuscito: {FirstLine(ex.Message)}";
                         }
                     }
@@ -1180,6 +1188,15 @@ public partial class VideoboxTabViewModel : ObservableObject
     /// WinSCP) la si chiude, se ne apre una nuova e si riprova una volta. Un errore su una
     /// sorgente non ferma le altre.
     /// </summary>
+    /// <summary>
+    /// La connessione va chiusa e riaperta solo se è davvero bloccata. Non se il server ha risposto
+    /// con un errore (es. "No such file" per una cartella appena eliminata), e mai mentre si carica
+    /// l'albero: la stessa connessione serve al caricamento, che si interrompeva a metà
+    /// ("Element session@0 already read to the end").
+    /// </summary>
+    private bool ShouldResetConnection(Exception ex) =>
+        !IsLoadingTree && ex is not WinSCP.SessionRemoteException;
+
     private async Task<bool> RefreshDirectoryWithRetryAsync(SftpNode root, string path, bool recursive)
     {
         var source = root.Source!;
@@ -1192,6 +1209,9 @@ public partial class VideoboxTabViewModel : ObservableObject
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
+                // Il server ha risposto (es. cartella appena eliminata): la connessione è sana,
+                // non si riprova e soprattutto non la si chiude
+                if (!ShouldResetConnection(ex)) return false;
                 await _pool.ResetAsync(source.ProfileId);
                 if (attempt >= 2 || source.ProfileId == VideoboxSftpPool.SharedProfileId)
                 {
@@ -1616,24 +1636,12 @@ public partial class VideoboxTabViewModel : ObservableObject
 
             await _apiService.UpdateVideoUrlsAsync(CurrentPostId, _currentServerId, CurrentPostTitle, catId, _currentPostAuthorId, finalUrls);
 
-            foreach (var item in MappingItems)
-            {
-                if (item.IsSelectedForUpdate && !string.IsNullOrEmpty(item.NewUrl))
-                {
-                    item.OldUrl = item.NewUrl;
-                    item.NewUrl = null;
-                    item.SftpFileName = null;
-                    item.IsSelectedForUpdate = false;
-                }
-                item.EvaluateStatus(_settingsService.Current.AllValidStorageDomains);
-            }
-
-            var itemsToRemove = MappingItems.Where(x => !x.IsSelectedForUpdate && string.IsNullOrEmpty(x.SftpFileName)).ToList();
-            foreach (var item in itemsToRemove) MappingItems.Remove(item);
-
-            // Il post appena modificato si aggiorna subito nella lista
+            // Il post appena modificato si aggiorna subito nella lista, e la tabella mostra i link
+            // come li ha salvati il forum (prima le righe applicate sparivano dalla tabella)
             var updatedPost = await _apiService.GetVideoByIdAsync(CurrentPostId);
             ApplyFreshPostData(updatedPost, recolor: false);
+            var savedServer = updatedPost.videos?.Values.FirstOrDefault(v => v.id.ToString() == _currentServerId);
+            if (savedServer?.online != null) FillMappingItems(savedServer.online.Values);
 
             UpdateSftpTreeColors();
 

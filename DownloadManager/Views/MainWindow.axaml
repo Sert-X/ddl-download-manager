@@ -2277,7 +2277,7 @@
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Come si usa</Run><LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 1. Configura:</Run> apri "Impostazioni e Domini", compila URL e API Key del forum e aggiungi le <Run FontWeight="SemiBold">sorgenti SFTP</Run>: per ognuna la connessione (un profilo della tab SFTP, anche su server diversi), la cartella sul server, il dominio e il percorso pubblico. L'anteprima mostra il link che verrà generato. Salva.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 2. Carica i post:</Run> scegli una categoria: "Carica Pag." carica 50 post, "Carica Tutti" li carica tutti a blocchi. Con la ricerca e i filtri colorati sotto (clic su un colore per mostrarlo o nasconderlo, "Da sistemare" nasconde i verdi) restano solo i post che ti interessano.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 3. Carica l'albero:</Run> scegli dal menu <Run FontWeight="SemiBold">Sorgenti</Run> quali caricare (la scelta è ricordata per ogni categoria) e premi "Carica": ogni sorgente compare come radice dell'albero, e i colori confrontano i post con i file di tutte. Dopo il caricamento l'albero si aggiorna da solo.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 3. Carica l'albero:</Run> scegli dal menu <Run FontWeight="SemiBold">Sorgenti</Run> quali caricare (la scelta resta salvata e vale per tutte le categorie: cambiando categoria alberi e spunte non cambiano) e premi "Carica": ogni sorgente compare come radice dell'albero, e i colori confrontano i post con i file di tutte. Dopo il caricamento l'albero si aggiorna da solo.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 4. Mappa:</Run> seleziona un post, clicca la cartella con i suoi episodi (o un singolo file, per i film) e premi "Mappa": i link vengono abbinati ai file in ordine naturale, col dominio della sorgente del file. Col clic destro puoi copiare titoli, percorsi e link.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 5. Controlla e applica:</Run> nella tabella puoi scambiare gli abbinamenti e togliere la spunta alle righe da non toccare; "Applica" invia i nuovi link al forum.<LineBreak/>
                                         <LineBreak/>
@@ -2605,7 +2605,7 @@
 
                                     <!-- Sorgenti da caricare (scelta ricordata per categoria) -->
                                     <DropDownButton DockPanel.Dock="Top" Classes="trackPicker" HorizontalAlignment="Stretch" Margin="0,0,0,10" IsVisible="{Binding HasSources}"
-                                                    ToolTip.Tip="Sorgenti da caricare nell'albero. La scelta viene ricordata per ogni categoria.">
+                                                    ToolTip.Tip="Sorgenti da caricare nell'albero. La scelta resta salvata e vale per tutte le categorie.">
                                         <StackPanel Classes="bi">
                                             <Path Classes="icon accent" Data="{StaticResource IconLayers}"/>
                                             <TextBlock Text="{Binding SourcesSelectionText}"/>

@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.4.1] — 2026-10-26
+
+### 🗂 Videobox Corrector
+- **Cambiare categoria non tocca più alberi e sorgenti**: prima ogni categoria aveva le sue spunte e, passando per esempio da Anime ITA ad Anime Sub ITA, gli alberi già caricati sparivano. Ora cambia solo l'elenco dei post; le spunte delle sorgenti sono una sola scelta per tutte le categorie.
+- **Dopo "Applica" i link restano nella tabella**: la tabella si ricarica con i link appena salvati sul forum, già colorati. Prima le righe applicate sparivano.
+- **Albero di una sorgente che non si caricava** ("non raggiungibile: Element session@0 already read to the end"): l'aggiornamento automatico, trovando una cartella appena eliminata, chiudeva la connessione che serviva al caricamento. Ora la connessione si chiude solo se è davvero bloccata, e mai mentre l'albero si carica.
+
+### ⚡ Code di download
+- **"Riscarica" non rallenta più l'app**: con serie lunghe e centinaia di episodi falliti l'app quasi si bloccava, perché i totali della serie venivano ricalcolati molte volte a ogni cambio di stato. Ora si calcolano in un solo passaggio e i cambi ravvicinati producono un solo aggiornamento (Anime e Film/Serie).
+
 ## [1.4.0] — 2026-10-26
 
 ### 🎬 Film/Serie Download · CB01

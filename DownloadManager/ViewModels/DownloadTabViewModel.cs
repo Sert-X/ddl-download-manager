@@ -933,7 +933,7 @@ public partial class DownloadTabViewModel : ViewModelBase
 
         var seriesName = string.IsNullOrWhiteSpace(item.SeriesName) ? "Senza serie" : item.SeriesName;
         var group = SeriesGroups.FirstOrDefault(g => g.SeriesName == seriesName);
-        group?.RefreshStats();
+        group?.ScheduleRefresh();
     }
     private void OnAllItemsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
