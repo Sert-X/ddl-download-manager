@@ -41,7 +41,7 @@
                     <Border Background="{DynamicResource AppInputBrush}"
                             BorderBrush="{DynamicResource AppBorderBrush}"
                             BorderThickness="1" CornerRadius="10" Padding="12">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ScrollViewer x:Name="ChangelogScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                             <SelectableTextBlock x:Name="ChangelogText" TextWrapping="Wrap" FontSize="12"
                                                  Foreground="{DynamicResource AppTextBrush}"/>
                         </ScrollViewer>

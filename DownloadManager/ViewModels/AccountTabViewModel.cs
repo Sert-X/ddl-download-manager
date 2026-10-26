@@ -62,9 +62,12 @@ public partial class AccountTabViewModel : ViewModelBase
     private int ScDaysLeft => ScExpire is { } d ? Math.Max(0, (d - DateTime.Today).Days) : 0;
 
     public string SessionBadge => !IsLoggedIn
-        ? "🔒 Non connesso"
-        : IsPremium ? (ScExpire != null ? $"💎 Premium — scade il {ScExpireText}" : "💎 Premium")
-        : "👤 Free — 720p";
+        ? "Non connesso"
+        : IsPremium ? (ScExpire != null ? $"Premium — scade il {ScExpireText}" : "Premium")
+        : "Free — 720p";
+
+    /// <summary>Icona e colore del badge: off, premium, free, pending, limited.</summary>
+    public string SessionTone => !IsLoggedIn ? "off" : IsPremium ? "premium" : "free";
 
     public string SessionDetails => !IsLoggedIn
         ? "Nessun account configurato."
@@ -87,10 +90,12 @@ public partial class AccountTabViewModel : ViewModelBase
     private string MsExpireText => MsPremiumExpire?.ToString("d MMMM yyyy", It) ?? "non indicata";
 
     public string MsSessionBadge => !IsMsLoggedIn
-        ? "🔒 Non connesso"
-        : IsMsUnverified ? "⏳ Da verificare"
-        : IsMsPremium ? (MsPremiumExpire != null ? $"💎 Premium — scade il {MsExpireText}" : "💎 Premium")
-        : "👤 Free — download CB01 non disponibili";
+        ? "Non connesso"
+        : IsMsUnverified ? "Da verificare"
+        : IsMsPremium ? (MsPremiumExpire != null ? $"Premium — scade il {MsExpireText}" : "Premium")
+        : "Free — download CB01 non disponibili";
+
+    public string MsSessionTone => !IsMsLoggedIn ? "off" : IsMsUnverified ? "pending" : IsMsPremium ? "premium" : "limited";
 
     public string MsSessionDetails => !IsMsLoggedIn
         ? "Nessun account configurato."
@@ -240,6 +245,7 @@ public partial class AccountTabViewModel : ViewModelBase
         DaysLeft = _auth.Current.DaysLeft;
 
         OnPropertyChanged(nameof(SessionBadge));
+        OnPropertyChanged(nameof(SessionTone));
         OnPropertyChanged(nameof(SessionDetails));
         OnPropertyChanged(nameof(HasAccountIssue));
         OnPropertyChanged(nameof(HasSavedCredentials));
@@ -340,6 +346,7 @@ public partial class AccountTabViewModel : ViewModelBase
         HasMsSavedCredentials = !string.IsNullOrEmpty(creds.Username) || !string.IsNullOrEmpty(creds.Password);
 
         OnPropertyChanged(nameof(MsSessionBadge));
+        OnPropertyChanged(nameof(MsSessionTone));
         OnPropertyChanged(nameof(MsSessionDetails));
         OnPropertyChanged(nameof(HasAccountIssue));
     }

@@ -151,6 +151,8 @@ public partial class ProxyTabViewModel : ViewModelBase
         ? $"{CurrentListTitle} passa dal proxy attivo qui sotto."
         : $"Spento: {CurrentListTitle} usa la connessione diretta, qualunque proxy sia attivo.";
     public bool IsProviderTab => SelectedTab is { IsArchive: false };
+    /// <summary>Lista CB01 · Maxstream: avviso sui proxy residenziali.</summary>
+    public bool IsCb01Tab => SelectedTab?.Key == ProviderKeys.Cb01;
     public bool IsArchiveTab => SelectedTab is { IsArchive: true };
     public string CurrentListTitle => SelectedTab?.Title ?? "";
     private string? CurrentKey => SelectedTab?.Key;
@@ -238,6 +240,7 @@ public partial class ProxyTabViewModel : ViewModelBase
         SelectedFilter = FilterAll;
 
         OnPropertyChanged(nameof(IsProviderTab));
+        OnPropertyChanged(nameof(IsCb01Tab));
         OnPropertyChanged(nameof(IsArchiveTab));
         OnPropertyChanged(nameof(CurrentListTitle));
         OnPropertyChanged(nameof(CurrentUseProxy));

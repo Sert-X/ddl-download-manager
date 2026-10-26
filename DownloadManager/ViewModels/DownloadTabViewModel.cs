@@ -37,7 +37,7 @@ public partial class DownloadTabViewModel : ViewModelBase
     // ============================================================
 
     [ObservableProperty] private string _searchQuery = string.Empty;
-    [ObservableProperty] private string _statusMessage = "Pronto. Premi 'Cerca' per iniziare.";
+    [ObservableProperty] private string _statusMessage = "Cerca un anime per iniziare.";
     [ObservableProperty] private ObservableCollection<AnimeSearchResult> _searchResults = new();
     [ObservableProperty] private AnimeSearchResult? _selectedAnime;
     [ObservableProperty] private ObservableCollection<Episode> _episodes = new();
@@ -437,7 +437,7 @@ public partial class DownloadTabViewModel : ViewModelBase
         SearchResults.Clear();
         Episodes.Clear();
         SelectedAnime = null;
-        StatusMessage = $"Provider: {value.Name}. Premi 'Cerca' per iniziare.";
+        StatusMessage = $"Provider {value.Name} selezionato. Cerca un anime per iniziare.";
 
         // Avvia il browser del provider in anticipo: la prima ricerca non aspetta l'avvio (0,5-3 s)
         _ = Task.Run(async () =>

@@ -41,7 +41,7 @@ public partial class StreamingTabViewModel : ViewModelBase
     public bool IsCb01 => SelectedProvider == "CB01";
 
     [ObservableProperty] private string _searchQuery = string.Empty;
-    [ObservableProperty] private string _statusMessage = "Cerca un film o una serie TV per iniziare.";
+    [ObservableProperty] private string _statusMessage = "Provider StreamingCommunity selezionato. Cerca un film o una serie TV per iniziare.";
     [ObservableProperty] private ObservableCollection<MovieSearchResult> _searchResults = new();
     [ObservableProperty] private MovieSearchResult? _selectedResult;
     [ObservableProperty] private ObservableCollection<Season> _seasons = new();
@@ -128,6 +128,37 @@ public partial class StreamingTabViewModel : ViewModelBase
     public bool IsSelectedResultSeries => SelectedResult?.IsSeries == true;
     public bool IsSelectedResultMovie => SelectedResult != null && !SelectedResult.IsSeries;
 
+    // === Conversione a fine download (CB01) ===
+    public IReadOnlyList<VideoConversionOption> ConversionOptions => VideoConversionOption.All;
+
+    /// <summary>Scelta per i prossimi download: parte dalla predefinita, si può cambiare ogni volta.</summary>
+    [ObservableProperty] private VideoConversionOption _selectedConversion = VideoConversionOption.All[0];
+
+    /// <summary>Scelta predefinita dell'utente (impostazioni).</summary>
+    public VideoConversionOption DefaultConversion
+    {
+        get => VideoConversionOption.For(_settings.Current.DefaultVideoConversion);
+        set
+        {
+            if (value == null) return;
+            _settings.Current.DefaultVideoConversion = value.Mode;
+            _settings.Save();
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsSelectedConversionDefault));
+            SelectedConversion = value;
+        }
+    }
+
+    public bool IsSelectedConversionDefault => SelectedConversion?.Mode == _settings.Current.DefaultVideoConversion;
+    partial void OnSelectedConversionChanged(VideoConversionOption value) => OnPropertyChanged(nameof(IsSelectedConversionDefault));
+
+    [RelayCommand]
+    private void MakeConversionDefault()
+    {
+        if (SelectedConversion != null) DefaultConversion = SelectedConversion;
+        StatusMessage = $"Conversione predefinita: {SelectedConversion?.Title}.";
+    }
+
     // === Riquadro dettaglio del film ===
     public string SelectedResultYear => SelectedResult?.Year ?? "";
     public bool SelectedResultIsSubIta => SelectedResult?.IsSubIta == true;
@@ -143,7 +174,7 @@ public partial class StreamingTabViewModel : ViewModelBase
     public string SeasonsCountText => Seasons.Count switch { 0 => "", 1 => "1 stagione", var n => $"{n} stagioni" };
     public bool HasSeasonsCount => Seasons.Count > 0;
     public string SeasonEpisodesText => SelectedSeason == null || Episodes.Count == 0
-        ? "" : $"Stagione {SelectedSeason.Number} · {Episodes.Count} episodi";
+        ? "" : SelectedSeason.IsFilm ? "Film" : $"Stagione {SelectedSeason.Number} · {Episodes.Count} episodi";
     public bool HasSeasonEpisodes => SeasonEpisodesText.Length > 0;
     public bool HasSelectedEpisodes => Episodes.Any(e => e.IsSelected);
     public string SeriesDetailHint => IsLoadingEpisodes
@@ -408,6 +439,7 @@ public partial class StreamingTabViewModel : ViewModelBase
         _shared = shared;
 
         MovieNamingPattern = _settings.Current.StreamingMovieNamingPattern;
+        SelectedConversion = DefaultConversion;   // all'avvio: la scelta predefinita
         SeriesNamingPattern = _settings.Current.StreamingSeriesNamingPattern;
         Cb01MovieNamingPattern = _settings.Current.Cb01MovieNamingPattern;
         Cb01SeriesNamingPattern = _settings.Current.Cb01SeriesNamingPattern;
@@ -589,9 +621,7 @@ public partial class StreamingTabViewModel : ViewModelBase
         SelectedQuality = null;
         ClearTracks();
         OnPropertyChanged(nameof(IsCb01));
-        StatusMessage = value == "CB01"
-            ? "Provider CB01 selezionato. Cerca un film o una serie."
-            : "Cerca un film o una serie TV per iniziare.";
+        StatusMessage = $"Provider {value} selezionato. Cerca un film o una serie TV per iniziare.";
     }
 
     partial void OnSelectedResultChanged(MovieSearchResult? value)
@@ -609,6 +639,7 @@ public partial class StreamingTabViewModel : ViewModelBase
         ClearTracks();
         IsQualitiesLoading = false;   // ← NUOVO (reset nel caso rimanesse appeso)
         OnPropertyChanged(nameof(HasSeasons)); OnPropertyChanged(nameof(HasItaAndSubSeasons));
+        SelectedConversion = DefaultConversion;
         NotifyMovieCard();
     }
 
@@ -1254,6 +1285,19 @@ public partial class StreamingTabViewModel : ViewModelBase
             ct.ThrowIfCancellationRequested();
 
             var epNum = int.TryParse(ep.Number, out var parsed) ? parsed : 0;
+
+            // CB01: film collegato nella pagina della serie → si accoda come un film
+            if (IsCb01 && ep.IsMovie)
+            {
+                var yearMatch = System.Text.RegularExpressions.Regex.Match(ep.Link, @"-(\d{4})/?$");
+                items.Add(BuildDownloadItem(
+                    "", ep.Title, 1, ep.Title,
+                    contentLink: ep.Link, episodeId: 0, isSeries: false,
+                    year: yearMatch.Success ? yearMatch.Groups[1].Value : "",
+                    providerKey: "CB01", subIta: ep.IsSubIta));
+                continue;
+            }
+
             if (epNum <= 0 || !existing.Add(epNum)) continue;
 
             Func<CancellationToken, Task<string?>>? extractor = null;
@@ -1351,6 +1395,8 @@ public partial class StreamingTabViewModel : ViewModelBase
             },
             QualityName = isCb01Provider ? "" : (SelectedQuality?.Name ?? ""),
             ProviderKey = providerKey,
+            // CB01: conversione scelta nel Dettaglio (salvata nel download, vale anche dopo un riavvio)
+            Conversion = isCb01Provider ? (SelectedConversion?.Mode ?? VideoConversion.Original) : VideoConversion.Original,
             // CB01: qui si ricorda se scaricare la versione sottotitolata (vedi Cb01Service.SubItaTag)
             AudioLanguages = isCb01Provider
                 ? Cb01Service.EncodeTag(subIta, cb01Group)

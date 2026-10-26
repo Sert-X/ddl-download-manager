@@ -39,13 +39,15 @@
                                 <Run Text="DDL" FontWeight="Black" Foreground="{DynamicResource AppAccentGradientBrush}"/>
                                 <Run Text="Download Manager" FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}"/>
                             </TextBlock>
-                            <Border Background="{DynamicResource AppAccentSoftBrush}"
-                                    BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1"
-                                    CornerRadius="999" Padding="7,1" VerticalAlignment="Center"
-                                    ToolTip.Tip="Versione installata">
-                                <TextBlock Text="{Binding AppVersionText}" FontSize="10" FontWeight="Bold"
-                                           Foreground="{DynamicResource AppAccentBrush}"/>
-                            </Border>
+                            <Button Classes="versionBadge" Click="OnShowChangelogClick" VerticalAlignment="Center"
+                                    ToolTip.Tip="Novità: cronologia delle versioni">
+                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                    <TextBlock Text="{Binding AppVersionText}" FontSize="10" FontWeight="Bold"
+                                               Foreground="{DynamicResource AppAccentBrush}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="· Novità" FontSize="10" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource AppAccentBrush}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
                         </StackPanel>
                         <TextBlock Text="Anime  ·  Film e Serie  ·  SFTP  ·  Videobox"
                                    FontSize="11" FontWeight="Medium" LetterSpacing="0.4"
@@ -203,11 +205,13 @@
             <!-- Contenuti sempre nel visual tree: cambiando tab restano scroll e stato -->
             <Panel ClipToBounds="True">
                 <Panel IsVisible="{Binding #MainTabs.SelectedIndex, Converter={x:Static vm:IndexEqualsConverter.Default}, ConverterParameter=0}">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" DataContext="{Binding AnimeDownload}">
+                    <!-- Il messaggio di stato sta nella pagina; scorrendo ne compare una copia fissa in alto -->
+                    <Panel DataContext="{Binding AnimeDownload}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" h:StickyBanner.Overlay="{Binding #AnimeStickyBanner}">
                     <StackPanel Margin="0,10,0,0">
+                        <ContentControl Theme="{StaticResource StatusBannerTheme}" Content="{Binding StatusMessage}"/>
 
                         <!-- STATUS -->
-                        <ContentControl Theme="{StaticResource StatusBannerTheme}" Content="{Binding StatusMessage}"/>
 
                         <!-- GUIDA ANIME -->
                         <Border Classes="cardElevated" Margin="0,0,0,12" Padding="0" ClipToBounds="True">
@@ -225,7 +229,7 @@
                                     <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}">
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Come si usa</Run><LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 1. Cerca:</Run> scegli il provider (AnimeWorld o AnimeSaturn), scrivi il titolo e premi Cerca o Invio. Le ricerche recenti restano nel menu a tendina.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 2. Dettaglio:</Run> fai doppio clic su un risultato: gli episodi compaiono nel riquadro Dettaglio a destra.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 2. Dettaglio:</Run> fai doppio clic su un risultato, o passaci sopra e premi "Analizza": gli episodi compaiono nel riquadro Dettaglio a destra.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 3. Selezione:</Run> spunta gli episodi (o usa Seleziona tutti / Deseleziona / Inverti) e premi "Scarica selezionati". Gli episodi già in coda vengono saltati.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 4. Coda:</Run> i download sono raggruppati per serie: espandi un gruppo per vedere ogni episodio, usa i pulsanti del gruppo per avviarlo, metterlo in pausa o annullarlo.<LineBreak/>
                                         <LineBreak/>
@@ -513,7 +517,7 @@
                                                                         <Path Grid.Column="0" Classes="icon warn" Width="13" Height="13" HorizontalAlignment="Left" Data="{StaticResource IconBolt}" IsVisible="{Binding IsPriority}"/>
                                                                         <TextBlock Grid.Column="1" Text="{Binding FileName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" FontWeight="Medium"/>
                                                                         <TextBlock Grid.Column="2" Text="{Binding EpisodeNumber}" VerticalAlignment="Center"/>
-                                                                        <TextBlock Grid.Column="3" Text="{Binding Status}" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                                                        <TextBlock Grid.Column="3" Text="{Binding StatusText}" ToolTip.Tip="{Binding StatusText}" TextTrimming="CharacterEllipsis" Margin="0,0,6,0" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}"/>
                                                                         <Grid Grid.Column="4" ColumnDefinitions="*, 44" Margin="0,0,12,0">
                                                                             <ProgressBar Value="{Binding Percentage}" Minimum="0" Maximum="100" Height="14"/>
                                                                             <TextBlock Grid.Column="1" Text="{Binding Percentage, StringFormat={}{0:F0}%}" TextAlignment="Right" VerticalAlignment="Center" FontSize="11"/>
@@ -543,13 +547,20 @@
                         </Border>
                     </StackPanel>
                 </ScrollViewer>
+                    <!-- Copia del messaggio fissata in alto, visibile solo scorrendo (StickyBanner) -->
+                    <Border x:Name="AnimeStickyBanner" VerticalAlignment="Top" IsVisible="False" Padding="0,10,0,0" Background="{DynamicResource AppBackgroundBrush}">
+                        <ContentControl Margin="0,0,0,8" Theme="{StaticResource StatusBannerTheme}" Content="{Binding StatusMessage}"/>
+                    </Border>
+                    </Panel>
                 </Panel>
                 <Panel IsVisible="{Binding #MainTabs.SelectedIndex, Converter={x:Static vm:IndexEqualsConverter.Default}, ConverterParameter=1}">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" DataContext="{Binding Streaming}">
+                    <!-- Il messaggio di stato sta nella pagina; scorrendo ne compare una copia fissa in alto -->
+                    <Panel DataContext="{Binding Streaming}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" h:StickyBanner.Overlay="{Binding #StreamingStickyBanner}">
                     <StackPanel Margin="0,10,0,0">
+                        <ContentControl Theme="{StaticResource StatusBannerTheme}" Content="{Binding StatusMessage}"/>
 
                         <!-- STATUS -->
-                        <ContentControl Theme="{StaticResource StatusBannerTheme}" Content="{Binding StatusMessage}"/>
 
                         <!-- GUIDA STREAMING -->
                         <Border Classes="cardElevated" Margin="0,0,0,12" Padding="0" ClipToBounds="True">
@@ -566,18 +577,35 @@
                                 <Border IsVisible="{Binding #ToggleGuideStreaming.IsChecked}" Background="Transparent" Margin="16,0,16,16" Padding="12">
                                     <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}">
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Come si usa</Run><LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 1. Cerca:</Run> scrivi il titolo di un film o di una serie e premi Cerca o Invio.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 2. Seleziona:</Run> fai clic su un risultato: per le serie compaiono stagioni ed episodi, per i film il pulsante di download.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 3. Qualità:</Run> scegli la qualità (Auto prende la migliore disponibile). Con un account Premium, accedi dalla tab Account per sbloccare il 1080p.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 4. Scarica:</Run> "Scarica selezionati" per gli episodi spuntati, "Scarica stagione" per l'intera stagione, "Scarica tutta la serie" per tutte le stagioni.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 1. Provider:</Run> scegli StreamingCommunity o CB01 (Maxstream) dal menu a sinistra della ricerca.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 2. Cerca:</Run> scrivi il titolo e premi Cerca o Invio.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 3. Dettaglio:</Run> fai doppio clic su un risultato, o passaci sopra e premi "Analizza": a destra compaiono locandina, informazioni e stagioni con gli episodi (serie) oppure il pulsante "Scarica film".<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 4. Scarica:</Run> "Scarica selezionati" per gli episodi spuntati, "Scarica stagione" per la stagione aperta, "Scarica tutta la serie" per tutte le stagioni.<LineBreak/>
+                                        <LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">StreamingCommunity</Run><LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Account:</Run> senza account i download arrivano a 720p; con un account Premium (tab Account) si sblocca il 1080p.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Qualità:</Run> nel Dettaglio scegli la qualità; Auto prende la migliore disponibile.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Audio:</Run> spunta le lingue di doppiaggio da includere nel file: la prima scelta è la traccia predefinita. Nessuna spunta = solo italiano.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Sottotitoli:</Run> spunta i sottotitoli da includere come tracce attivabili dal player. "Imprimi nel video" disegna il primo sottotitolo scelto nell'immagine (sempre visibile), ma richiede la ricodifica e rende l'unione finale molto più lenta.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Proxy:</Run> se compare l'errore 403 o il blocco di Cloudflare, attiva un proxy funzionante per StreamingCommunity nella tab Proxy.<LineBreak/>
+                                        <LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">CB01 · Maxstream</Run><LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Account:</Run> serve un account Maxstream Premium (tab Account): senza, Maxstream mostra un captcha e i download falliscono.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Ricerca e qualità:</Run> vengono lette tutte le pagine di risultati, film e serie; il link migliore (HD/SD) viene scelto al via del download.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• ITA e Sub ITA:</Run> il badge SUB ITA indica film e stagioni in lingua originale con sottotitoli italiani. Se una serie ha stagioni in entrambe le versioni compaiono "Scarica tutta la serie ITA" e "Scarica tutta la serie Sub ITA".<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Più sezioni:</Run> se la pagina di una serie contiene più blocchi (stagioni, film, OAV, special), nell'elenco stagioni compaiono tutti con il loro nome.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Conversione:</Run> nel Dettaglio scegli cosa fare del file a fine download: Originale, Copia in MP4, MP4 + audio AAC oppure H.264 + AAC per i player web (con il processore o con la scheda video). Sotto il menu è spiegato cosa comporta ogni opzione; "Usa sempre questa" la rende predefinita, modificabile anche in "Nome file e cartella". Le conversioni vengono eseguite una alla volta e l'avanzamento compare nella coda.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Audio e sottotitoli:</Run> con tutte le opzioni MP4 restano tutte le tracce audio e i sottotitoli testuali, con l'italiano sempre come prima traccia audio (predefinita). Le conversioni AAC e H.264 regolano anche il volume (dialoghi in primo piano, -16 LUFS).<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Proxy:</Run> per CB01 funzionano solo proxy residenziali (vedi tab Proxy); con la connessione di casa non serve nessun proxy.<LineBreak/>
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Come funziona l'accodamento</Run><LineBreak/>
                                         Gli episodi vengono accodati subito. Il link video di ogni episodio viene estratto quando parte il suo download, perché i link scadono dopo pochi minuti: così anche le code lunghe non falliscono per link scaduti.<LineBreak/>
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Suggerimenti</Run><LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Nome dei file:</Run> i pattern per film e serie supportano {Series}, {Episode:D2}, {Title} e {Anno}. Le stagioni possono finire in sottocartelle dedicate.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Errore 403 / Cloudflare:</Run> attiva un proxy funzionante per StreamingCommunity nella tab Proxy e controlla nella tab Domini che l'indirizzo sia aggiornato.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Problemi:</Run> filtra il Log globale sulla sezione "Streaming" per vedere i dettagli di ogni estrazione.
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Nome dei file:</Run> in "Nome file e cartella" ci sono pattern separati per StreamingCommunity e CB01, con {Series}, {Episode:D2}, {Title}, {Anno} e, per CB01, {OriginalFileName} (nome del file su Maxstream). Le stagioni possono finire in sottocartelle dedicate.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Apri nel browser:</Run> dal Dettaglio, o con il clic destro su un risultato, apre la pagina originale sul sito.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Sito non raggiungibile:</Run> controlla nella tab Domini che l'indirizzo del provider sia aggiornato.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Problemi:</Run> filtra il Log globale sulla sezione "Streaming" per vedere i dettagli di ogni estrazione e conversione.
                                     </TextBlock>
                                 </Border>
                             </StackPanel>
@@ -616,7 +644,7 @@
                                     </Grid>
                                 </ToggleButton>
                                 <Border IsVisible="{Binding #ToggleNamingStreaming.IsChecked}" Margin="16,0,16,16">
-                                    <Grid ColumnDefinitions="Auto, *, Auto, Auto, Auto" RowDefinitions="Auto, Auto, Auto, Auto, Auto, Auto">
+                                    <Grid ColumnDefinitions="Auto, *, Auto, Auto, Auto" RowDefinitions="Auto, Auto, Auto, Auto, Auto, Auto, Auto">
                                         <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0" ToolTip.Tip="Nome dei film scaricati da StreamingCommunity"><TextBlock Text="Film · StreamingCommunity" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="Movie" Target="{Binding #MoviePatternBox}"/></StackPanel>
                                         <ComboBox x:Name="MoviePatternBox" Grid.Row="0" Grid.Column="1" IsEditable="True" ItemsSource="{Binding MovieNamingPresets}" Text="{Binding MovieNamingPattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,0,10,0"/>
                                         <Border Grid.Row="0" Grid.Column="2" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,0,10,0" MaxWidth="380">
@@ -650,6 +678,19 @@
 
                                         <StackPanel Grid.Row="5" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,10,4,0"><TextBlock Text="Sottocartella stagione" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="SeasonFolder" Target="{Binding #SeasonFolderBox}"/></StackPanel>
                                         <TextBox x:Name="SeasonFolderBox" Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding SeasonFolderPattern}" PlaceholderText="Stagione {number} (vuoto = nessuna)" Margin="0,10,10,0"/>
+
+                                        <TextBlock Grid.Row="6" Grid.Column="0" Text="Conversione CB01" VerticalAlignment="Top" FontWeight="SemiBold" Margin="0,16,10,0" ToolTip.Tip="Scelta proposta per ogni download CB01: si può cambiare ogni volta nel Dettaglio"/>
+                                        <StackPanel Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="4" Spacing="4" Margin="0,10,0,0">
+                                            <ComboBox ItemsSource="{Binding ConversionOptions}" SelectedItem="{Binding DefaultConversion, Mode=TwoWay}" HorizontalAlignment="Left" MinWidth="320">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate x:DataType="models:VideoConversionOption">
+                                                        <TextBlock Text="{Binding Title}"/>
+                                                    </DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
+                                            <TextBlock Text="{Binding DefaultConversion.Details}" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                            <TextBlock Text="{x:Static models:VideoConversionOption.TimingNote}" FontSize="10" FontStyle="Italic" TextWrapping="Wrap" Foreground="{DynamicResource AppTextMutedBrush}" Opacity="0.8"/>
+                                        </StackPanel>
                                     </Grid>
                                 </Border>
                             </StackPanel>
@@ -869,6 +910,34 @@
                                         </StackPanel>
                                     </WrapPanel>
 
+                                    <!-- CB01: conversione a fine download (scelta per questo download) -->
+                                    <Panel DockPanel.Dock="Top" IsVisible="{Binding HasSelectedResult}">
+                                        <Border IsVisible="{Binding IsCb01}" Background="{DynamicResource AppSurface2Brush}" CornerRadius="10" Padding="12,10" Margin="0,0,0,10">
+                                            <StackPanel Spacing="6">
+                                                <Grid ColumnDefinitions="Auto, *, Auto">
+                                                    <StackPanel Classes="bi" VerticalAlignment="Center" Margin="0,0,10,0">
+                                                        <Path Classes="icon accent" Data="{StaticResource IconRefresh}"/>
+                                                        <TextBlock Text="Conversione" FontWeight="SemiBold"/>
+                                                    </StackPanel>
+                                                    <ComboBox Grid.Column="1" ItemsSource="{Binding ConversionOptions}" SelectedItem="{Binding SelectedConversion, Mode=TwoWay}" HorizontalAlignment="Stretch" MaxWidth="360"
+                                                              ToolTip.Tip="Cosa fare del video a fine download. Vale per i prossimi download che accodi da qui.">
+                                                        <ComboBox.ItemTemplate>
+                                                            <DataTemplate x:DataType="models:VideoConversionOption">
+                                                                <TextBlock Text="{Binding Title}"/>
+                                                            </DataTemplate>
+                                                        </ComboBox.ItemTemplate>
+                                                    </ComboBox>
+                                                    <Panel Grid.Column="2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                                        <Border Classes="moviePill accent" IsVisible="{Binding IsSelectedConversionDefault}" ToolTip.Tip="È la tua scelta predefinita (si cambia in &quot;Nome file e cartella&quot;)"><TextBlock Text="Predefinita"/></Border>
+                                                        <Button Classes="ghost" Padding="10,4" FontSize="11" Command="{Binding MakeConversionDefaultCommand}" IsVisible="{Binding !IsSelectedConversionDefault}" ToolTip.Tip="Usa questa conversione anche per i prossimi download">Usa sempre questa</Button>
+                                                    </Panel>
+                                                </Grid>
+                                                <TextBlock Text="{Binding SelectedConversion.Details, FallbackValue=''}" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                                <TextBlock Text="{x:Static models:VideoConversionOption.TimingNote}" FontSize="10" FontStyle="Italic" TextWrapping="Wrap" Foreground="{DynamicResource AppTextMutedBrush}" Opacity="0.8"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </Panel>
+
                                     <WrapPanel DockPanel.Dock="Top" Orientation="Horizontal" ItemSpacing="6" LineSpacing="6" Margin="0,0,0,8" IsVisible="{Binding IsSelectedResultSeries}">
                                         <Button ToolTip.Tip="Accoda tutti gli episodi spuntati (quelli già in coda vengono saltati)" Classes="success" Command="{Binding DownloadSelectedEpisodesCommand}" IsEnabled="{Binding CanInteractWithEpisodes}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconDownload}"/><TextBlock Text="Scarica selezionati"/></StackPanel></Button>
                                         <Button Classes="accent" Command="{Binding DownloadCurrentSeasonCommand}" IsEnabled="{Binding CanInteractWithEpisodes}" ToolTip.Tip="Accoda tutti gli episodi della stagione corrente"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconDownload}"/><TextBlock Text="Scarica stagione"/></StackPanel></Button>
@@ -1041,7 +1110,7 @@
                                                                         <Path Grid.Column="0" Classes="icon warn" Width="13" Height="13" HorizontalAlignment="Left" Data="{StaticResource IconBolt}" IsVisible="{Binding IsPriority}"/>
                                                                         <TextBlock Grid.Column="1" Text="{Binding FileName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" FontWeight="Medium"/>
                                                                         <TextBlock Grid.Column="2" Text="{Binding EpisodeNumber}" VerticalAlignment="Center"/>
-                                                                        <TextBlock Grid.Column="3" Text="{Binding Status}" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                                                        <TextBlock Grid.Column="3" Text="{Binding StatusText}" ToolTip.Tip="{Binding StatusText}" TextTrimming="CharacterEllipsis" Margin="0,0,6,0" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}"/>
                                                                         <Grid Grid.Column="4" ColumnDefinitions="*, 44" Margin="0,0,12,0">
                                                                             <ProgressBar Value="{Binding Percentage}" Minimum="0" Maximum="100" Height="14"/>
                                                                             <TextBlock Grid.Column="1" Text="{Binding Percentage, StringFormat={}{0:F0}%}" TextAlignment="Right" VerticalAlignment="Center" FontSize="11"/>
@@ -1070,6 +1139,11 @@
                         </Border>
                     </StackPanel>
                     </ScrollViewer>
+                    <!-- Copia del messaggio fissata in alto, visibile solo scorrendo (StickyBanner) -->
+                    <Border x:Name="StreamingStickyBanner" VerticalAlignment="Top" IsVisible="False" Padding="0,10,0,0" Background="{DynamicResource AppBackgroundBrush}">
+                        <ContentControl Margin="0,0,0,8" Theme="{StaticResource StatusBannerTheme}" Content="{Binding StatusMessage}"/>
+                    </Border>
+                    </Panel>
                 </Panel>
                 <Panel IsVisible="{Binding #MainTabs.SelectedIndex, Converter={x:Static vm:IndexEqualsConverter.Default}, ConverterParameter=2}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" DataContext="{Binding Account}">
@@ -1100,7 +1174,7 @@
                                             <LineBreak/>
                                             <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Rete e sicurezza</Run><LineBreak/>
                                             <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Cifratura:</Run> le credenziali sono cifrate con DPAPI di Windows: solo il tuo utente può leggerle.<LineBreak/>
-                                            <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Proxy:</Run> ogni account usa il proxy attivo per il suo provider (tab Proxy). Il link di download di Maxstream vale solo per l'IP che l'ha chiesto, quindi anche il download esce da quell'IP.<LineBreak/>
+                                            <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Proxy:</Run> ogni account usa il proxy attivo per il suo provider (tab Proxy). Il link di download di Maxstream vale solo per l'IP che l'ha chiesto, quindi anche il download esce da quell'IP. Per Maxstream usa solo proxy residenziali e cambia IP il meno possibile: troppi accessi da IP diversi possono far richiedere una nuova verifica del login dal browser.<LineBreak/>
                                             <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• FlareSolverr:</Run> facoltativo. Serve solo se Cloudflare blocca la connessione diretta a Maxstream (IP da datacenter o VPN); con la connessione di casa non serve.<LineBreak/>
                                             <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Problemi:</Run> se un login fallisce, controlla nella tab Domini che il dominio del sito sia raggiungibile.
                                         </TextBlock>
@@ -1120,7 +1194,20 @@
 
                                         <Border Background="{DynamicResource AppSurface2Brush}" CornerRadius="8" Padding="12">
                                             <StackPanel Spacing="4">
-                                                <TextBlock Text="{Binding SessionBadge}" FontWeight="Bold" FontSize="15"/>
+                                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                                    <Panel VerticalAlignment="Center">
+                                                        <Border Width="28" Height="28" CornerRadius="14" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" IsVisible="{Binding SessionTone, Converter={x:Static h:ToneConverters.Is}, ConverterParameter=off}">
+                                                            <Path Classes="icon" Data="{StaticResource IconMinusCircle}" Width="13" Height="13" Stroke="{DynamicResource AppTextMutedBrush}" StrokeThickness="2.1" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        </Border>
+                                                        <Border Width="28" Height="28" CornerRadius="14" Background="{DynamicResource AppSuccessSoftBrush}" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="0" IsVisible="{Binding SessionTone, Converter={x:Static h:ToneConverters.Is}, ConverterParameter=premium}">
+                                                            <Path Classes="icon" Data="{StaticResource IconCheck}" Width="12" Height="12" Stroke="{DynamicResource AppSuccessBrush}" StrokeThickness="2.1" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        </Border>
+                                                        <Border Width="28" Height="28" CornerRadius="14" Background="{DynamicResource AppInfoSoftBrush}" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="0" IsVisible="{Binding SessionTone, Converter={x:Static h:ToneConverters.Is}, ConverterParameter=free}">
+                                                            <Path Classes="icon" Data="{StaticResource IconUser}" Width="13" Height="13" Stroke="{DynamicResource AppInfoBrush}" StrokeThickness="2.1" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        </Border>
+                                                    </Panel>
+                                                    <TextBlock Text="{Binding SessionBadge}" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                                </StackPanel>
                                                 <TextBlock Text="{Binding SessionDetails}" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" TextWrapping="Wrap" MinHeight="68"/>
                                             </StackPanel>
                                         </Border>
@@ -1156,7 +1243,23 @@
 
                                         <Border Background="{DynamicResource AppSurface2Brush}" CornerRadius="8" Padding="12">
                                             <StackPanel Spacing="4">
-                                                <TextBlock Text="{Binding MsSessionBadge}" FontWeight="Bold" FontSize="15"/>
+                                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                                    <Panel VerticalAlignment="Center">
+                                                        <Border Width="28" Height="28" CornerRadius="14" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" IsVisible="{Binding MsSessionTone, Converter={x:Static h:ToneConverters.Is}, ConverterParameter=off}">
+                                                            <Path Classes="icon" Data="{StaticResource IconMinusCircle}" Width="13" Height="13" Stroke="{DynamicResource AppTextMutedBrush}" StrokeThickness="2.1" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        </Border>
+                                                        <Border Width="28" Height="28" CornerRadius="14" Background="{DynamicResource AppSuccessSoftBrush}" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="0" IsVisible="{Binding MsSessionTone, Converter={x:Static h:ToneConverters.Is}, ConverterParameter=premium}">
+                                                            <Path Classes="icon" Data="{StaticResource IconCheck}" Width="12" Height="12" Stroke="{DynamicResource AppSuccessBrush}" StrokeThickness="2.1" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        </Border>
+                                                        <Border Width="28" Height="28" CornerRadius="14" Background="{DynamicResource AppWarningSoftBrush}" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="0" IsVisible="{Binding MsSessionTone, Converter={x:Static h:ToneConverters.Is}, ConverterParameter=limited}">
+                                                            <Path Classes="icon" Data="{StaticResource IconUser}" Width="13" Height="13" Stroke="{DynamicResource AppWarningBrush}" StrokeThickness="2.1" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        </Border>
+                                                        <Border Width="28" Height="28" CornerRadius="14" Background="{DynamicResource AppWarningSoftBrush}" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="0" IsVisible="{Binding MsSessionTone, Converter={x:Static h:ToneConverters.Is}, ConverterParameter=pending}">
+                                                            <Path Classes="icon" Data="{StaticResource IconClock}" Width="13" Height="13" Stroke="{DynamicResource AppWarningBrush}" StrokeThickness="2.1" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        </Border>
+                                                    </Panel>
+                                                    <TextBlock Text="{Binding MsSessionBadge}" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                                </StackPanel>
                                                 <TextBlock Text="{Binding MsSessionDetails}" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" TextWrapping="Wrap" MinHeight="68"/>
                                             </StackPanel>
                                         </Border>
@@ -1202,7 +1305,9 @@
                     </ScrollViewer>
                 </Panel>
                 <Panel IsVisible="{Binding #MainTabs.SelectedIndex, Converter={x:Static vm:IndexEqualsConverter.Default}, ConverterParameter=3}">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" DataContext="{Binding Organizer}">
+                    <!-- Il messaggio di stato sta nella pagina; scorrendo ne compare una copia fissa in alto -->
+                    <Panel DataContext="{Binding Organizer}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" h:StickyBanner.Overlay="{Binding #OrganizerStickyBanner}">
                     <DockPanel Margin="0,10,0,0">
                         <ContentControl DockPanel.Dock="Top" Theme="{StaticResource StatusBannerTheme}" Content="{Binding CurrentStatusMessage}" IsVisible="{Binding CurrentStatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
 
@@ -1549,6 +1654,11 @@
                         </DockPanel>
                     </DockPanel>
                 </ScrollViewer>
+                    <!-- Copia del messaggio fissata in alto, visibile solo scorrendo (StickyBanner) -->
+                    <Border x:Name="OrganizerStickyBanner" VerticalAlignment="Top" IsVisible="False" Padding="0,10,0,0" Background="{DynamicResource AppBackgroundBrush}">
+                        <ContentControl Margin="0,0,0,8" Theme="{StaticResource StatusBannerTheme}" Content="{Binding CurrentStatusMessage}" IsVisible="{Binding CurrentStatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                    </Border>
+                    </Panel>
                 </Panel>
                 <Panel IsVisible="{Binding #MainTabs.SelectedIndex, Converter={x:Static vm:IndexEqualsConverter.Default}, ConverterParameter=4}">
                     <DockPanel Margin="0,10,0,0" DataContext="{Binding Sftp}">
@@ -1823,7 +1933,7 @@
                                                                 </DataTemplate>
                                                             </ComboBox.ItemTemplate>
                                                         </ComboBox>
-                                                        <Button Grid.Column="6" Content="{Binding LocalSortDirectionIcon}" Classes="iconCircle" Width="34" Command="{Binding ToggleLocalSortDirectionCommand}" ToolTip.Tip="Inverti direzione (crescente / decrescente)"/>
+                                                        <Button Grid.Column="6" Classes="iconCircle" Width="34" Command="{Binding ToggleLocalSortDirectionCommand}" ToolTip.Tip="Inverti direzione (crescente / decrescente)"><Panel><Path Classes="icon" Data="{StaticResource IconArrowUp}" IsVisible="{Binding LocalSortAscending}"/><Path Classes="icon" Data="{StaticResource IconArrowDown}" IsVisible="{Binding !LocalSortAscending}"/></Panel></Button>
                                                     </Grid>
                                                     <TextBlock Grid.Row="1" Text="{Binding LocalBrowserStats}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,6,0,0" HorizontalAlignment="Left"/>
                                                 </Grid>
@@ -1908,14 +2018,14 @@
                                                                 </DataTemplate>
                                                             </ComboBox.ItemTemplate>
                                                         </ComboBox>
-                                                        <Button Grid.Column="7" Content="{Binding RemoteSortDirectionIcon}" Classes="iconCircle" Width="34" Command="{Binding ToggleRemoteSortDirectionCommand}" ToolTip.Tip="Inverti direzione (crescente / decrescente)"/>
+                                                        <Button Grid.Column="7" Classes="iconCircle" Width="34" Command="{Binding ToggleRemoteSortDirectionCommand}" ToolTip.Tip="Inverti direzione (crescente / decrescente)"><Panel><Path Classes="icon" Data="{StaticResource IconArrowUp}" IsVisible="{Binding RemoteSortAscending}"/><Path Classes="icon" Data="{StaticResource IconArrowDown}" IsVisible="{Binding !RemoteSortAscending}"/></Panel></Button>
                                                     </Grid>
                                                     <TextBlock Grid.Row="1" Text="{Binding RemoteBrowserStats}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,6,0,0" HorizontalAlignment="Left"/>
                                                 </Grid>
 
                                                 <Border DockPanel.Dock="Top" IsVisible="{Binding HasRemoteStatus}" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10,6" Margin="0,0,0,8">
                                                     <StackPanel Orientation="Horizontal" Spacing="8">
-                                                        <TextBlock Text="{Binding RemoteStatusIcon}" FontSize="12" VerticalAlignment="Center"/>
+                                                        <Panel VerticalAlignment="Center"><Path Classes="icon accent" Width="13" Height="13" Data="{StaticResource IconSearch}" IsVisible="{Binding IsCheckingZeroByte}"/><Path Classes="icon accent" Width="13" Height="13" Data="{StaticResource IconRefresh}" IsVisible="{Binding !IsCheckingZeroByte}"/></Panel>
                                                         <TextBlock Text="{Binding RemoteStatusText}" FontSize="12" Foreground="{DynamicResource AppTextBrush}" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                 </Border>
@@ -2643,7 +2753,9 @@
                     </Grid>
                 </Panel>
                 <Panel IsVisible="{Binding #MainTabs.SelectedIndex, Converter={x:Static vm:IndexEqualsConverter.Default}, ConverterParameter=6}">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" DataContext="{Binding Proxy}">
+                    <!-- Il messaggio di stato sta nella pagina; scorrendo ne compare una copia fissa in alto -->
+                    <Panel DataContext="{Binding Proxy}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" h:StickyBanner.Overlay="{Binding #ProxyStickyBanner}">
                     <DockPanel Margin="0,10,0,0">
                         <DockPanel.Styles>
                             <!-- Pillole di stato (stesso linguaggio visivo dei pulsanti colorati dell'app) -->
@@ -2743,8 +2855,8 @@
                                 <Setter Property="VerticalAlignment" Value="Center"/>
                             </Style>
                         </DockPanel.Styles>
-
                         <ContentControl DockPanel.Dock="Top" Theme="{StaticResource StatusBannerTheme}" Content="{Binding ProxyStatusMessage}"/>
+
 
                         <!-- GUIDA PROXY -->
                         <Border DockPanel.Dock="Top" Classes="cardElevated" Margin="0,0,0,12" Padding="0" ClipToBounds="True">
@@ -2776,6 +2888,11 @@
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Testare</Run><LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Testa da testare / Ritesta tutti:</Run> solo la lista aperta. <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">Testa tutti i provider:</Run> ritesta tutte le liste una dopo l'altra (anche dall'Archivio); "Stop" ferma tutto.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Test CB01:</Run> prova la home di Maxstream, la sua pagina di login e la home di CB01, e segnala se Cloudflare chiede la verifica.<LineBreak/>
+                                        <LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">CB01 · Maxstream</Run><LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Solo residenziali:</Run> Cloudflare blocca login e link di Maxstream da proxy di datacenter o VPN, anche quando il test risulta OK. Usa proxy residenziali (IP di casa o mobili, meglio se fissi) oppure lascia il proxy spento: con la connessione di casa CB01 funziona.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Account:</Run> ogni cambio di IP è un nuovo accesso all'account Maxstream: alternare molti proxy diversi può portare Maxstream a chiedere di verificare di nuovo il login dal browser.<LineBreak/>
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Aggiungere e togliere</Run><LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Importa:</Run> incolla una lista o caricala da file, per tutte le liste o solo per alcune. I doppioni vengono saltati.<LineBreak/>
@@ -2844,6 +2961,19 @@
                                 </Grid>
 
                                 <TextBlock Text="{Binding UseProxyHint}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" TextWrapping="Wrap"/>
+
+                                <!-- CB01 · Maxstream: servono proxy residenziali -->
+                                <Border IsVisible="{Binding IsCb01Tab}" Background="{DynamicResource AppWarningSoftBrush}" BorderBrush="{DynamicResource AppWarningBrush}" BorderThickness="1" CornerRadius="10" Padding="12,10">
+                                    <Grid ColumnDefinitions="Auto, *">
+                                        <Path Classes="icon warn" Data="{StaticResource IconAlertCircle}" Width="18" Height="18" VerticalAlignment="Top" Margin="0,1,12,0"/>
+                                        <StackPanel Grid.Column="1" Spacing="4">
+                                            <TextBlock Text="Solo proxy residenziali" FontWeight="Bold" Foreground="{DynamicResource AppWarningBrush}"/>
+                                            <TextBlock TextWrapping="Wrap" FontSize="12">
+                                                Maxstream è protetto da Cloudflare, che blocca login e link quando la connessione arriva da proxy di <Run FontWeight="SemiBold">datacenter o VPN</Run> (anche se il test qui risulta OK). Usa solo <Run FontWeight="SemiBold">proxy residenziali</Run> (IP di casa o mobili, meglio se fissi: ogni cambio di IP è un nuovo accesso all'account), oppure lascia il proxy spento: con la connessione di casa CB01 funziona.
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
 
                                 <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="6">
                                     <Button Classes="success" Command="{Binding ProxyActivateFastestCommand}" IsEnabled="{Binding !IsActivating}" ToolTip.Tip="Riprova i proxy funzionanti dal più veloce e attiva il primo che risponde"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconBolt}"/><TextBlock Text="Attiva il più veloce"/></StackPanel></Button>
@@ -3072,12 +3202,19 @@
                         </Grid>
                     </DockPanel>
                     </ScrollViewer>
+                    <!-- Copia del messaggio fissata in alto, visibile solo scorrendo (StickyBanner) -->
+                    <Border x:Name="ProxyStickyBanner" VerticalAlignment="Top" IsVisible="False" Padding="0,10,0,0" Background="{DynamicResource AppBackgroundBrush}">
+                        <ContentControl Margin="0,0,0,8" Theme="{StaticResource StatusBannerTheme}" Content="{Binding ProxyStatusMessage}"/>
+                    </Border>
+                    </Panel>
                 </Panel>
                 <Panel IsVisible="{Binding #MainTabs.SelectedIndex, Converter={x:Static vm:IndexEqualsConverter.Default}, ConverterParameter=7}">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" DataContext="{Binding Domains}">
+                    <!-- Il messaggio di stato sta nella pagina; scorrendo ne compare una copia fissa in alto -->
+                    <Panel DataContext="{Binding Domains}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" h:StickyBanner.Overlay="{Binding #DomainsStickyBanner}">
                         <DockPanel Margin="0,10,0,0">
-                            <!-- STATUS (in alto, sopra la guida) -->
                             <ContentControl DockPanel.Dock="Top" Theme="{StaticResource StatusBannerTheme}" Content="{Binding StatusMessage}"/>
+                            <!-- STATUS (in alto, sopra la guida) -->
 
                             <!-- GUIDA DOMINI -->
                             <Border DockPanel.Dock="Top" Classes="cardElevated" Margin="0,0,0,12" Padding="0" ClipToBounds="True">
@@ -3099,6 +3236,7 @@
                                             <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Come si usa</Run><LineBreak/>
                                             <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Test:</Run> "Test tutti" (o il pulsante a spina su una riga) controlla stato HTTP e tempo di risposta. Il pallino è verde se il sito risponde e rosso se non è raggiungibile.<LineBreak/>
                                             <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Modifica:</Run> se un sito ha cambiato indirizzo, scrivi quello nuovo e premi il pulsante Salva della riga: i provider useranno subito il nuovo dominio.<LineBreak/>
+                                            <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Controllo automatico:</Run> i domini vengono ricontrollati da soli; con "Ricontrolla" scegli ogni quanti minuti (o solo all'avvio) e accanto vedi quando avverrà il prossimo controllo.<LineBreak/>
                                             <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Ripristina:</Run> il pulsante con la freccia circolare riporta il dominio predefinito.<LineBreak/>
                                             <LineBreak/>
                                             <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Indicatore:</Run> il pallino sulla tab Domini diventa rosso quando almeno un dominio non risponde.
@@ -3138,7 +3276,7 @@
                                                         <TextBlock Grid.Column="0" Text="{Binding ProviderName}" VerticalAlignment="Center" FontWeight="SemiBold"/>
                                                         <TextBox Grid.Column="1" Text="{Binding Url, Mode=TwoWay}" Margin="0,0,8,0" MinHeight="32" VerticalAlignment="Center"/>
                                                         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding StatusIcon}" FontSize="14" VerticalAlignment="Center"/>
+                                                            <Panel VerticalAlignment="Center" Margin="2,0,2,0"><Ellipse Width="10" Height="10" Fill="{DynamicResource AppSuccessBrush}" IsVisible="{Binding StatusTone, Converter={x:Static h:ToneConverters.Is}, ConverterParameter=ok}"/><Ellipse Width="10" Height="10" Fill="{DynamicResource AppDangerBrush}" IsVisible="{Binding StatusTone, Converter={x:Static h:ToneConverters.Is}, ConverterParameter=ko}"/><Ellipse Width="10" Height="10" Fill="{DynamicResource AppTextMutedBrush}" Opacity="0.6" IsVisible="{Binding StatusTone, Converter={x:Static h:ToneConverters.Is}, ConverterParameter=none}"/></Panel>
                                                             <TextBlock Text="{Binding StatusMessage}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                                         </StackPanel>
                                                         <TextBlock Grid.Column="3" Text="{Binding LastTested, StringFormat='{}{0:dd/MM HH:mm:ss}'}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center"/>
@@ -3162,6 +3300,11 @@
                             </Border>
                         </DockPanel>
                     </ScrollViewer>
+                    <!-- Copia del messaggio fissata in alto, visibile solo scorrendo (StickyBanner) -->
+                    <Border x:Name="DomainsStickyBanner" VerticalAlignment="Top" IsVisible="False" Padding="0,10,0,0" Background="{DynamicResource AppBackgroundBrush}">
+                        <ContentControl Margin="0,0,0,8" Theme="{StaticResource StatusBannerTheme}" Content="{Binding StatusMessage}"/>
+                    </Border>
+                    </Panel>
                 </Panel>
             </Panel>
         </DockPanel>
@@ -3223,7 +3366,7 @@
                                 <Border Classes="logRow" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="0,0,0,1" Padding="14,4">
                                     <Grid ColumnDefinitions="Auto, Auto, Auto, *">
                                         <SelectableTextBlock Grid.Column="0" Text="{Binding TimestampText}" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center" Margin="0,0,12,0"/>
-                                        <TextBlock Grid.Column="1" Text="{Binding LevelIcon}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <Panel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,8,0" ToolTip.Tip="{Binding LevelText}"><Path Classes="icon" Width="12" Height="12" Stroke="{DynamicResource AppTextMutedBrush}" Data="{StaticResource IconInfo}" IsVisible="{Binding IsInfo}"/><Path Classes="icon" Width="12" Height="12" Stroke="{DynamicResource AppWarningBrush}" Data="{StaticResource IconAlert}" IsVisible="{Binding IsWarning}"/><Path Classes="icon" Width="12" Height="12" Stroke="{DynamicResource AppDangerBrush}" Data="{StaticResource IconAlertCircle}" IsVisible="{Binding IsError}"/></Panel>
                                         <Border Grid.Column="2" Background="{DynamicResource AppAccentSoftBrush}" CornerRadius="999" Padding="8,1" MinWidth="64" Margin="0,0,12,0" VerticalAlignment="Center">
                                             <TextBlock Text="{Binding Category}" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource AppAccentBrush}" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                         </Border>

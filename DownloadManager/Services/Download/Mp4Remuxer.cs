@@ -24,6 +24,7 @@ public static class Mp4Remuxer
         var temp = target + ".converting";
         var (videoCodec, audioCodecs) = await ProbeCodecsAsync(ffmpegPath, source, ct);
         var isHevc = videoCodec.Equals("hevc", StringComparison.OrdinalIgnoreCase);
+        var audioMap = AudioTracks.MapArgs(await AudioTracks.ItalianFirstOrderAsync(ffmpegPath, source, ct));
 
         // DTS, TrueHD, Vorbis, FLAC, PCM...: ffmpeg li mette nell'MP4 ma molti lettori non li riproducono
         bool copyAudio = audioCodecs.All(Mp4FriendlyAudio.Contains);
@@ -33,11 +34,12 @@ public static class Mp4Remuxer
 
         // In ordine: tutto con sottotitoli testuali (mov_text); senza sottotitoli (PGS/VobSub non
         // convertibili); audio in AAC. "0:V" esclude le copertine allegate, che fanno fallire la copia.
+        // L'audio italiano va per primo (vedi AudioTracks).
         var attempts = new (string Name, string[] Args)[]
         {
-            ("copia completa", new[] { "-map", "0:V", "-map", "0:a?", "-map", "0:s?", "-c:v", "copy", "-c:s", "mov_text" }.Concat(audio).ToArray()),
-            ("senza sottotitoli", new[] { "-map", "0:V", "-map", "0:a?", "-c:v", "copy", "-sn" }.Concat(audio).ToArray()),
-            ("audio in AAC", new[] { "-map", "0:V", "-map", "0:a?", "-c:v", "copy", "-sn" }.Concat(AacAudio).ToArray()),
+            ("copia completa", new[] { "-map", "0:V" }.Concat(audioMap).Concat(new[] { "-map", "0:s?", "-c:v", "copy", "-c:s", "mov_text" }).Concat(audio).ToArray()),
+            ("senza sottotitoli", new[] { "-map", "0:V" }.Concat(audioMap).Concat(new[] { "-c:v", "copy", "-sn" }).Concat(audio).ToArray()),
+            ("audio in AAC", new[] { "-map", "0:V" }.Concat(audioMap).Concat(new[] { "-c:v", "copy", "-sn" }).Concat(AacAudio).ToArray()),
         };
 
         foreach (var (name, attemptArgs) in attempts)
@@ -68,6 +70,33 @@ public static class Mp4Remuxer
 
         logger.LogWarning("[MP4] Impossibile convertire {File} in MP4: resta nel formato originale.", Path.GetFileName(source));
         return null;
+    }
+
+    /// <summary>
+    /// Riscrive un .mp4 sul posto copiando le tracce (nessuna ricodifica): indice in testa
+    /// (faststart), tag hvc1 per l'HEVC e audio italiano per primo. True se riuscito; altrimenti il file resta com'era.
+    /// </summary>
+    public static async Task<bool> RewriteAsync(string ffmpegPath, string file, ILogger logger, CancellationToken ct = default)
+    {
+        var temp = file + ".rewrite.mp4";
+        var (videoCodec, _) = await ProbeCodecsAsync(ffmpegPath, file, ct);
+        var args = new List<string> { "-hide_banner", "-nostdin", "-y", "-i", file, "-map", "0:V" };
+        args.AddRange(AudioTracks.MapArgs(await AudioTracks.ItalianFirstOrderAsync(ffmpegPath, file, ct)));
+        args.AddRange(new[] { "-map", "0:s?", "-c", "copy", "-c:s", "mov_text" });
+        if (videoCodec.Equals("hevc", StringComparison.OrdinalIgnoreCase)) args.AddRange(new[] { "-tag:v", "hvc1" });
+        args.AddRange(new[] { "-map_metadata", "0", "-movflags", "+faststart", "-f", "mp4", temp });
+
+        var sw = Stopwatch.StartNew();
+        var (code, err) = await RunAsync(ffmpegPath, args, ct);
+        if (code == 0 && File.Exists(temp) && new FileInfo(temp).Length > 0)
+        {
+            File.Move(temp, file, overwrite: true);
+            logger.LogInformation("[MP4] {File} riscritto in {S:F0}s", Path.GetFileName(file), sw.Elapsed.TotalSeconds);
+            return true;
+        }
+        TryDelete(temp);
+        logger.LogInformation("[MP4] Riscrittura non riuscita per {File}: {Err}", Path.GetFileName(file), LastLines(err));
+        return false;
     }
 
     /// <summary>Codec del video principale e di tutte le tracce audio ("" e lista vuota se ffprobe manca).</summary>

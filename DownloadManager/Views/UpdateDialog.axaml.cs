@@ -133,6 +133,7 @@ public partial class UpdateDialog : Window
                 ChangelogText.Text = string.IsNullOrWhiteSpace(_changelog)
                     ? "Nessun dettaglio disponibile per questa versione."
                     : _changelog;
+                ShowChangelog();
 
                 AddButton("Più tardi", "ghost", () => { Choice = UpdateChoice.Cancel; Close(); });
                 AddButton("Aggiorna ora", "accent", () => _ = StartDownloadAsync());
@@ -167,6 +168,7 @@ public partial class UpdateDialog : Window
                 ChangelogText.Text = string.IsNullOrWhiteSpace(_changelog)
                     ? "Nessun dettaglio disponibile per questa versione."
                     : _changelog;
+                ShowChangelog();
                 AddButton("Inizia", "accent", Close);
                 break;
 
@@ -175,6 +177,14 @@ public partial class UpdateDialog : Window
                 AddButton("Chiudi", "ghost", () => { Choice = UpdateChoice.Cancel; Close(); });
                 break;
         }
+    }
+
+    /// <summary>Le novità della versione, impaginate (il testo della release contiene tutto il changelog).</summary>
+    private void ShowChangelog()
+    {
+        if (string.IsNullOrWhiteSpace(_changelog)) return;
+        var section = DownloadManager.Helpers.ChangelogRenderer.SectionFor(_changelog, _newVersion);
+        ChangelogScroll.Content = DownloadManager.Helpers.ChangelogRenderer.Render(section, showVersionHeaders: false);
     }
 
     /// <summary>Mostra "Installazione..." per un attimo, poi l'app si chiude e Velopack applica l'aggiornamento.</summary>

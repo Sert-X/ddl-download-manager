@@ -14,9 +14,9 @@
     <!-- ============================================================ -->
     <AssemblyName>DDLDownloadManager</AssemblyName>
     <RootNamespace>DownloadManager</RootNamespace>
-    <Version>1.3.0</Version>
-    <FileVersion>1.3.0.0</FileVersion>
-    <AssemblyVersion>1.3.0.0</AssemblyVersion>
+    <Version>1.4.0</Version>
+    <FileVersion>1.4.0.0</FileVersion>
+    <AssemblyVersion>1.4.0.0</AssemblyVersion>
     <Product>DDL Download Manager</Product>
     <Company>DDL</Company>
     <Description>Download manager per AnimeWorld con organizer locale/remoto e SFTP.</Description>
@@ -47,6 +47,8 @@
   <!-- ============================================================ -->
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" Exclude="Assets\ffmpeg\**;Assets\yt-dlp\**" />
+    <!-- Changelog incluso nell'app: finestra "Novità" (si legge anche offline) -->
+    <EmbeddedResource Include="..\CHANGELOG.md" LogicalName="CHANGELOG.md" Link="CHANGELOG.md" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,5 +1,6 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:h="using:DownloadManager.Helpers"
              x:Class="DownloadManager.App"
              RequestedThemeVariant="Dark">
 
@@ -401,18 +402,39 @@
                                 CornerRadius="10"
                                 Padding="10,8">
                             <Grid ColumnDefinitions="Auto,*">
-                                <Border Width="24" Height="24" CornerRadius="12"
-                                        Background="{DynamicResource AppAccentSoftBrush}"
-                                        Margin="0,0,10,0" VerticalAlignment="Center">
-                                    <Path Data="{StaticResource IconInfo}"
-                                          Width="12" Height="12" Stretch="Uniform"
-                                          Stroke="{DynamicResource AppAccentBrush}"
-                                          StrokeThickness="2"
-                                          StrokeLineCap="Round" StrokeJoin="Round"
-                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                </Border>
+                                <!-- Icona secondo il tipo di messaggio (vedi StatusBannerTone): info, riuscito, avviso, errore -->
+                                <Panel Margin="0,0,10,0" VerticalAlignment="Center">
+                                    <Border Width="24" Height="24" CornerRadius="12" Background="{DynamicResource AppAccentSoftBrush}"
+                                            IsVisible="{TemplateBinding Content, Converter={x:Static h:StatusBannerTone.IsInfo}}">
+                                        <Path Classes="icon" Data="{StaticResource IconInfo}" Width="12" Height="12" Stretch="Uniform"
+                                              Stroke="{DynamicResource AppAccentBrush}" StrokeThickness="2.2"
+                                              StrokeLineCap="Round" StrokeJoin="Round"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <Border Width="24" Height="24" CornerRadius="12" Background="{DynamicResource AppSuccessSoftBrush}"
+                                            IsVisible="{TemplateBinding Content, Converter={x:Static h:StatusBannerTone.IsSuccess}}">
+                                        <Path Classes="icon" Data="{StaticResource IconCheck}" Width="11" Height="11" Stretch="Uniform"
+                                              Stroke="{DynamicResource AppSuccessBrush}" StrokeThickness="2.2"
+                                              StrokeLineCap="Round" StrokeJoin="Round"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <Border Width="24" Height="24" CornerRadius="12" Background="{DynamicResource AppWarningSoftBrush}"
+                                            IsVisible="{TemplateBinding Content, Converter={x:Static h:StatusBannerTone.IsWarning}}">
+                                        <Path Classes="icon" Data="{StaticResource IconAlert}" Width="12" Height="12" Stretch="Uniform"
+                                              Stroke="{DynamicResource AppWarningBrush}" StrokeThickness="2.2"
+                                              StrokeLineCap="Round" StrokeJoin="Round"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <Border Width="24" Height="24" CornerRadius="12" Background="{DynamicResource AppDangerSoftBrush}"
+                                            IsVisible="{TemplateBinding Content, Converter={x:Static h:StatusBannerTone.IsError}}">
+                                        <Path Classes="icon" Data="{StaticResource IconClose}" Width="10" Height="10" Stretch="Uniform"
+                                              Stroke="{DynamicResource AppDangerBrush}" StrokeThickness="2.2"
+                                              StrokeLineCap="Round" StrokeJoin="Round"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                </Panel>
                                 <TextBlock Grid.Column="1"
-                                           Text="{TemplateBinding Content}"
+                                           Text="{TemplateBinding Content, Converter={x:Static h:StatusBannerTone.Text}}"
                                            Foreground="{DynamicResource AppTextBrush}"
                                            FontSize="12"
                                            VerticalAlignment="Center"
@@ -1135,6 +1157,23 @@
         <Style Selector="Button.posterAnalyze:pressed">
             <Setter Property="RenderTransform" Value="scale(0.95)"/>
         </Style>
+        <!-- Badge della versione nell'intestazione: apre la finestra "Novità" -->
+        <Style Selector="Button.versionBadge">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border x:Name="Pill" Background="{DynamicResource AppAccentSoftBrush}"
+                            BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1"
+                            CornerRadius="999" Padding="8,2">
+                        <ContentPresenter Content="{TemplateBinding Content}"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.versionBadge:pointerover /template/ Border#Pill">
+            <Setter Property="Background" Value="{DynamicResource AppHoverBrush}"/>
+        </Style>
+
         <!-- Pillole del riquadro dettaglio film -->
         <Style Selector="Border.moviePill">
             <Setter Property="Background" Value="{DynamicResource AppSurface2Brush}"/>

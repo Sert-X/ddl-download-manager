@@ -21,12 +21,12 @@ public partial class DomainConfig : ObservableObject
     [ObservableProperty] private DateTime? _lastTested;
     [ObservableProperty] private bool _isTesting;
 
-    /// <summary>Icona in base allo stato (bindata in UI).</summary>
-    public string StatusIcon => Status switch
+    /// <summary>Colore del pallino di stato: ok (verde), ko (rosso), none (grigio, mai testato).</summary>
+    public string StatusTone => Status switch
     {
-        DomainStatus.Ok => "🟢",
-        DomainStatus.Unreachable => "🔴",
-        _ => "⚪"
+        DomainStatus.Ok => "ok",
+        DomainStatus.Unreachable => "ko",
+        _ => "none"
     };
 
     /// <summary>True se l'URL è stato modificato rispetto al default.</summary>
@@ -34,7 +34,7 @@ public partial class DomainConfig : ObservableObject
 
     partial void OnStatusChanged(DomainStatus value)
     {
-        OnPropertyChanged(nameof(StatusIcon));
+        OnPropertyChanged(nameof(StatusTone));
     }
 
     partial void OnUrlChanged(string value)

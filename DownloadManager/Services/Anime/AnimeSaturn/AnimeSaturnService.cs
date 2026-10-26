@@ -475,7 +475,7 @@ public class AnimeSaturnService : IAnimeSaturnService
         // Episodi su YouTube o risposte inattese: li gestisce il browser
         if (!src.StartsWith("http", StringComparison.OrdinalIgnoreCase)) return null;
 
-        _logger.LogInformation("[SATURN] ✅ Video (via veloce): {Url}", src);
+        _logger.LogInformation("[SATURN] Video (via veloce): {Url}", src);
         return src;
     }
 
@@ -510,7 +510,7 @@ public class AnimeSaturnService : IAnimeSaturnService
                     if (IsVideoUrl(lower) || isVideoContentType)
                     {
                         if (videoTcs.TrySetResult(url))
-                            _logger.LogInformation("[SATURN] ✅ Video intercettato: {Url}", url);
+                            _logger.LogInformation("[SATURN] Video intercettato: {Url}", url);
                     }
                 }
                 catch { }
@@ -538,7 +538,7 @@ public class AnimeSaturnService : IAnimeSaturnService
             if (!string.IsNullOrEmpty(immediate))
             {
                 page.Response -= OnResponse;
-                _logger.LogInformation("[SATURN] ✅ Video trovato (DOM main): {Url}", immediate);
+                _logger.LogInformation("[SATURN] Video trovato (DOM main): {Url}", immediate);
                 return immediate;
             }
 
@@ -550,7 +550,7 @@ public class AnimeSaturnService : IAnimeSaturnService
                 page.Response -= OnResponse;
                 if (raced == videoTcs.Task && videoTcs.Task.IsCompletedSuccessfully)
                     return videoTcs.Task.Result;
-                _logger.LogWarning("[SATURN] ❌ Nessun video trovato (no iframe)");
+                _logger.LogWarning("[SATURN] Nessun video trovato (no iframe)");
                 return null;
             }
 
@@ -581,7 +581,7 @@ public class AnimeSaturnService : IAnimeSaturnService
                         if (IsVideoUrl(lower) || isVideoContentType)
                         {
                             if (iframeTcs.TrySetResult(url))
-                                _logger.LogInformation("[SATURN] ✅ Video intercettato (iframe): {Url}", url);
+                                _logger.LogInformation("[SATURN] Video intercettato (iframe): {Url}", url);
                         }
                     }
                     catch { }
@@ -622,11 +622,11 @@ public class AnimeSaturnService : IAnimeSaturnService
                 iframePage.Response -= OnIframeResponse;
                 if (!string.IsNullOrEmpty(domUrl))
                 {
-                    _logger.LogInformation("[SATURN] ✅ Video trovato (DOM iframe): {Url}", domUrl);
+                    _logger.LogInformation("[SATURN] Video trovato (DOM iframe): {Url}", domUrl);
                     return domUrl;
                 }
 
-                _logger.LogWarning("[SATURN] ❌ Nessun video trovato nell'iframe");
+                _logger.LogWarning("[SATURN] Nessun video trovato nell'iframe");
                 return null;
             }
             finally

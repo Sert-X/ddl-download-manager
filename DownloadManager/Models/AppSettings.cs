@@ -36,6 +36,8 @@ public class AppSettings
     public string LastRunVersion { get; set; } = "";
     /// <summary>Ogni quanti minuti ricontrollare i domini in background (0 = solo all'avvio).</summary>
     public int DomainCheckIntervalMinutes { get; set; } = 10;
+    /// <summary>Conversione proposta per i download CB01 (si può cambiare per ogni download).</summary>
+    public VideoConversion DefaultVideoConversion { get; set; } = VideoConversion.Mp4Copy;   // come fino alla 1.3.0: sempre .mp4
 
     public bool UseProxyForAnimeWorld { get; set; } = true;
     public bool UseProxyForAnimeSaturn { get; set; } = true;
@@ -64,6 +66,11 @@ public class AppSettings
     public List<VideoboxSourceConfig> VideoboxSources { get; set; } = new();
     /// <summary>Sorgenti da caricare per ogni categoria (chiave = Id categoria). Assente = tutte.</summary>
     public Dictionary<string, List<string>> VideoboxCategorySources { get; set; } = new();
+    /// <summary>
+    /// Sorgenti ESCLUSE per categoria (sostituisce l'elenco delle attive): una sorgente aggiunta
+    /// dopo parte attiva in tutte le categorie, invece di risultare spenta.
+    /// </summary>
+    public Dictionary<string, List<string>> VideoboxCategoryDisabledSources { get; set; } = new();
 
     /// <summary>Domini considerati validi: quelli delle sorgenti, il primario storico e i secondari.</summary>
     public IEnumerable<string> AllValidStorageDomains =>

@@ -124,12 +124,20 @@ public class Cb01Service : ICb01Service
         var it = System.Globalization.CultureInfo.GetCultureInfo("it-IT");
         return Regex.Replace(group.Trim(), @"[\p{L}\p{N}]+", m =>
             known.TryGetValue(m.Value, out var w) ? w
+            : KeepUpper.Contains(m.Value) ? m.Value.ToUpperInvariant()
             : m.Value.Length == 0 ? m.Value
             : char.ToUpper(m.Value[0], it) + m.Value[1..].ToLower(it));
     }
 
+    /// <summary>Sigle che restano maiuscole nei nomi dei gruppi.</summary>
+    private static readonly HashSet<string> KeepUpper = new(StringComparer.OrdinalIgnoreCase)
+        { "OAV", "OVA", "ONA", "TV", "SP", "UK", "USA", "II", "III", "IV", "VI", "VII", "VIII", "IX", "XI", "XII" };
+
     /// <summary>Titolo della pagina della serie (per scrivere bene i nomi dei gruppi).</summary>
     private readonly Dictionary<string, string> _pageTitles = new();
+
+    /// <summary>Film collegati negli spoiler della pagina di una serie (es. "SPECIALE"): titolo, link, sottotitolato.</summary>
+    private readonly Dictionary<string, List<(string Title, string Url, bool IsSub)>> _seriesFilms = new();
     private readonly Dictionary<string, (DateTime At, List<SeriesEpisode> Episodes)> _seriesCache = new();
     private static readonly TimeSpan SeriesCacheTtl = TimeSpan.FromMinutes(10);
 
@@ -192,12 +200,43 @@ public class Cb01Service : ICb01Service
         return results;
     }
 
+    /// <summary>Tutte le pagine di risultati (fino a 5): la prima, poi le altre insieme.</summary>
     private async Task<List<MovieSearchResult>> SearchPageAsync(string url, bool isSeries, CancellationToken ct)
+    {
+        string first;
+        try { first = await _http.GetStringAsync(url, ct); }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[CB01] Errore ricerca {Url}", url);
+            return new List<MovieSearchResult>();
+        }
+
+        var results = ParseSearchResults(first, isSeries);
+
+        // Paginazione: "/page/2/?s=..." (film) o "/serietv/page/2/?s=..." (serie)
+        int last = RxSearchPage.Matches(first).Select(m => int.Parse(m.Groups[1].Value)).DefaultIfEmpty(1).Max();
+        if (last > 1)
+        {
+            var u = new Uri(url);
+            var basePath = u.AbsolutePath.TrimEnd('/');
+            var pages = await Task.WhenAll(Enumerable.Range(2, Math.Min(last, 5) - 1).Select(async n =>
+            {
+                try { return ParseSearchResults(await _http.GetStringAsync($"{u.Scheme}://{u.Authority}{basePath}/page/{n}/{u.Query}", ct), isSeries); }
+                catch (Exception ex) { _logger.LogWarning(ex, "[CB01] Errore pagina {N} di {Url}", n, url); return new List<MovieSearchResult>(); }
+            }));
+            foreach (var r in pages.SelectMany(p => p))
+                if (!results.Any(x => x.Link == r.Link)) results.Add(r);
+        }
+        return results;
+    }
+
+    private static readonly Regex RxSearchPage = new(@"href=""[^""]*/page/(\d+)/\?s=", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    private List<MovieSearchResult> ParseSearchResults(string html, bool isSeries)
     {
         var results = new List<MovieSearchResult>();
         try
         {
-            var html = await _http.GetStringAsync(url, ct);
             foreach (Match card in RxCard.Matches(html))
             {
                 var block = card.Groups[1].Value;
@@ -236,7 +275,7 @@ public class Cb01Service : ICb01Service
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "[CB01] Errore ricerca {Url}", url);
+            _logger.LogWarning(ex, "[CB01] Errore lettura risultati");
         }
         return results;
     }
@@ -277,7 +316,21 @@ public class Cb01Service : ICb01Service
                 })
                 .ToList();
 
-            _logger.LogInformation("[CB01] {Link}: {N} stagioni, {E} episodi", seriesLink, seasons.Count, episodes.Count);
+            // In fondo i film collegati negli spoiler (es. Beyblade: "SPECIALE" → "Beyblade: The Movie")
+            List<(string Title, string Url, bool IsSub)> films;
+            lock (_seriesFilms) films = _seriesFilms.GetValueOrDefault(seriesLink) ?? new();
+            foreach (var film in films)
+            {
+                var title = PrettyGroup(film.Title, reference);
+                seasons.Add(new Season
+                {
+                    Number = 1, Variant = "film", Group = film.Url, GroupTitle = title,
+                    Title = $"Film · {title}{(film.IsSub ? " · Sub ITA" : "")}",
+                    LanguageTag = film.IsSub ? "Sub ITA" : ""
+                });
+            }
+
+            _logger.LogInformation("[CB01] {Link}: {N} stagioni, {F} film, {E} episodi", seriesLink, seasons.Count - films.Count, films.Count, episodes.Count);
             return seasons;
         }
         catch (Exception ex)
@@ -300,7 +353,23 @@ public class Cb01Service : ICb01Service
         try
         {
             List<StreamingEpisode> episodes;
-            if (IsSeriesLink(contentLink))
+            if (variant == "film")
+            {
+                // Film collegato nella pagina della serie: una sola voce, che si scarica come un film
+                await GetSeriesEpisodesAsync(contentLink, ct);
+                List<(string Title, string Url, bool IsSub)> films;
+                lock (_seriesFilms) films = _seriesFilms.GetValueOrDefault(contentLink) ?? new();
+                string reference;
+                lock (_pageTitles) reference = _pageTitles.GetValueOrDefault(contentLink, "");
+                episodes = films.Where(f => f.Url == group)
+                    .Select(f => new StreamingEpisode
+                    {
+                        Number = "1", Title = PrettyGroup(f.Title, reference), Link = f.Url,
+                        SeasonNumber = 0, IsSubIta = f.IsSub, IsMovie = true
+                    })
+                    .ToList();
+            }
+            else if (IsSeriesLink(contentLink))
             {
                 episodes = (await GetSeriesEpisodesAsync(contentLink, ct))
                     .Where(e => e.Season == seasonNumber && e.Group == group)
@@ -371,6 +440,7 @@ public class Cb01Service : ICb01Service
             _pageTitles[seriesLink] = WebUtility.HtmlDecode(Regex.Replace(pageTitle.Groups[1].Value, "<[^>]+>", "")).Trim();
 
         var sections = new List<(string Header, string Group, int Order, int From, int To, bool IsSub, bool IsHd, string Body)>();
+        var films = new List<(string Title, string Url, bool IsSub)>();
         foreach (var block in html.Split("<div class=\"sp-wrap", StringSplitOptions.None).Skip(1))
         {
             var m = RxSpoiler.Match(block);
@@ -380,7 +450,25 @@ public class Cb01Service : ICb01Service
             var sm = RxSeasonHeader.Match(header);
             if (!sm.Success)
             {
-                _logger.LogInformation("[CB01] Sezione ignorata (non è una stagione): '{Header}'", header);
+                bool sub = header.Contains("SUB", StringComparison.OrdinalIgnoreCase);
+                // Spoiler senza "STAGIONE" ma con episodi (es. One Piece: "SERIE - ITA - HD", "OAV - SUB ITA",
+                // "SPECIALE - ITA"): diventa un gruppo col suo nome; la stagione la dicono righe e nomi dei file
+                if (RxAnchor.Matches(SpoilerBody(m.Groups[2].Value)).Any(a => IsCandidateHost(WebUtility.HtmlDecode(a.Groups[1].Value))))
+                {
+                    sections.Add((header, NonSeasonGroup(header), sections.Count, 1, 1, sub,
+                        Regex.IsMatch(header, @"\bHD\b", RegexOptions.IgnoreCase), m.Groups[2].Value));
+                    continue;
+                }
+
+                // Altrimenti può contenere link ad altri post di CB01, cioè film (es. Beyblade: "SPECIALE")
+                var linked = FilmPostLinks(m.Groups[2].Value, sub);
+                if (linked.Count > 0)
+                {
+                    films.AddRange(linked.Where(l => !films.Any(f => f.Url == l.Url)));
+                    _logger.LogInformation("[CB01] Sezione '{Header}': {N} film collegati", header, linked.Count);
+                }
+                else
+                    _logger.LogInformation("[CB01] Sezione ignorata (non è una stagione): '{Header}'", header);
                 continue;
             }
 
@@ -447,8 +535,51 @@ public class Cb01Service : ICb01Service
             .OrderBy(e => e.GroupOrder).ThenBy(e => e.Season).ThenBy(e => e.Episode)
             .ToList();
 
+        lock (_seriesFilms) _seriesFilms[seriesLink] = films;
         lock (_seriesCache) _seriesCache[seriesLink] = (DateTime.UtcNow, episodes);
         return episodes;
+    }
+
+    /// <summary>Solo il corpo dello spoiler: l'ultimo della pagina proseguirebbe fino al fondo (Contatti, Dmca...).</summary>
+    private static string SpoilerBody(string body)
+    {
+        var stop = body.IndexOf("class=\"spdiv\"", StringComparison.OrdinalIgnoreCase);
+        if (stop < 0) stop = body.IndexOf("</div>", StringComparison.OrdinalIgnoreCase);
+        return stop >= 0 ? body[..stop] : body;
+    }
+
+    /// <summary>
+    /// Nome del gruppo per uno spoiler senza "STAGIONE": l'intestazione senza lingua e qualità.
+    /// "SERIE"/"EPISODI" = la serie principale (nessun gruppo).
+    /// </summary>
+    private static string NonSeasonGroup(string header)
+    {
+        var parts = header.Split(new[] { " - ", " – ", " — " }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(p => !Regex.IsMatch(p, @"^(SUB[\s\-]*ITA|ITA|HD|SD|ITA\s*/\s*SUB\s*ITA|SUB\s*ITA\s*/\s*ITA)$", RegexOptions.IgnoreCase))
+            .ToList();
+        var name = string.Join(" - ", parts).Trim();
+        return Regex.IsMatch(name, @"^(SERIE|EPISODI|SERIE TV|TUTTE LE STAGIONI)?$", RegexOptions.IgnoreCase) ? "" : name;
+    }
+
+    /// <summary>Link a pagine di film di CB01 dentro uno spoiler (stesso sito, non serie TV né protettori).</summary>
+    private List<(string Title, string Url, bool IsSub)> FilmPostLinks(string body, bool isSub)
+    {
+        var result = new List<(string Title, string Url, bool IsSub)>();
+        var baseUri = new Uri(BaseUrl.TrimEnd('/') + "/");
+        body = SpoilerBody(body);
+        foreach (Match a in RxAnchor.Matches(body))
+        {
+            var href = WebUtility.HtmlDecode(a.Groups[1].Value);
+            var title = WebUtility.HtmlDecode(Regex.Replace(a.Groups[2].Value, "<[^>]+>", "")).Trim();
+            if (title.Length == 0 || !Uri.TryCreate(baseUri, href, out var url)) continue;
+            if (DomainResolver.HostOf(url.ToString()) != DomainResolver.HostOf(baseUri.ToString())) continue;
+            if (IsSeriesLink(url.ToString()) || IsCandidateHost(url.ToString()) || url.AbsolutePath.Length <= 1) continue;
+            if (url.AbsolutePath.StartsWith("/cdn-cgi/", StringComparison.OrdinalIgnoreCase) ||
+                url.AbsolutePath.Contains("/feed", StringComparison.OrdinalIgnoreCase) ||
+                url.AbsolutePath.Contains("/category/", StringComparison.OrdinalIgnoreCase)) continue;
+            result.Add((title, url.ToString(), isSub || Regex.IsMatch(title, @"sub[\s\-_.]*ita", RegexOptions.IgnoreCase)));
+        }
+        return result;
     }
 
     /// <summary>Ordine di prova: prima ciò che il post dichiara HD, poi le etichette "Maxstream". Solo un'ipotesi: decide il file reale.</summary>
@@ -489,6 +620,7 @@ public class Cb01Service : ICb01Service
             return list;
         }
 
+        var unnumbered = new List<(string Title, string Url)>();
         foreach (Match row in RxFolderRow.Matches(html))
         {
             var fileName = WebUtility.HtmlDecode(row.Groups[1].Value).Trim();
@@ -501,7 +633,8 @@ public class Cb01Service : ICb01Service
                     list.Add(new FolderEpisode(fromSeason, bare, $"Episodio {bare}", row.Groups[2].Value));
                     continue;
                 }
-                _logger.LogInformation("[CB01] File senza numero episodio, saltato: {File}", fileName);
+                // OAV, speciali...: nessun numero nel nome. Si accodano dopo, in ordine
+                unnumbered.Add((ReadableFileTitle(fileName), row.Groups[2].Value));
                 continue;
             }
 
@@ -531,8 +664,30 @@ public class Cb01Service : ICb01Service
             list.Add(new FolderEpisode(season, episode, title, row.Groups[2].Value));
         }
 
+        // Cartella solo di file senza numero (es. OAV: "_SUB-ITA_One.Piece.OAV.mp4"): episodi 1, 2, ...
+        // Se ci sono anche episodi numerati, quei file sono doppioni ("One.Piece.1004.1.WEB") e si saltano
+        if (unnumbered.Count > 0 && list.Count == 0)
+        {
+            int next = 0;
+            foreach (var (title, url) in unnumbered)
+            {
+                next++;
+                list.Add(new FolderEpisode(fromSeason, next, title, url));
+            }
+            _logger.LogInformation("[CB01] Cartella {Url}: {N} file senza numero aggiunti in coda", folderUrl, unnumbered.Count);
+        }
+
         _logger.LogInformation("[CB01] Cartella {Url}: {N} episodi", folderUrl, list.Count);
         return list;
+    }
+
+    /// <summary>"_SUB-ITA_One.Piece.OAV.mp4" → "One Piece OAV".</summary>
+    private static string ReadableFileTitle(string fileName)
+    {
+        var name = Regex.Replace(fileName, @"\.(mp4|mkv|avi)$", "", RegexOptions.IgnoreCase);
+        name = Regex.Replace(name, @"^_?(SUB[-_. ]?ITA|ITA)_", "", RegexOptions.IgnoreCase);
+        name = Regex.Replace(name, @"[._]+", " ").Trim();
+        return name.Length > 0 ? name : fileName;
     }
 
     /// <summary>
@@ -654,7 +809,9 @@ public class Cb01Service : ICb01Service
         item.UrlExtractor = async ct =>
         {
             var d = await ResolveBestAsync(link, isSeries, season, episode, subIta, group, ct);
-            if (d == null) return null;
+            // Nella coda si vede il motivo vero (es. proxy bloccato da Cloudflare), non "UrlExtractor vuoto"
+            if (d == null)
+                throw new InvalidOperationException(_maxstream.LastProblem ?? "Nessun link Maxstream funzionante per questo titolo.");
             item.SourceFileName = d.FileName;
             return d.Url;
         };

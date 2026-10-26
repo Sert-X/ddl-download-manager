@@ -42,6 +42,8 @@ public partial class DownloadItem : ObservableObject
     public string SubtitleLanguages { get; set; } = "";
     /// <summary>Se true il primo sottotitolo scelto viene impresso nel video (richiede ricodifica).</summary>
     public bool BurnSubtitles { get; set; }
+    /// <summary>Conversione a fine download (CB01): originale, audio AAC, H.264 con processore o scheda video.</summary>
+    public VideoConversion Conversion { get; set; } = VideoConversion.Original;
 
     public Func<CancellationToken, Task<string?>>? UrlExtractor { get; set; }
     public Func<CancellationToken, Task<string?>>? AudioExtractor { get; set; }
@@ -58,6 +60,13 @@ public partial class DownloadItem : ObservableObject
     public bool PauseRequested { get; set; }
 
     public string FileName => Path.GetFileName(DestinationPath);
+
+    /// <summary>Stato per la coda: a download finito mostra la fase in corso (es. "Conversione 37%").</summary>
+    public string StatusText => Status == DownloadStatus.Downloading && !string.IsNullOrEmpty(ErrorMessage)
+        ? ErrorMessage
+        : Status.ToString();
+
+    partial void OnErrorMessageChanged(string value) => OnPropertyChanged(nameof(StatusText));
 
     public double Percentage => TotalBytes > 0
         ? Math.Min(100, (double)DownloadedBytes / TotalBytes * 100)
@@ -128,6 +137,7 @@ public partial class DownloadItem : ObservableObject
         OnPropertyChanged(nameof(CanCancel));
         OnPropertyChanged(nameof(CanRetry));
         OnPropertyChanged(nameof(CanForce));
+        OnPropertyChanged(nameof(StatusText));
     }
 
     partial void OnIsPriorityChanged(bool value)

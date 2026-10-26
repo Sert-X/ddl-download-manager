@@ -154,10 +154,7 @@ public partial class SftpTabViewModel : ViewModelBase
         }
     }
 
-    public string RemoteStatusIcon => IsCheckingZeroByte ? "🔍" : "🔄";
     public bool HasRemoteStatus => !string.IsNullOrEmpty(RemoteStatusText);
-    public string LocalSortDirectionIcon => LocalSortAscending ? "↑" : "↓";
-    public string RemoteSortDirectionIcon => RemoteSortAscending ? "↑" : "↓";
 
     public SftpTabViewModel(
         ISftpService sftpService,
@@ -253,7 +250,6 @@ public partial class SftpTabViewModel : ViewModelBase
 
     partial void OnLocalSortAscendingChanged(bool value)
     {
-        OnPropertyChanged(nameof(LocalSortDirectionIcon));
         ReorderLocalEntries();
     }
 
@@ -265,7 +261,6 @@ public partial class SftpTabViewModel : ViewModelBase
 
     partial void OnRemoteSortAscendingChanged(bool value)
     {
-        OnPropertyChanged(nameof(RemoteSortDirectionIcon));
         ReorderRemoteEntries();
     }
 
@@ -444,7 +439,6 @@ public partial class SftpTabViewModel : ViewModelBase
     partial void OnIsCheckingZeroByteChanged(bool value)
     {
         OnPropertyChanged(nameof(RemoteStatusText));
-        OnPropertyChanged(nameof(RemoteStatusIcon));
         OnPropertyChanged(nameof(HasRemoteStatus));
     }
 
@@ -454,7 +448,6 @@ public partial class SftpTabViewModel : ViewModelBase
     partial void OnIsRefreshingRemoteChanged(bool value)
     {
         OnPropertyChanged(nameof(RemoteStatusText));
-        OnPropertyChanged(nameof(RemoteStatusIcon));
         OnPropertyChanged(nameof(HasRemoteStatus));
     }
 

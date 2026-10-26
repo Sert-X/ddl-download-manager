@@ -18,10 +18,13 @@ public class LogEntry
     public bool IsWarning => Level == LogLevel.Warning;
 
     public string TimestampText => Timestamp.ToString("HH:mm:ss");
-    public string LevelIcon => Level switch
+    public bool IsInfo => !IsError && !IsWarning;
+
+    /// <summary>Livello in testo, per copia ed esportazione del log.</summary>
+    public string LevelText => Level switch
     {
-        LogLevel.Warning => "⚠",
-        LogLevel.Error => "❌",
-        _ => "ℹ"
+        LogLevel.Warning => "AVVISO",
+        LogLevel.Error => "ERRORE",
+        _ => "INFO"
     };
 }

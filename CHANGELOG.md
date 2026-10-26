@@ -1,5 +1,46 @@
 # Changelog
 
+## [1.4.0] — 2026-10-26
+
+### 🎬 Film/Serie Download · CB01
+- **Conversione a scelta a fine download**, nel Dettaglio, con la spiegazione di cosa comporta ogni opzione:
+  - **Originale (nessuna elaborazione)**: il file così come lo fornisce il sito (spesso .mkv);
+  - **Copia in MP4 (senza ricodifica)**: come nelle versioni precedenti, ora anche con controllo e riparazione dei .mp4 difettosi;
+  - **MP4 + audio AAC**: il video resta originale, l'audio diventa AAC stereo;
+  - **Player web: H.264 + AAC**, con il processore o con la scheda video (NVIDIA, Intel, AMD): video e audio ricodificati, si riproducono in tutti i browser e player web.
+- **Scelta predefinita**: "Usa sempre questa" nel Dettaglio, oppure "Conversione CB01" in "Nome file e cartella". Si può cambiare per ogni download e resta salvata anche dopo un riavvio.
+- Le conversioni vengono eseguite **una alla volta** e nella coda si vede la fase ("Conversione 37%", "Copia in MP4...") al posto di "Downloading".
+- **Audio più forte e dialoghi chiari** nelle conversioni AAC e H.264: il passaggio da 5.1 a stereo non abbassa più il canale dei dialoghi e il volume è normalizzato a -16 LUFS, come nei servizi di streaming.
+- **Tutte le tracce audio e i sottotitoli** restano nel file, con l'**italiano sempre come prima traccia audio** (predefinita): i player web come Plyr partono in italiano.
+- **Video che non si aprivano** (es. Avengers: Endgame, nessun lettore lo riproduceva): la configurazione del video HEVC viene ricostruita senza ricodificare.
+- **Ricerca completa**: vengono lette tutte le pagine dei risultati (cercando "One Piece" ora compaiono tutti i 15 film e le 2 serie).
+- Nelle serie compaiono anche **film, OAV e special** pubblicati nella stessa pagina (es. il film di Beyblade, l'OAV di One Piece).
+- **Proxy e Cloudflare**: messaggi chiari quando Cloudflare blocca Maxstream, con il nome del proxy in uso. Nella tab Proxy, la lista CB01 avvisa che servono **proxy residenziali**.
+- Download più affidabili: un download ripreso riparte da zero se il file parziale non è integro, e i pezzi incompleti vengono riscaricati invece di finire nel file.
+
+### 🎨 Interfaccia
+- **Messaggio di stato sempre visibile**: scorrendo la pagina resta fissato in alto, in tutte le tab, con lo stesso aspetto e la stessa distanza dalle tab.
+- **Icone al posto delle emoji**:
+  - il messaggio di stato mostra spunta verde, triangolo arancione o X rossa in base all'esito;
+  - nuovi badge in Account (Premium, Free, Non connesso, Da verificare);
+  - pallini colorati in Domini;
+  - icone di livello nel Log globale;
+  - icone e frecce di ordinamento in SFTP.
+- **Novità nell'app**: il badge della versione nell'intestazione apre il changelog completo.
+- Frasi iniziali uniformi in Anime Download e Film/Serie Download.
+- **Guide rapide aggiornate**:
+  - Film e Serie, con le sezioni StreamingCommunity e CB01;
+  - Anime;
+  - Proxy;
+  - Domini;
+  - Account.
+
+### 🗂 Videobox Corrector
+- Caricando gli alberi di due o più sorgenti, una sorgente poteva restare senza spunta nel menu: risolto. Togliendo la spunta a una sorgente, la sua radice sparisce dall'albero.
+
+### 🧹 Varie
+- Esportando o copiando il Log globale, il livello è scritto in testo (INFO, AVVISO, ERRORE).
+
 ## [1.3.0] — 2026-10-25
 
 ### 🌐 Proxy (tab rinnovata)

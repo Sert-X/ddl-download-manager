@@ -168,6 +168,15 @@ public class MaxstreamService : IAsyncDisposable
 
     private ProxyConfig? ActiveProxy => _proxyProvider.GetActive(ProviderKeys.Cb01);
 
+    /// <summary>Motivo dell'ultimo link non ottenuto, in parole semplici (mostrato nella coda download).</summary>
+    public string? LastProblem { get; private set; }
+
+    /// <summary>Messaggio per Cloudflare che blocca: col proxy CB01 attivo la colpa è del proxy.</summary>
+    private string CloudflareMessage(string fallback) => ActiveProxy is { } p
+        ? $"Maxstream (Cloudflare) blocca il proxy CB01 {p.Host}: i proxy di datacenter/VPN non superano la sua verifica. " +
+          "Spegni il proxy per CB01 nella tab Proxy (con la connessione di casa funziona) o usa un proxy residenziale."
+        : fallback;
+
     private HttpClient GetDirectHttpClient()
     {
         // Il client tiene i cookie di login: si ricrea solo se cambia il proxy (e allora serve un nuovo login)
@@ -382,7 +391,7 @@ public class MaxstreamService : IAsyncDisposable
         {
             if (!HasFlareSolverr)
                 return Publish(new MaxstreamAccountInfo(false, false, null,
-                    "Cloudflare blocca la connessione diretta a Maxstream: configura FlareSolverr o un proxy residenziale CB01."));
+                    CloudflareMessage("Cloudflare blocca la connessione diretta a Maxstream: configura FlareSolverr o un proxy residenziale CB01.")));
 
             _logger.LogWarning("[MAXSTREAM] Cloudflare blocca la connessione diretta, passo a FlareSolverr {Url}", FlareSolverrUrl);
             _useFlare = true;
@@ -401,9 +410,11 @@ public class MaxstreamService : IAsyncDisposable
         if (!info.LoggedIn && !_useFlare && IsCloudflareBlock(html))
             info = info with
             {
-                Message = "Maxstream ha messo in verifica il login di questo account (troppi accessi ravvicinati o da IP diversi). " +
-                          "Accedi una volta dal browser su maxstream.video, poi riprova; di solito si sblocca da solo dopo un po'."
+                Message = CloudflareMessage(
+                    "Maxstream ha messo in verifica il login di questo account (troppi accessi ravvicinati o da IP diversi). " +
+                    "Accedi una volta dal browser su maxstream.video, poi riprova; di solito si sblocca da solo dopo un po'.")
             };
+        if (!info.LoggedIn) LastProblem = info.Message;
         if (info.LoggedIn)
         {
             _loggedIn = true;
@@ -493,6 +504,8 @@ public class MaxstreamService : IAsyncDisposable
         {
             var loginBase = ConfiguredBase;
             const int maxAttempts = 3;
+            string? lastProblem = null;
+            bool lastCloudflare = false;
             for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
                 await EnsureLoggedInAsync(loginBase, ct);
@@ -515,6 +528,8 @@ public class MaxstreamService : IAsyncDisposable
                 var problem = DiagnosePage(html, out bool retryable);
                 if (problem == null)
                     return await ExtractDownloadAsync(html!, finalUrl ?? link, loginBase, ct);
+                lastProblem = problem;
+                lastCloudflare = IsCloudflareBlock(html);
 
                 _logger.LogWarning("[MAXSTREAM] {Problem} (tentativo {N}/{Max})", problem, attempt, maxAttempts);
                 if (!retryable) return null;
@@ -526,6 +541,9 @@ public class MaxstreamService : IAsyncDisposable
             }
 
             _logger.LogWarning("[MAXSTREAM] Rinuncio a {Url}: controlla credenziali premium, connessione e FlareSolverr.", link);
+            LastProblem = lastCloudflare
+                ? CloudflareMessage("Cloudflare blocca le pagine di Maxstream: riprova più tardi o configura FlareSolverr.")
+                : lastProblem ?? "Link Maxstream non disponibile.";
             return null;
         }
         finally

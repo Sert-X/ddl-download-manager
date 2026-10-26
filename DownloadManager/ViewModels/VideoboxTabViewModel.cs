@@ -423,21 +423,36 @@ public partial class VideoboxTabViewModel : ObservableObject
         _applyingCategorySources = true;
         try
         {
-            var saved = _settingsService.Current.VideoboxCategorySources.TryGetValue(key, out var ids) ? ids : null;
-            foreach (var src in Sources) src.IsEnabled = saved == null || saved.Contains(src.Id);
+            var s = _settingsService.Current;
+            if (s.VideoboxCategoryDisabledSources.TryGetValue(key, out var disabled))
+                foreach (var src in Sources) src.IsEnabled = !disabled.Contains(src.Id);
+            else
+            {
+                // Scelte salvate dalle versioni precedenti (elenco delle attive)
+                var saved = s.VideoboxCategorySources.TryGetValue(key, out var ids) ? ids : null;
+                foreach (var src in Sources) src.IsEnabled = saved == null || saved.Contains(src.Id);
+            }
         }
         finally { _applyingCategorySources = false; }
         NotifySourcesChanged();
+        // L'albero segue le spunte: via le radici delle sorgenti ora escluse
+        foreach (var src in Sources.Where(x => !x.IsEnabled).ToList()) RemoveSourceRoot(src.Id);
     }
 
     private void SaveCategorySources()
     {
         var key = (SelectedCategory?.Id ?? 0).ToString();
         _settingsService.Current.VideoboxCategorySources[key] = Sources.Where(x => x.IsEnabled).Select(x => x.Id).ToList();
+        _settingsService.Current.VideoboxCategoryDisabledSources[key] = Sources.Where(x => !x.IsEnabled).Select(x => x.Id).ToList();
         _settingsService.Save();
     }
 
-    partial void OnSelectedCategoryChanged(CategoryItem? value) => ApplyCategorySources();
+    // Mentre l'elenco delle categorie si ricarica la tendina passa per "nessuna": lì non si tocca niente
+    // (si applicavano per un attimo le sorgenti di "Tutti i media" alla categoria scelta)
+    partial void OnSelectedCategoryChanged(CategoryItem? value)
+    {
+        if (value != null) ApplyCategorySources();
+    }
 
     [RelayCommand] public void AddSecondaryDomain() => SecondaryDomains.Add(new DomainItem());
     [RelayCommand] public void RemoveSecondaryDomain(DomainItem domain) => SecondaryDomains.Remove(domain);
@@ -957,8 +972,11 @@ public partial class VideoboxTabViewModel : ObservableObject
             var roots = await Task.WhenAll(toLoad.Select(src => LoadSourceRootAsync(src, cts.Token)));
             cts.Token.ThrowIfCancellationRequested();
 
-            // Nell'albero nell'ordine delle sorgenti
-            var all = keep.Concat(roots).OrderBy(r => sources.FindIndex(s => s.Id == r.Source!.Id)).ToList();
+            // Nell'albero nell'ordine delle sorgenti; se durante il caricamento una sorgente è stata
+            // esclusa (spunta tolta o cambio di categoria) non va aggiunta: albero e spunte coincidono
+            var all = keep.Concat(roots)
+                .Where(r => r.Source is { IsEnabled: true })
+                .OrderBy(r => sources.FindIndex(s => s.Id == r.Source!.Id)).ToList();
             SftpRootNodes.Clear();
             foreach (var root in all) SftpRootNodes.Add(root);
 

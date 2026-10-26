@@ -379,7 +379,7 @@ public partial class MainWindowViewModel : ViewModelBase
         return Models.LogLevel.Info;
     }
 
-    private static string FormatLogLine(LogEntry l) => $"{l.TimestampText} {l.LevelIcon} [{l.Category}] {l.Message}";
+    private static string FormatLogLine(LogEntry l) => $"{l.TimestampText} {l.LevelText} [{l.Category}] {l.Message}";
 
     [RelayCommand]
     private async Task CopyLogsAsync()

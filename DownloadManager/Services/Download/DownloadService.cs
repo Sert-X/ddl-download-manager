@@ -287,22 +287,73 @@ public partial class DownloadService : IDownloadService
         if (File.Exists(item.DestinationPath)) File.Delete(item.DestinationPath);
         File.Move(tempPath, item.DestinationPath);
 
-        // CB01: si scarica il file originale (spesso .mkv) ma si consegna sempre un .mp4
-        if (item.ProviderKey == "CB01" &&
-            !item.DestinationPath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
+        // CB01: "Originale" consegna il file così com'è; tutte le altre scelte partono da un .mp4
+        var finalPath = item.DestinationPath;
+        var processCb01 = item.ProviderKey == "CB01" && item.Conversion != VideoConversion.Original;
+        var rewritten = false;   // file già riscritto da ffmpeg (audio italiano già per primo)
+        if (processCb01 &&
+            !finalPath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
         {
             var ffmpeg = _ffmpegLocator.GetFfmpegPath();
             if (string.IsNullOrEmpty(ffmpeg))
             {
-                _logger.LogWarning("[MP4] ffmpeg non trovato: {File} resta nel formato originale", item.DestinationPath);
+                _logger.LogWarning("[MP4] ffmpeg non trovato: {File} resta nel formato originale", finalPath);
             }
             else
             {
-                SetUi(() => item.ErrorMessage = "Conversione in MP4...");
-                var mp4 = await Mp4Remuxer.ConvertAsync(ffmpeg, item.DestinationPath, _logger, ct);
-                if (mp4 != null) SetUi(() => item.DestinationPath = mp4);
+                SetUi(() => item.ErrorMessage = "Copia in MP4...");
+                var mp4 = await Mp4Remuxer.ConvertAsync(ffmpeg, finalPath, _logger, ct);
+                if (mp4 != null)
+                {
+                    finalPath = mp4;
+                    rewritten = true;
+                    SetUi(() => item.DestinationPath = mp4);
+                }
                 SetUi(() => item.ErrorMessage = string.Empty);
             }
+        }
+
+        // CB01: alcuni video HEVC (sia .mp4 originali sia .mkv convertiti) hanno la configurazione
+        // del codec vuota e nessun lettore li apre. Si ricostruisce, senza ricodificare, e si riordina il file.
+        if (processCb01 &&
+            finalPath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
+        {
+            SetUi(() => item.ErrorMessage = "Controllo del file video...");
+            var pathToCheck = finalPath;
+            var repaired = await Task.Run(() => HevcConfigRepair.TryRepair(pathToCheck, _logger), ct);
+            if (repaired)
+            {
+                var ffmpegPath = _ffmpegLocator.GetFfmpegPath();
+                if (!string.IsNullOrEmpty(ffmpegPath))
+                {
+                    SetUi(() => item.ErrorMessage = "Riparazione del video...");
+                    rewritten = await Mp4Remuxer.RewriteAsync(ffmpegPath, pathToCheck, _logger, ct);
+                }
+            }
+
+            // "Copia in MP4" su un .mp4 del sito: se l'italiano non è la prima traccia audio, si riscrive
+            // (le conversioni AAC/H.264 qui sotto lo mettono già per primo)
+            var ffmpegForOrder = _ffmpegLocator.GetFfmpegPath();
+            if (!rewritten && item.Conversion == VideoConversion.Mp4Copy && !string.IsNullOrEmpty(ffmpegForOrder) &&
+                await AudioTracks.NeedsReorderAsync(ffmpegForOrder, pathToCheck, ct))
+            {
+                SetUi(() => item.ErrorMessage = "Audio italiano per primo...");
+                await Mp4Remuxer.RewriteAsync(ffmpegForOrder, pathToCheck, _logger, ct);
+            }
+            SetUi(() => item.ErrorMessage = string.Empty);
+        }
+
+        // CB01: conversione scelta dall'utente (audio AAC o H.264 per i player web), anche per i .mp4
+        if (processCb01 && item.Conversion != VideoConversion.Mp4Copy &&
+            finalPath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
+        {
+            var ffmpegPath = _ffmpegLocator.GetFfmpegPath();
+            if (string.IsNullOrEmpty(ffmpegPath))
+                _logger.LogWarning("[CONVERSIONE] ffmpeg non trovato: {File} resta com'è", finalPath);
+            else
+                await VideoTranscoder.ConvertAsync(ffmpegPath, finalPath, item.Conversion, _logger,
+                    msg => SetUi(() => item.ErrorMessage = msg), ct);
+            SetUi(() => item.ErrorMessage = string.Empty);
         }
 
         SetUi(() =>
@@ -415,6 +466,17 @@ public partial class DownloadService : IDownloadService
     {
         var allRanges = CalculateRanges(totalSize);
         var doneChunks = await _repository.GetChunksAsync(item.Id);
+        var tempPath = item.DestinationPath + ".part";
+
+        // I pezzi segnati come fatti valgono solo se il file parziale c'è ed è della dimensione giusta:
+        // altrimenti si riparte da zero (prima il file veniva ricreato vuoto e quei pezzi restavano a zeri)
+        bool resumable = File.Exists(tempPath) && new FileInfo(tempPath).Length == totalSize;
+        if (doneChunks.Count > 0 && !resumable)
+        {
+            _logger.LogWarning("[DOWNLOAD] {File}: file parziale mancante o diverso, riparto da zero", Path.GetFileName(item.DestinationPath));
+            await _repository.ClearChunksAsync(item.Id);
+            doneChunks = await _repository.GetChunksAsync(item.Id);
+        }
 
         var todoRanges = allRanges
             .Where(r => !doneChunks.Any(d => d.Start <= r.Start && d.End >= r.End))
@@ -423,9 +485,9 @@ public partial class DownloadService : IDownloadService
         long alreadyDownloaded = doneChunks.Sum(c => c.End - c.Start + 1);
         SetUi(() => item.DownloadedBytes = alreadyDownloaded);
 
-        var tempPath = item.DestinationPath + ".part";
-        await using var fs = new FileStream(tempPath, FileMode.Create, FileAccess.Write,
-            FileShare.Write, 81920, true);
+        // OpenOrCreate: riprendendo, i pezzi già scaricati restano nel file
+        await using var fs = new FileStream(tempPath, doneChunks.Count > 0 ? FileMode.OpenOrCreate : FileMode.Create,
+            FileAccess.Write, FileShare.Write, 81920, true);
         fs.SetLength(totalSize);
 
         var semaphore = new SemaphoreSlim(ParallelChunksPerFile);
@@ -498,18 +560,24 @@ public partial class DownloadService : IDownloadService
         using var response = await _http.SendAsync(request,
             HttpCompletionOption.ResponseHeadersRead, ct);
 
+        // Serve proprio il tratto chiesto (206): un 200 è il file intero dall'inizio, che scritto
+        // a metà file lo rovinerebbe. Si accetta solo se il pezzo parte da 0.
         if (response.StatusCode != HttpStatusCode.PartialContent &&
-            response.StatusCode != HttpStatusCode.OK)
+            !(response.StatusCode == HttpStatusCode.OK && range.Start == 0))
             throw new InvalidOperationException(
                 $"Server ha risposto {response.StatusCode}, previsto 206.");
+        if (response.StatusCode == HttpStatusCode.PartialContent &&
+            response.Content.Headers.ContentRange is { From: { } from } && from != range.Start)
+            throw new InvalidOperationException($"Il server ha mandato il tratto da {from} invece che da {range.Start}.");
 
         await using var source = await response.Content.ReadAsStreamAsync(ct);
 
         var buffer = new byte[81920];
         int read;
         long offset = range.Start;
+        long wanted = range.End - range.Start + 1;
 
-        while ((read = await source.ReadAsync(buffer, ct)) > 0)
+        while (offset - range.Start < wanted && (read = await source.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, wanted - (offset - range.Start))), ct)) > 0)
         {
             lock (fs)
             {
@@ -519,6 +587,10 @@ public partial class DownloadService : IDownloadService
             offset += read;
             onBytes(read);
         }
+
+        // Connessione chiusa prima della fine del pezzo: non va segnato come completato
+        if (offset - range.Start < wanted)
+            throw new IOException($"Pezzo incompleto: ricevuti {offset - range.Start} byte su {wanted}.");
     }
 
     private static List<(long Start, long End)> CalculateRanges(long totalSize)

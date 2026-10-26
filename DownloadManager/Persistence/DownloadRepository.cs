@@ -97,6 +97,10 @@ public class DownloadRepository
 
             if (!cols.Contains("BurnSubtitles", StringComparer.OrdinalIgnoreCase))
                 await conn.ExecuteAsync("ALTER TABLE Downloads ADD COLUMN BurnSubtitles INTEGER NOT NULL DEFAULT 0");
+
+            // Download rimasti in coda dalle versioni precedenti: "Copia in MP4" (4), come facevano prima
+            if (!cols.Contains("Conversion", StringComparer.OrdinalIgnoreCase))
+                await conn.ExecuteAsync("ALTER TABLE Downloads ADD COLUMN Conversion INTEGER NOT NULL DEFAULT 4");
         }
         catch (Exception ex)
         {
@@ -118,12 +122,12 @@ public class DownloadRepository
                 (Url, DestinationPath, SeriesName, EpisodeNumber, SeasonNumber,
                  TotalBytes, DownloadedBytes, Status, ErrorMessage, Category,
                  EpisodeTitle, ProviderKey, QualityName, ContentLink, EpisodeId, IsSeries, AudioUrl,
-                 AudioLanguages, SubtitleLanguages, BurnSubtitles)
+                 AudioLanguages, SubtitleLanguages, BurnSubtitles, Conversion)
             VALUES
                 (@Url, @DestinationPath, @SeriesName, @EpisodeNumber, @SeasonNumber,
                  @TotalBytes, @DownloadedBytes, @Status, @ErrorMessage, @Category,
                  @EpisodeTitle, @ProviderKey, @QualityName, @ContentLink, @EpisodeId, @IsSeries, @AudioUrl,
-                 @AudioLanguages, @SubtitleLanguages, @BurnSubtitles);
+                 @AudioLanguages, @SubtitleLanguages, @BurnSubtitles, @Conversion);
             SELECT last_insert_rowid();
         ", new
         {
@@ -146,7 +150,8 @@ public class DownloadRepository
             item.AudioUrl,
             item.AudioLanguages,
             item.SubtitleLanguages,
-            BurnSubtitles = item.BurnSubtitles ? 1 : 0
+            BurnSubtitles = item.BurnSubtitles ? 1 : 0,
+            Conversion = (int)item.Conversion
         });
         item.Id = id;
         return id;
@@ -173,12 +178,12 @@ public class DownloadRepository
                     (Url, DestinationPath, SeriesName, EpisodeNumber, SeasonNumber,
                      TotalBytes, DownloadedBytes, Status, ErrorMessage, Category,
                      EpisodeTitle, ProviderKey, QualityName, ContentLink, EpisodeId, IsSeries, AudioUrl,
-                 AudioLanguages, SubtitleLanguages, BurnSubtitles)
+                 AudioLanguages, SubtitleLanguages, BurnSubtitles, Conversion)
                 VALUES
                     (@Url, @DestinationPath, @SeriesName, @EpisodeNumber, @SeasonNumber,
                      @TotalBytes, @DownloadedBytes, @Status, @ErrorMessage, @Category,
                      @EpisodeTitle, @ProviderKey, @QualityName, @ContentLink, @EpisodeId, @IsSeries, @AudioUrl,
-                 @AudioLanguages, @SubtitleLanguages, @BurnSubtitles);
+                 @AudioLanguages, @SubtitleLanguages, @BurnSubtitles, @Conversion);
                 SELECT last_insert_rowid();
             ", new
             {
@@ -201,7 +206,8 @@ public class DownloadRepository
                 item.AudioUrl,
                 item.AudioLanguages,
                 item.SubtitleLanguages,
-                BurnSubtitles = item.BurnSubtitles ? 1 : 0
+                BurnSubtitles = item.BurnSubtitles ? 1 : 0,
+                Conversion = (int)item.Conversion
             }, transaction: tx);
 
             item.Id = id;
@@ -240,7 +246,8 @@ public class DownloadRepository
                 AudioUrl = @AudioUrl,
                 AudioLanguages = @AudioLanguages,
                 SubtitleLanguages = @SubtitleLanguages,
-                BurnSubtitles = @BurnSubtitles
+                BurnSubtitles = @BurnSubtitles,
+                Conversion = @Conversion
             WHERE Id = @Id;
         ", new
         {
@@ -264,7 +271,8 @@ public class DownloadRepository
             item.AudioUrl,
             item.AudioLanguages,
             item.SubtitleLanguages,
-            BurnSubtitles = item.BurnSubtitles ? 1 : 0
+            BurnSubtitles = item.BurnSubtitles ? 1 : 0,
+            Conversion = (int)item.Conversion
         });
     }
 
@@ -312,7 +320,8 @@ public class DownloadRepository
             AudioUrl = r.AudioUrl ?? "",
             AudioLanguages = r.AudioLanguages ?? "",
             SubtitleLanguages = r.SubtitleLanguages ?? "",
-            BurnSubtitles = r.BurnSubtitles != 0
+            BurnSubtitles = r.BurnSubtitles != 0,
+            Conversion = (VideoConversion)r.Conversion
         }).ToList();
     }
 
@@ -383,5 +392,6 @@ public class DownloadRepository
         public string? AudioLanguages { get; set; }
         public string? SubtitleLanguages { get; set; }
         public int BurnSubtitles { get; set; }
+        public int Conversion { get; set; }
     }
 }

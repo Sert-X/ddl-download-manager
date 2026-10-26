@@ -1339,9 +1339,14 @@ public partial class MainWindow : Window
         catch (Exception ex) { Console.WriteLine($">>> Apertura browser fallita: {ex.Message}"); }
     }
 
+    private async void OnShowChangelogClick(object? sender, RoutedEventArgs e)
+    {
+        await ChangelogDialog.ShowAsync(this, Vm?.AppVersionText ?? "");
+    }
+
     private void OnOpenSelectedResultInBrowserClick(object? sender, RoutedEventArgs e)
     {
-        var link = Vm.Streaming.SelectedResult?.Link;
+        var link = Vm?.Streaming.SelectedResult?.Link;
         if (!Uri.TryCreate(link, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
             return;
         try { Process.Start(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true }); }

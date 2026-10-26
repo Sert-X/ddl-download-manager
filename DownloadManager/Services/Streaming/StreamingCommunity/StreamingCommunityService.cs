@@ -313,7 +313,7 @@ public class StreamingCommunityService : IStreamingCommunityService
             if (pwCookies.Count > 0)
             {
                 await _context.AddCookiesAsync(pwCookies);
-                _logger.LogWarning("[SC] ✅ Iniettati {N} cookie in Playwright",
+                _logger.LogWarning("[SC] Iniettati {N} cookie in Playwright",
                     pwCookies.Count);
             }
         }
@@ -645,7 +645,7 @@ public class StreamingCommunityService : IStreamingCommunityService
                 if (isMaster)
                 {
                     m3u8Url = url;
-                    _logger.LogWarning("[SC] ✅ MASTER da network: {Url}", url);
+                    _logger.LogWarning("[SC] MASTER da network: {Url}", url);
                     m3u8Found.TrySetResult(url);
                 }
             };
@@ -712,7 +712,7 @@ public class StreamingCommunityService : IStreamingCommunityService
                             }
 
                             m3u8Url = full;
-                            _logger.LogWarning("[SC] ✅ MASTER da movieData: {Url}", full);
+                            _logger.LogWarning("[SC] MASTER da movieData: {Url}", full);
                             m3u8Found.TrySetResult(full);
                         }
                     }
@@ -758,7 +758,7 @@ public class StreamingCommunityService : IStreamingCommunityService
             // 4. Fallback: usa lo HOST REALE della rendition intercettata, non vixcloud.co
             if (string.IsNullOrEmpty(m3u8Url))
             {
-                _logger.LogWarning("[SC] ❌ Nessun master. Totale req playlist: {N}", allPlaylistReqs.Count);
+                _logger.LogWarning("[SC] Nessun master. Totale req playlist: {N}", allPlaylistReqs.Count);
                 foreach (var u in allPlaylistReqs) _logger.LogWarning("[SC]   - {Url}", u);
 
                 var firstRendition =

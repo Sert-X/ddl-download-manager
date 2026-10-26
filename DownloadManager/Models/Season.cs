@@ -21,7 +21,9 @@ public partial class Season : ObservableObject
     public string Group { get; set; } = string.Empty;
     /// <summary>Nome leggibile della serie del gruppo ("Beyblade V-Force", "GTO 1998").</summary>
     public string GroupTitle { get; set; } = string.Empty;
-    public bool IsSubVariant => Variant == "sub";
+    public bool IsSubVariant => Variant == "sub" || (IsFilm && LanguageTag == "Sub ITA");
+    /// <summary>Film collegato nella pagina della serie (CB01, es. spoiler "SPECIALE"): Group = link del film.</summary>
+    public bool IsFilm => Variant == "film";
     public bool HasLanguageTag => LanguageTag.Length > 0;
     partial void OnLanguageTagChanged(string value) => OnPropertyChanged(nameof(HasLanguageTag));
     public ObservableCollection<StreamingEpisode> Episodes { get; set; } = new();
