@@ -16,10 +16,15 @@ public abstract class SftpQueueServiceBase<TJob> where TJob : TransferJobBase
 {
     protected readonly ILogger _logger;
 
-    private readonly Queue<TJob> _pending = new();
+    // Lista (non coda): si prende il primo job il cui server ha ancora posti liberi
+    private readonly List<TJob> _pending = new();
     private readonly HashSet<int> _pendingIds = new();
     private readonly Dictionary<int, CancellationTokenSource> _active = new();
     private readonly Dictionary<int, Session> _activeSessions = new();
+    /// <summary>Server di ogni job in corso (id job → chiave server), per il limite per server.</summary>
+    private readonly Dictionary<int, string> _activeServers = new();
+    /// <summary>Limiti di sessioni dei server diversi da quello principale (uno per server).</summary>
+    private readonly Dictionary<string, SftpSessionLimiter> _otherLimiters = new(StringComparer.OrdinalIgnoreCase);
     protected readonly object _queueLock = new();
 
     private readonly SemaphoreSlim _dispatchGate = new(1, 1);
@@ -53,11 +58,34 @@ public abstract class SftpQueueServiceBase<TJob> where TJob : TransferJobBase
     /// <summary>Esegue il trasferimento vero e proprio (PutFiles / GetFileToDirectory + verifica/rename).</summary>
     protected abstract Task ExecuteTransferAsync(Session session, TJob job, CancellationToken ct);
 
-    /// <summary>Server a cui si collega la sessione del job (di norma quello configurato).</summary>
-    protected virtual SftpConfig? GetSessionConfig(TJob job) => _currentConfig;
+    /// <summary>Server a cui si collega la sessione del job: il suo, altrimenti quello configurato.</summary>
+    protected virtual SftpConfig? GetSessionConfig(TJob job) => job.Server ?? _currentConfig;
 
-    /// <summary>La coda può partire (c'è una configurazione).</summary>
-    protected virtual bool IsConfigured => _currentConfig != null;
+    /// <summary>Chiave del server del job: il limite di trasferimenti in parallelo vale per server.</summary>
+    protected virtual string ServerKeyOf(TJob job) => GetSessionConfig(job)?.ServerKey ?? "";
+
+    /// <summary>
+    /// Limite di sessioni per il job: il server principale usa quello condiviso con il browser
+    /// della tab SFTP, ogni altro server ne ha uno suo (non si tolgono posti a vicenda).
+    /// </summary>
+    protected virtual SftpSessionLimiter LimiterFor(TJob job)
+    {
+        var key = ServerKeyOf(job);
+        if (_currentConfig == null || string.Equals(key, _currentConfig.ServerKey, StringComparison.OrdinalIgnoreCase))
+            return _sessionLimiter;
+        lock (_otherLimiters)
+        {
+            if (!_otherLimiters.TryGetValue(key, out var limiter))
+                _otherLimiters[key] = limiter = new SftpSessionLimiter(8);
+            return limiter;
+        }
+    }
+
+    /// <summary>
+    /// La coda può partire. Ogni job porta il suo server (o usa quello configurato): i job senza
+    /// nessuno dei due restano in attesa, gli altri partono anche senza connessione principale.
+    /// </summary>
+    protected virtual bool IsConfigured => true;
 
     /// <summary>
     /// true: l'avanzamento arriva dagli eventi di WinSCP della sessione. false: lo
@@ -121,7 +149,7 @@ public abstract class SftpQueueServiceBase<TJob> where TJob : TransferJobBase
         lock (_queueLock)
         {
             if (_pendingIds.Add(job.Id))
-                _pending.Enqueue(job);
+                _pending.Add(job);
         }
 
         QueueChanged?.Invoke();
@@ -148,7 +176,7 @@ public abstract class SftpQueueServiceBase<TJob> where TJob : TransferJobBase
                     job.ErrorMessage = string.Empty;
 
                     if (!_active.ContainsKey(job.Id) && _pendingIds.Add(job.Id))
-                        _pending.Enqueue(job);
+                        _pending.Add(job);
                 }
             }
         }
@@ -170,12 +198,13 @@ public abstract class SftpQueueServiceBase<TJob> where TJob : TransferJobBase
                 .Cast<TJob>()
                 .ToList();
 
-            while (_pending.TryDequeue(out var job))
+            foreach (var job in _pending)
             {
                 _pendingIds.Remove(job.Id);
                 if (job.Status == SftpJobStatus.Pending)
                     job.Status = SftpJobStatus.Paused;
             }
+            _pending.Clear();
         }
 
         foreach (var job in toPause)
@@ -319,7 +348,7 @@ public abstract class SftpQueueServiceBase<TJob> where TJob : TransferJobBase
         lock (_queueLock)
         {
             if (_pendingIds.Add(job.Id))
-                _pending.Enqueue(job);
+                _pending.Add(job);
         }
 
         _isPaused = false;
@@ -389,9 +418,24 @@ public abstract class SftpQueueServiceBase<TJob> where TJob : TransferJobBase
                     {
                         if (!_isRunning) return;
                         if (_isPaused) return;
-                        if (_active.Count >= _maxConcurrency) return;
                         if (!IsConfigured) return;
-                        if (!_pending.TryDequeue(out job)) return;
+
+                        // Primo job in attesa il cui server ha ancora posti (MaxConcurrency per server)
+                        int index = -1;
+                        string key = "";
+                        for (int i = 0; i < _pending.Count; i++)
+                        {
+                            var candidate = _pending[i];
+                            if (candidate.Status is SftpJobStatus.Cancelled or SftpJobStatus.Completed or SftpJobStatus.Paused)
+                            { index = i; break; }   // si toglie dalla lista qui sotto
+                            if (GetSessionConfig(candidate) == null) continue;
+                            var k = ServerKeyOf(candidate);
+                            if (_activeServers.Values.Count(v => v == k) >= _maxConcurrency) continue;
+                            index = i; key = k; break;
+                        }
+                        if (index < 0) return;
+                        job = _pending[index];
+                        _pending.RemoveAt(index);
 
                         _pendingIds.Remove(job.Id);
 
@@ -404,6 +448,7 @@ public abstract class SftpQueueServiceBase<TJob> where TJob : TransferJobBase
 
                         cts = new CancellationTokenSource();
                         _active[job.Id] = cts;
+                        _activeServers[job.Id] = key;
                     }
 
                     await Task.Delay(Random.Shared.Next(100, 400));
@@ -426,6 +471,7 @@ public abstract class SftpQueueServiceBase<TJob> where TJob : TransferJobBase
     {
         Session? session = null;
         bool holdsSlot = false;
+        var limiter = LimiterFor(job);
 
         try
         {
@@ -465,7 +511,7 @@ public abstract class SftpQueueServiceBase<TJob> where TJob : TransferJobBase
             try
             {
                 // Acquisisci slot PRIMA di aprire la sessione
-                await _sessionLimiter.AcquireAsync(cts.Token);
+                await limiter.AcquireAsync(cts.Token);
                 holdsSlot = true;
 
                 var config = GetSessionConfig(job)
@@ -534,13 +580,13 @@ public abstract class SftpQueueServiceBase<TJob> where TJob : TransferJobBase
             // Rilascia lo slot DOPO aver chiuso la sessione
             if (holdsSlot)
             {
-                _sessionLimiter.Release();
+                limiter.Release();
                 holdsSlot = false;
             }
 
             job.PauseRequested = false;
 
-            lock (_queueLock) { _active.Remove(job.Id); }
+            lock (_queueLock) { _active.Remove(job.Id); _activeServers.Remove(job.Id); }
 
             QueueChanged?.Invoke();
             TryDispatch();

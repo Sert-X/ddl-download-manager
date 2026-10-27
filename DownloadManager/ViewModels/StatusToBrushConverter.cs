@@ -16,13 +16,13 @@ public class StatusToBrushConverter : IValueConverter
         {
             return status switch
             {
-                MappingStatus.Valid => Brushes.LimeGreen,
-                MappingStatus.Invalid => Brushes.OrangeRed,
-                MappingStatus.Mismatch => Brushes.Gold,
-                _ => Brushes.Gray
+                MappingStatus.Valid => VideoboxPalette.Green,
+                MappingStatus.Invalid => VideoboxPalette.Red,
+                MappingStatus.Mismatch => VideoboxPalette.Orange,
+                _ => VideoboxPalette.Gray
             };
         }
-        return Brushes.Gray;
+        return VideoboxPalette.Gray;
     }
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) 

@@ -41,6 +41,62 @@ public partial class EpisodeMappingItem : ObservableObject
     [ObservableProperty] private string? newUrl;
     [ObservableProperty] private MappingStatus status = MappingStatus.Unknown;
     [ObservableProperty] private bool isSelectedForUpdate = true;
+    /// <summary>Numero della riga (1, 2, 3...).</summary>
+    [ObservableProperty] private int index;
+
+    // Nella tabella si mostra il nome del file in grande e, sotto, server e cartella:
+    // l'URL intero (tutto uguale fino al nome del file) resta nel suggerimento.
+    /// <summary>Riga aggiunta per un file in più: sul forum non c'era nessun link.</summary>
+    public string OldName => FileNameOf(OldUrl) ?? "nuovo link (file in più)";
+    public string OldWhere => WhereOf(OldUrl);
+    public bool HasOld => !string.IsNullOrEmpty(OldUrl);
+    public string NewName => !string.IsNullOrEmpty(SftpFileName) ? SftpFileName! : FileNameOf(NewUrl) ?? "";
+    public string NewWhere => WhereOf(NewUrl);
+    public bool HasNew => !string.IsNullOrEmpty(NewUrl);
+    /// <summary>In "Diventa" si mostra il nuovo file solo se la riga verrà inviata (con "Usa").</summary>
+    public bool ShowNew => HasNew && IsSelectedForUpdate;
+    /// <summary>Riga senza nuovo link: sul forum resta com'è (o viene tolta se "Usa" è spento).</summary>
+    public string UnchangedText => IsSelectedForUpdate ? "resta com'è" : "verrà tolto dal post";
+
+    partial void OnOldUrlChanged(string value)
+    {
+        OnPropertyChanged(nameof(OldName));
+        OnPropertyChanged(nameof(OldWhere));
+        OnPropertyChanged(nameof(HasOld));
+    }
+    partial void OnNewUrlChanged(string? value)
+    {
+        OnPropertyChanged(nameof(NewName));
+        OnPropertyChanged(nameof(NewWhere));
+        OnPropertyChanged(nameof(HasNew));
+        OnPropertyChanged(nameof(ShowNew));
+    }
+    partial void OnSftpFileNameChanged(string? value) => OnPropertyChanged(nameof(NewName));
+    partial void OnIsSelectedForUpdateChanged(bool value)
+    {
+        OnPropertyChanged(nameof(UnchangedText));
+        OnPropertyChanged(nameof(ShowNew));
+    }
+
+    private static string? FileNameOf(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return null;
+        var path = Uri.TryCreate(url, UriKind.Absolute, out var u) ? u.AbsolutePath : url;
+        var name = path.TrimEnd('/').Split('/').LastOrDefault() ?? url;
+        try { return Uri.UnescapeDataString(name); } catch { return name; }
+    }
+
+    /// <summary>"server · cartella" del link (es. "data2ddl.ichigolink.top · Anime/Slime/2").</summary>
+    private static string WhereOf(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url, UriKind.Absolute, out var u)) return "";
+        string folder;
+        try { folder = Uri.UnescapeDataString(u.AbsolutePath); } catch { folder = u.AbsolutePath; }
+        folder = folder.Trim('/');
+        int slash = folder.LastIndexOf('/');
+        folder = slash > 0 ? folder.Substring(0, slash) : "";
+        return folder.Length > 0 ? $"{u.Host} · {folder}" : u.Host;
+    }
 
     public void EvaluateStatus(IEnumerable<string> validDomains)
     {
@@ -200,11 +256,48 @@ public partial class VideoboxTabViewModel : ObservableObject
     public bool HasLastApplySummary => LastApplySummary.Length > 0;
     partial void OnLastApplySummaryChanged(string value) => OnPropertyChanged(nameof(HasLastApplySummary));
 
+    /// <summary>C'è qualcosa da inviare (abilita "Applica").</summary>
+    public bool HasMappingItems => MappingItems.Count > 0;
+
+    // Riepilogo sotto "Anteprima modifiche", calcolato sulle righe come sono davvero (spunte
+    // comprese): quello che dice è esattamente quello che farà "Applica".
+    private int RowsRemoved => MappingItems.Count(m => !m.IsSelectedForUpdate && m.HasOld);
+    private int RowsAdded => MappingItems.Count(m => m.IsSelectedForUpdate && m.HasNew && !m.HasOld);
+    private int RowsKept => MappingItems.Count(m => m.IsSelectedForUpdate && !m.HasNew && m.HasOld);
+
+    public string MappingSummaryText
+    {
+        get
+        {
+            if (MappingItems.Count == 0) return "";
+            if (SftpFileCount == 0) return "Nessun file abbinato: clicca una cartella nell'albero e premi Mappa";
+            var parts = new List<string> { $"{SftpFileCount} {(SftpFileCount == 1 ? "file abbinato" : "file abbinati")}" };
+            int removed = RowsRemoved, added = RowsAdded, kept = RowsKept;
+            if (removed > 0) parts.Add($"{removed} {(removed == 1 ? "link verrà tolto" : "link verranno tolti")}");
+            if (added > 0) parts.Add($"{added} {(added == 1 ? "link verrà aggiunto" : "link verranno aggiunti")}");
+            if (kept > 0) parts.Add($"{kept} {(kept == 1 ? "resta com'è" : "restano com'erano")}");
+            return string.Join(" · ", parts);
+        }
+    }
+    /// <summary>Tutto abbinato, niente tolto o aggiunto (verde); altrimenti da guardare (arancione).</summary>
+    public bool MappingSummaryOk => SftpFileCount > 0 && RowsRemoved == 0 && RowsAdded == 0 && RowsKept == 0;
+    public bool MappingSummaryWarn => SftpFileCount > 0 && !MappingSummaryOk;
+    public bool MappingSummaryInfo => MappingItems.Count > 0 && SftpFileCount == 0;
+    /// <summary>Post aperto ma tabella vuota: si mostra cosa fare.</summary>
+    public bool ShowMappingHint => SelectedPost != null && MappingItems.Count == 0;
+
     private void UpdateMappingCounts()
     {
+        OnPropertyChanged(nameof(HasMappingItems));
+        for (int i = 0; i < MappingItems.Count; i++) MappingItems[i].Index = i + 1;
         OldLinkCount = MappingItems.Count(m => !string.IsNullOrEmpty(m.OldUrl));
         NewLinkCount = MappingItems.Count(m => m.IsSelectedForUpdate && !string.IsNullOrEmpty(m.NewUrl));
         SftpFileCount = MappingItems.Count(m => !string.IsNullOrEmpty(m.SftpFileName));
+        OnPropertyChanged(nameof(MappingSummaryText));
+        OnPropertyChanged(nameof(MappingSummaryOk));
+        OnPropertyChanged(nameof(MappingSummaryWarn));
+        OnPropertyChanged(nameof(MappingSummaryInfo));
+        OnPropertyChanged(nameof(ShowMappingHint));
     }
 
     private void OnMappingItemsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
@@ -275,7 +368,8 @@ public partial class VideoboxTabViewModel : ObservableObject
         // Si aggiorna solo la cartella toccata, non tutto l'albero.
         // Modifiche fatte dall'app su qualsiasi server (tab SFTP, secondo server, copie tra server)
         SftpChangeHub.Changed += (server, change) => EnqueueTreeRefresh(server, change.DirectoryPath, change.Recursive);
-        uploadQueue.JobCompleted += job => EnqueueTreeRefresh(_sftpService.ServerKey, job.DestinationFolder, false);
+        // Ogni upload aggiorna l'albero del server su cui è andato (le schede SFTP possono essere più d'una)
+        uploadQueue.JobCompleted += job => EnqueueTreeRefresh(job.Server?.ServerKey ?? _sftpService.ServerKey, job.DestinationFolder, false);
 
         // Modifiche esterne (altri client, server) → scansione completa periodica.
         _treePollTimer = new DispatcherTimer { Interval = TreePollInterval };
@@ -363,6 +457,7 @@ public partial class VideoboxTabViewModel : ObservableObject
 
     private async Task LoadProfilesAsync()
     {
+        await ConvertSharedSourcesAsync();
         var options = await _pool.GetProfileOptionsAsync();
         if (!options.SequenceEqual(SftpProfiles))
         {
@@ -370,6 +465,22 @@ public partial class VideoboxTabViewModel : ObservableObject
             foreach (var o in options) SftpProfiles.Add(o);
         }
         SyncSourceProfiles();
+    }
+
+    /// <summary>
+    /// Le sorgenti con la vecchia opzione "connessione della tab SFTP" passano al profilo salvato
+    /// dello stesso server: ogni sorgente ha così la sua connessione. Se non si capisce quale sia
+    /// (nessuna connessione aperta e più profili) si riprova al prossimo giro.
+    /// </summary>
+    private async Task ConvertSharedSourcesAsync()
+    {
+        var legacy = Sources.Where(x => x.ProfileId == VideoboxSftpPool.SharedProfileId).ToList();
+        if (legacy.Count == 0) return;
+        var profileId = await _pool.ResolveSharedProfileAsync();
+        if (profileId == null) return;
+        foreach (var src in legacy) src.ProfileId = profileId.Value;
+        _settingsService.Current.VideoboxSources = Sources.Select(x => x.ToConfig()).ToList();
+        _settingsService.Save();
     }
 
     /// <summary>Riporta nel menu "Connessione SFTP" di ogni sorgente il profilo salvato.</summary>
@@ -440,7 +551,8 @@ public partial class VideoboxTabViewModel : ObservableObject
         var src = new VideoboxSource
         {
             Name = $"Sorgente {Sources.Count + 1}",
-            ProfileId = VideoboxSftpPool.SharedProfileId,
+            // Connessione propria col primo profilo salvato: non dipende da cosa è aperto nella tab SFTP
+            ProfileId = SftpProfiles.FirstOrDefault(p => p.Id != VideoboxSftpPool.SharedProfileId)?.Id ?? VideoboxSftpPool.SharedProfileId,
             Domain = Sources.FirstOrDefault()?.Domain ?? _settingsService.Current.PrimaryStorageUrl
         };
         src.PropertyChanged += OnSourcePropertyChanged;
@@ -747,6 +859,7 @@ public partial class VideoboxTabViewModel : ObservableObject
 
     partial void OnSelectedPostChanged(VideoboxPostItem? value)
     {
+        OnPropertyChanged(nameof(ShowMappingHint));
         if (_restoringSelection) return;
         if (value != null) _ = LoadPostDetailsAsync(value.Id);
     }
@@ -1601,6 +1714,11 @@ public partial class VideoboxTabViewModel : ObservableObject
 
             if (videoFiles.Count == 0) { StatusMessage = "Nessun file trovato nella cartella."; return; }
 
+            // Righe aggiunte da una mappatura precedente (file in più, mai state sul forum): si
+            // ripartono da zero, così con una cartella più piccola non restano righe vuote
+            for (int i = MappingItems.Count - 1; i >= 0; i--)
+                if (string.IsNullOrEmpty(MappingItems[i].OldUrl)) MappingItems.RemoveAt(i);
+
             int oldRows = MappingItems.Count;
             if (videoFiles.Count > oldRows)
             {
@@ -1653,10 +1771,53 @@ public partial class VideoboxTabViewModel : ObservableObject
         target.IsSelectedForUpdate = true;
         target.EvaluateStatus(_settingsService.Current.AllValidStorageDomains);
 
+        // I file hanno la precedenza: le righe rimaste senza file perdono la spunta e con
+        // "Applica" vengono tolte, qualunque sia il loro link (come per una cartella con meno
+        // file). Per un film in più parti, il file successivo riprende la spunta sulla sua riga.
+        int removed = 0;
+        foreach (var row in MappingItems)
+        {
+            if (ReferenceEquals(row, target) || row.HasNew || !row.IsSelectedForUpdate) continue;
+            row.IsSelectedForUpdate = false;
+            removed++;
+        }
+
         // Si passa alla riga successiva: più file (es. film in due parti) si mappano in sequenza
         int idx = MappingItems.IndexOf(target);
         SelectedMappingItem = idx >= 0 && idx < MappingItems.Count - 1 ? MappingItems[idx + 1] : null;
-        StatusMessage = $"Mappato il file {file.Name} sulla riga {idx + 1}.";
+        StatusMessage = removed > 0
+            ? $"Mappato il file {file.Name} sulla riga {idx + 1}; {Plural(removed, "link senza file verrà tolto", "link senza file verranno tolti")} se applichi."
+            : $"Mappato il file {file.Name} sulla riga {idx + 1}.";
+    }
+
+    // ============================================================
+    //  SELEZIONE MULTIPLA (Ctrl / Maiusc) NELLA TABELLA
+    // ============================================================
+
+    /// <summary>Righe selezionate nella tabella (aggiornate dalla finestra).</summary>
+    public List<EpisodeMappingItem> SelectedMappingRows { get; } = new();
+
+    /// <summary>Spunta "Usa" su tutte le righe selezionate (clic destro).</summary>
+    [RelayCommand] private void UseSelectedRows() => SetUseForSelected(true);
+
+    /// <summary>Toglie la spunta "Usa" a tutte le righe selezionate (clic destro).</summary>
+    [RelayCommand] private void SkipSelectedRows() => SetUseForSelected(false);
+
+    /// <summary>Spazio: se almeno una riga selezionata è senza spunta le spunta tutte, altrimenti le toglie.</summary>
+    public void ToggleSelectedRows()
+    {
+        if (SelectedMappingRows.Count == 0) return;
+        SetUseForSelected(SelectedMappingRows.Any(r => !r.IsSelectedForUpdate));
+    }
+
+    private void SetUseForSelected(bool use)
+    {
+        var rows = SelectedMappingRows.ToList();
+        if (rows.Count == 0) { StatusMessage = "Seleziona prima le righe (Ctrl o Maiusc per selezionarne più di una)."; return; }
+        foreach (var r in rows) r.IsSelectedForUpdate = use;
+        StatusMessage = use
+            ? $"{Plural(rows.Count, "riga verrà inviata", "righe verranno inviate")} al forum."
+            : $"{Plural(rows.Count, "riga verrà tolta", "righe verranno tolte")} dal post se applichi.";
     }
 
     [RelayCommand]
@@ -1678,9 +1839,11 @@ public partial class VideoboxTabViewModel : ObservableObject
         var item1 = MappingItems[index1];
         var item2 = MappingItems[index2];
 
-        var tempFile = item1.SftpFileName; var tempUrl = item1.NewUrl;
-        item1.SftpFileName = item2.SftpFileName; item1.NewUrl = item2.NewUrl;
-        item2.SftpFileName = tempFile; item2.NewUrl = tempUrl;
+        // Si scambia l'abbinamento (file e nuovo link) e con lui la spunta "Usa": prima la spunta
+        // restava dov'era e una riga senza file poteva risultare "resta com'è" invece di "tolto"
+        var tempFile = item1.SftpFileName; var tempUrl = item1.NewUrl; var tempUse = item1.IsSelectedForUpdate;
+        item1.SftpFileName = item2.SftpFileName; item1.NewUrl = item2.NewUrl; item1.IsSelectedForUpdate = item2.IsSelectedForUpdate;
+        item2.SftpFileName = tempFile; item2.NewUrl = tempUrl; item2.IsSelectedForUpdate = tempUse;
 
         item1.EvaluateStatus(_settingsService.Current.AllValidStorageDomains);
         item2.EvaluateStatus(_settingsService.Current.AllValidStorageDomains);

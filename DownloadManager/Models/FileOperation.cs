@@ -46,6 +46,9 @@ public class FileOperation
     /// </summary>
     public bool IsRemote { get; set; }
 
+    /// <summary>Server SFTP dell'operazione remota (null = registrata prima delle schede SFTP).</summary>
+    public string? ServerKey { get; set; }
+
     /// <summary>
     /// Descrizione leggibile dell'operazione.
     /// </summary>

@@ -56,6 +56,13 @@ public class FileOperationRepository
         }
         catch { /* colonna già presente */ }
 
+        // Server delle operazioni remote: "Annulla" agisce solo sul server giusto
+        try
+        {
+            await conn.ExecuteAsync("ALTER TABLE FileOperations ADD COLUMN ServerKey TEXT NULL;");
+        }
+        catch { /* colonna già presente */ }
+
         _logger.LogInformation("Tabella FileOperations pronta");
     }
 
@@ -63,8 +70,8 @@ public class FileOperationRepository
     {
         await using var conn = new SqliteConnection(_connectionString);
         var id = await conn.ExecuteScalarAsync<int>(@"
-            INSERT INTO FileOperations (Type, OriginalPath, NewPath, Timestamp, BatchId, IsUndone, IsRemote)
-            VALUES (@Type, @OriginalPath, @NewPath, @Timestamp, @BatchId, @IsUndone, @IsRemote);
+            INSERT INTO FileOperations (Type, OriginalPath, NewPath, Timestamp, BatchId, IsUndone, IsRemote, ServerKey)
+            VALUES (@Type, @OriginalPath, @NewPath, @Timestamp, @BatchId, @IsUndone, @IsRemote, @ServerKey);
             SELECT last_insert_rowid();
         ", new
         {
@@ -74,7 +81,8 @@ public class FileOperationRepository
             Timestamp = op.Timestamp.ToString("O", CultureInfo.InvariantCulture),
             op.BatchId,
             IsUndone = op.IsUndone ? 1 : 0,
-            IsRemote = op.IsRemote ? 1 : 0
+            IsRemote = op.IsRemote ? 1 : 0,
+            op.ServerKey
         });
 
         op.Id = id;
@@ -93,8 +101,8 @@ public class FileOperationRepository
         foreach (var op in list)
         {
             var id = await conn.ExecuteScalarAsync<int>(@"
-                INSERT INTO FileOperations (Type, OriginalPath, NewPath, Timestamp, BatchId, IsUndone, IsRemote)
-                VALUES (@Type, @OriginalPath, @NewPath, @Timestamp, @BatchId, @IsUndone, @IsRemote);
+                INSERT INTO FileOperations (Type, OriginalPath, NewPath, Timestamp, BatchId, IsUndone, IsRemote, ServerKey)
+                VALUES (@Type, @OriginalPath, @NewPath, @Timestamp, @BatchId, @IsUndone, @IsRemote, @ServerKey);
                 SELECT last_insert_rowid();
             ", new
             {
@@ -104,7 +112,8 @@ public class FileOperationRepository
                 Timestamp = op.Timestamp.ToString("O", CultureInfo.InvariantCulture),
                 op.BatchId,
                 IsUndone = op.IsUndone ? 1 : 0,
-                IsRemote = op.IsRemote ? 1 : 0
+                IsRemote = op.IsRemote ? 1 : 0,
+                op.ServerKey
             }, tx);
 
             op.Id = id;
@@ -183,7 +192,8 @@ public class FileOperationRepository
         Timestamp = DateTime.Parse(r.Timestamp, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
         BatchId = r.BatchId,
         IsUndone = r.IsUndone == 1,
-        IsRemote = r.IsRemote == 1
+        IsRemote = r.IsRemote == 1,
+        ServerKey = r.ServerKey
     };
 
     private class FileOperationRow
@@ -196,5 +206,6 @@ public class FileOperationRepository
         public string BatchId { get; set; } = string.Empty;
         public int IsUndone { get; set; }
         public int IsRemote { get; set; }
+        public string? ServerKey { get; set; }
     }
 }

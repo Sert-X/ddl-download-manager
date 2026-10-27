@@ -10,16 +10,23 @@ using Microsoft.Extensions.Logging;
 namespace DownloadManager.ViewModels;
 
 /// <summary>
-/// Secondo server SFTP nel pannello di sinistra e copie da server a server.
-/// Il pannello di sinistra mostra i file locali oppure un secondo server (connessione
-/// propria, indipendente da quella principale); i file si copiano tra i due server
-/// con la coda "Server ↔ Server".
+/// Pannello di sinistra (Locale + schede di server) e copie da server a server.
+/// Il pannello di sinistra mostra i file locali oppure uno dei server aperti nelle sue schede
+/// (ognuno con la sua connessione). I nomi "Server2..." indicano la scheda aperta a sinistra.
+/// I file si copiano tra la scheda di sinistra e quella di destra con la coda "Server ↔ Server".
 /// </summary>
 public partial class SftpTabViewModel
 {
     private SftpRelayQueueService _relayQueue = null!;
-    private SftpWinScpService _server2 = null!;
-    private SftpConfig? _server2Config;
+    /// <summary>Server aperti nel pannello di sinistra, uno per scheda.</summary>
+    public ObservableCollection<RemoteServerTab> LeftTabs { get; } = new();
+    [ObservableProperty] private RemoteServerTab? _activeLeftTab;
+    /// <summary>Riquadro "connetti un server" aperto a sinistra con il pulsante "+".</summary>
+    [ObservableProperty] private bool _isLeftAdding;
+
+    /// <summary>Connessione della scheda aperta a sinistra (usata solo dopo aver controllato IsServer2Connected).</summary>
+    private ISftpService _server2 => ActiveLeftTab!.Service;
+    private SftpConfig? _server2Config => ActiveLeftTab?.Config;
     private DispatcherTimer _mainRefreshDebounce = null!;
     private DispatcherTimer _server2RefreshDebounce = null!;
     private readonly SemaphoreSlim _server2RefreshLock = new(1, 1);
@@ -28,7 +35,6 @@ public partial class SftpTabViewModel
     /// <summary>Pannello di sinistra: false = file locali, true = secondo server.</summary>
     [ObservableProperty] private bool _isServer2Mode;
     [ObservableProperty] private SftpConfig? _server2Profile;
-    [ObservableProperty] private bool _isServer2Connected;
     [ObservableProperty] private bool _isServer2Busy;
     [ObservableProperty] private string _server2Path = "/";
     [ObservableProperty] private string _server2Stats = "";
@@ -37,17 +43,90 @@ public partial class SftpTabViewModel
     [ObservableProperty] private string _relayQueueStats = "";
     [ObservableProperty] private bool _hasActiveRelays;
 
+    public bool IsServer2Connected => ActiveLeftTab != null && ActiveLeftTab.Service.IsConnected;
+    public bool HasLeftTabs => LeftTabs.Count > 0;
+
+    // Controllo dei file a 0 byte della scheda di sinistra (lo stesso della destra se il server
+    // è aperto anche lì: risultati condivisi)
+    private ZeroByteCheckerService? _server2Checker => ActiveLeftTab?.Checker;
+    /// <summary>La scheda ricorda la sua cartella.</summary>
+    partial void OnServer2PathChanged(string value) { if (ActiveLeftTab != null) ActiveLeftTab.Path = value; }
+    [ObservableProperty] private bool _isServer2CheckingZeroByte;
+    [ObservableProperty] private string _server2ZeroByteStatus = "";
+    [ObservableProperty] private bool _isServer2Reading;
+
+    public string Server2StatusText => IsServer2CheckingZeroByte
+        ? (string.IsNullOrEmpty(Server2ZeroByteStatus) ? "Avvio check 0-byte in corso..." : Server2ZeroByteStatus)
+        : IsServer2Reading ? "Lettura cartella in corso..." : "";
+    public bool HasServer2Status => Server2StatusText.Length > 0;
+    partial void OnIsServer2CheckingZeroByteChanged(bool value) => NotifyServer2Status();
+    partial void OnServer2ZeroByteStatusChanged(string value) => NotifyServer2Status();
+    partial void OnIsServer2ReadingChanged(bool value) => NotifyServer2Status();
+    private void NotifyServer2Status()
+    {
+        OnPropertyChanged(nameof(Server2StatusText));
+        OnPropertyChanged(nameof(HasServer2Status));
+    }
+
+    private void SyncServer2ZeroByteState()
+    {
+        var checker = _server2Checker;
+        IsServer2CheckingZeroByte = checker?.IsChecking == true;
+        Server2ZeroByteStatus = checker?.IsChecking == true ? checker.ProgressStatus : "";
+    }
+
+    [RelayCommand]
+    private void CheckServer2ZeroByte()
+    {
+        if (!IsServer2Connected || _server2Checker == null) { SftpStatusMessage = "Collega prima il secondo server."; return; }
+        if (_server2Checker.IsChecking) { SftpStatusMessage = $"Un check 0-byte su '{Server2Name}' è già in corso."; return; }
+        var folders = Server2Entries.Where(e => e.IsDirectory).ToList();
+        if (folders.Count == 0) { SftpStatusMessage = "Nessuna cartella da controllare nella cartella corrente."; return; }
+        _server2Checker.UseConnection(_server2, () => _server2.IsConnected);
+        SftpStatusMessage = $"Check di {folders.Count} cartelle su '{Server2Name}' in corso...";
+        _ = _server2Checker.RunCheckAsync(folders);
+    }
+
+    [RelayCommand] private void StopServer2ZeroByte() => _server2Checker?.Stop();
+
+    /// <summary>Clic su un profilo nel riquadro del secondo server: si collega subito.</summary>
+    [RelayCommand]
+    private async Task Server2ConnectProfileAsync(SftpConfig? profile)
+    {
+        if (profile == null || IsServer2Busy) return;
+        Server2Profile = profile;
+        await Server2ConnectAsync();
+    }
+
+    // Ordinamento della tabella di sinistra (come a destra, ma indipendente)
+    [ObservableProperty] private SortOption _server2SortOption = null!;
+    [ObservableProperty] private bool _server2SortAscending = true;
+    partial void OnServer2SortOptionChanged(SortOption value) { if (value != null) ReorderServer2Entries(); }
+    partial void OnServer2SortAscendingChanged(bool value) => ReorderServer2Entries();
+    [RelayCommand] private void ToggleServer2SortDirection() => Server2SortAscending = !Server2SortAscending;
+
+    private void ReorderServer2Entries()
+    {
+        if (Server2SortOption == null || Server2Entries.Count == 0) return;
+        var sorted = SftpEntrySorter.SortRemoteEntries(Server2Entries.ToList(), Server2SortOption.Mode, Server2SortAscending);
+        var selected = SelectedServer2Entry;
+        Server2Entries.Clear();
+        foreach (var e in sorted) Server2Entries.Add(e);
+        if (selected != null && Server2Entries.Contains(selected)) SelectedServer2Entry = selected;
+    }
+
     public ObservableCollection<SftpRemoteEntry> Server2Entries { get; } = new();
     public ObservableCollection<SftpRemoteEntry> SelectedServer2Entries { get; } = new();
     public ObservableCollection<SftpRelayJob> SftpRelayJobs => _relayQueue.AllJobs;
 
-    public string Server2Name => _server2Config?.Name ?? "Secondo server";
+    public string Server2Name => _server2Config?.Name ?? "Connetti un server";
 
-    /// <summary>Connessione del secondo server (per la scelta della cartella in "Sposta in...").</summary>
-    public ISftpService Server2Service => _server2;
+    /// <summary>Connessione della scheda di sinistra (per la scelta della cartella in "Sposta in...").</summary>
+    public ISftpService Server2Service => ActiveLeftTab?.Service ?? _sftpService;
     public bool IsLocalMode => !IsServer2Mode;
-    public bool ShowServer2Connect => IsServer2Mode && !IsServer2Connected;
-    public bool ShowServer2Browser => IsServer2Mode && IsServer2Connected;
+    public bool ShowServer2Connect => IsServer2Mode && (ActiveLeftTab == null || IsLeftAdding);
+    public bool ShowServer2Browser => IsServer2Mode && !ShowServer2Connect;
+    public bool CanCancelLeftAdd => IsLeftAdding && ActiveLeftTab != null;
 
     private void InitRelay(SftpRelayQueueService relayQueue, ILoggerFactory loggerFactory)
     {
@@ -55,17 +134,15 @@ public partial class SftpTabViewModel
         _relayQueue.MaxConcurrency = SftpMaxRelayConcurrency;
         _relayQueue.QueueChanged += () => Dispatcher.UIThread.Post(UpdateSftpBadges);
         _relayQueue.JobCompleted += OnRelayJobCompleted;
-        _sftpUploadQueue.JobCompleted += job =>
-        {
-            if (IsInOrUnder(job.DestinationFolder, SftpCurrentRemotePath)) ScheduleMainRefresh();
-        };
+        // File arrivato con un upload: si aggiornano i pannelli (destra e sinistra) che mostrano
+        // quella cartella di quel server
+        _sftpUploadQueue.JobCompleted += job => RefreshPanesShowing(job.Server ?? _mainConfig, job.DestinationFolder);
 
-        // Connessione propria: non toglie slot né blocca quella principale
-        _server2 = new SftpWinScpService(loggerFactory.CreateLogger<SftpWinScpService>(), new SftpSessionLimiter(2));
-        _server2.RemoteChanged += change =>
-        {
-            if (SamePath(change.DirectoryPath, Server2Path) || change.Recursive) ScheduleServer2Refresh();
-        };
+        // Modifiche fatte da QUALSIASI connessione dell'app (schede di destra e di sinistra,
+        // Organizza file, copie...): si aggiornano tutti i pannelli che mostrano quella cartella
+        // di quel server. Prima ogni pannello sentiva solo la sua connessione: con lo stesso
+        // server aperto a destra e a sinistra, l'altro pannello restava indietro.
+        SftpChangeHub.Changed += OnServerChanged;
 
         _mainRefreshDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1500) };
         _mainRefreshDebounce.Tick += async (_, _) =>
@@ -81,14 +158,54 @@ public partial class SftpTabViewModel
         };
     }
 
-    partial void OnIsServer2ModeChanged(bool value)
+    private void OnServerChanged(string serverKey, SftpRemoteChange change) => Dispatcher.UIThread.Post(() =>
     {
-        if (value && Server2Profile == null)
-            Server2Profile = SftpProfiles.FirstOrDefault(p => p.Id != SelectedSftpProfile?.Id) ?? SftpProfiles.FirstOrDefault();
+        bool Shows(SftpConfig? server, string path) =>
+            server != null && string.Equals(server.ServerKey, serverKey, StringComparison.OrdinalIgnoreCase) &&
+            (SamePath(change.DirectoryPath, path) || change.Recursive);
+        if (ActiveRemoteTab != null && Shows(RemoteConfig, SftpCurrentRemotePath)) ScheduleMainRefresh();
+        if (IsServer2Mode && IsServer2Connected && Shows(_server2Config, Server2Path)) ScheduleServer2Refresh();
+    });
+
+    /// <summary>Aggiorna i pannelli che mostrano quella cartella (o una superiore) di quel server.</summary>
+    private void RefreshPanesShowing(SftpConfig? server, string folder) => Dispatcher.UIThread.Post(() =>
+    {
+        if (server == null) return;
+        if (IsShownInActiveTab(server, folder)) ScheduleMainRefresh();
+        if (IsServer2Mode && IsServer2Connected && _server2Config != null &&
+            string.Equals(_server2Config.ServerKey, server.ServerKey, StringComparison.OrdinalIgnoreCase) &&
+            IsInOrUnder(folder, Server2Path))
+            ScheduleServer2Refresh();
+    });
+
+    partial void OnIsServer2ModeChanged(bool value) { UpdateLeftTabHighlight(); NotifyServer2Layout(); }
+    partial void OnIsLeftAddingChanged(bool value)
+    {
+        if (value)
+            Server2Profile = SftpProfiles.FirstOrDefault(p => LeftTabs.All(t => t.Config.ServerKey != p.ServerKey)) ?? SftpProfiles.FirstOrDefault();
+        UpdateLeftTabHighlight();
         NotifyServer2Layout();
     }
 
-    partial void OnIsServer2ConnectedChanged(bool value) => NotifyServer2Layout();
+    /// <summary>La scheda di sinistra è evidenziata solo quando il pannello mostra quel server.</summary>
+    private void UpdateLeftTabHighlight()
+    {
+        foreach (var t in LeftTabs) t.IsActive = ReferenceEquals(t, ActiveLeftTab) && IsServer2Mode && !IsLeftAdding;
+    }
+
+    partial void OnActiveLeftTabChanged(RemoteServerTab? oldValue, RemoteServerTab? newValue)
+    {
+        Server2Entries.Clear();
+        SelectedServer2Entries.Clear();
+        Server2Stats = "";
+        _lastListedServer2Path = null;
+        IsLeftAdding = false;
+        if (newValue != null) Server2Path = newValue.Path;
+        UpdateLeftTabHighlight();
+        SyncServer2ZeroByteState();
+        NotifyServer2Layout();
+        if (newValue != null && IsServer2Mode) _ = Server2RefreshInternalAsync(silent: false);
+    }
 
     private void NotifyServer2Layout()
     {
@@ -96,6 +213,10 @@ public partial class SftpTabViewModel
         OnPropertyChanged(nameof(ShowServer2Connect));
         OnPropertyChanged(nameof(ShowServer2Browser));
         OnPropertyChanged(nameof(Server2Name));
+        OnPropertyChanged(nameof(IsServer2Connected));
+        OnPropertyChanged(nameof(CanCancelLeftAdd));
+        OnPropertyChanged(nameof(HasLeftTabs));
+        OnPropertyChanged(nameof(Server2Service));
     }
 
     partial void OnSftpMaxRelayConcurrencyChanged(int value)
@@ -103,51 +224,101 @@ public partial class SftpTabViewModel
         if (_relayQueue != null) _relayQueue.MaxConcurrency = value;
     }
 
-    [RelayCommand] private void ShowLocalPane() => IsServer2Mode = false;
-    [RelayCommand] private void ShowServer2Pane() => IsServer2Mode = true;
+    [RelayCommand] private void ShowLocalPane() { IsServer2Mode = false; IsLeftAdding = false; }
+
+    /// <summary>"+ Connetti server" a sinistra.</summary>
+    [RelayCommand] private void ShowServer2Pane() { IsLeftAdding = true; IsServer2Mode = true; }
+
+    [RelayCommand] private void CancelLeftAdd() { IsLeftAdding = false; if (ActiveLeftTab == null) IsServer2Mode = false; }
+
+    [RelayCommand]
+    private void SelectLeftTab(RemoteServerTab? tab)
+    {
+        if (tab == null) return;
+        bool wasLocal = !IsServer2Mode;
+        IsLeftAdding = false;
+        IsServer2Mode = true;
+        if (!ReferenceEquals(ActiveLeftTab, tab)) ActiveLeftTab = tab;
+        else if (wasLocal) _ = Server2RefreshInternalAsync(silent: false);
+    }
 
     // ============================================================
     //  CONNESSIONE AL SECONDO SERVER
     // ============================================================
 
+    /// <summary>Apre a sinistra una scheda col profilo scelto (o passa a quella già aperta).</summary>
     [RelayCommand]
     private async Task Server2ConnectAsync()
     {
         var profile = Server2Profile;
-        if (profile == null) { SftpStatusMessage = "Scegli il profilo del secondo server."; return; }
+        if (profile == null) { SftpStatusMessage = "Scegli il profilo del server da aprire."; return; }
 
+        var existing = LeftTabs.FirstOrDefault(t => string.Equals(t.Config.ServerKey, profile.ServerKey, StringComparison.OrdinalIgnoreCase));
+        if (existing != null)
+        {
+            SelectLeftTab(existing);
+            SftpStatusMessage = $"'{profile.Name}' è già aperto a sinistra: passato alla sua scheda.";
+            return;
+        }
+
+        SftpWinScpService? service = null;
         try
         {
             IsServer2Busy = true;
             SftpStatusMessage = $"Connessione a '{profile.Name}'...";
-            await _server2.ConnectAsync(profile);
-            _server2Config = profile;
-            IsServer2Connected = true;
-
+            // Connessione propria: non toglie posti né blocca le altre
+            service = new SftpWinScpService(_loggerFactory.CreateLogger<SftpWinScpService>(), new SftpSessionLimiter(2));
+            await service.ConnectAsync(profile);
             var start = string.IsNullOrWhiteSpace(profile.RemoteBasePath) || profile.RemoteBasePath == "/"
-                ? _server2.GetWorkingDirectory()
+                ? service.GetWorkingDirectory()
                 : profile.RemoteBasePath;
-            Server2Path = string.IsNullOrWhiteSpace(start) ? "/" : start;
-            _logger.LogInformation("[SFTP-2] Connesso al secondo server '{Name}' ({Host})", profile.Name, profile.Host);
-            await Server2RefreshInternalAsync(silent: false);
+            var tab = new RemoteServerTab(profile, service, isMain: false)
+            {
+                Path = string.IsNullOrWhiteSpace(start) ? "/" : start,
+                Checker = GetChecker(profile, service)
+            };
+            LeftTabs.Add(tab);
+            _logger.LogInformation("[SFTP] Aperta a sinistra la scheda '{Name}' ({Host})", profile.Name, profile.Host);
+            IsServer2Mode = true;
+            ActiveLeftTab = tab;
+            IsLeftAdding = false;
+            SftpStatusMessage = $"Connesso a '{profile.Name}'.";
         }
         catch (Exception ex)
         {
-            IsServer2Connected = false;
+            try { service?.Dispose(); } catch { }
             SftpStatusMessage = $"Connessione a '{profile.Name}' fallita: {ex.Message}";
-            _logger.LogWarning(ex, "[SFTP-2] Connessione fallita");
+            _logger.LogWarning(ex, "[SFTP] Connessione a sinistra fallita");
         }
         finally { IsServer2Busy = false; }
     }
 
+    /// <summary>Disconnette la scheda aperta a sinistra (pulsante nella barra).</summary>
     [RelayCommand]
-    private async Task Server2DisconnectAsync()
+    private Task Server2DisconnectAsync() => CloseLeftTabAsync(ActiveLeftTab);
+
+    [RelayCommand]
+    private async Task CloseLeftTabAsync(RemoteServerTab? tab)
     {
-        try { await _server2.DisconnectAsync(); } catch { }
-        IsServer2Connected = false;
-        Server2Entries.Clear();
-        Server2Stats = "";
-        SftpStatusMessage = $"Disconnesso da '{Server2Name}'.";
+        if (tab == null) return;
+        int index = LeftTabs.IndexOf(tab);
+        if (index < 0) return;
+
+        RemoteServerTab? next = null;
+        if (ReferenceEquals(tab, ActiveLeftTab))
+            next = index + 1 < LeftTabs.Count ? LeftTabs[index + 1] : index > 0 ? LeftTabs[index - 1] : null;
+        LeftTabs.Remove(tab);
+        if (ReferenceEquals(tab, ActiveLeftTab))
+        {
+            ActiveLeftTab = next;
+            if (next == null) IsServer2Mode = false;   // nessun server a sinistra: si torna ai file locali
+        }
+        if (!IsServerOpen(tab.Config.ServerKey)) tab.Checker?.Stop();
+
+        try { await tab.Service.DisconnectAsync(); } catch { }
+        try { (tab.Service as IDisposable)?.Dispose(); } catch { }
+        _logger.LogInformation("[SFTP] Chiusa a sinistra la scheda '{Name}'", tab.Name);
+        SftpStatusMessage = $"Disconnesso da '{tab.Name}'.";
     }
 
     // ============================================================
@@ -208,21 +379,34 @@ public partial class SftpTabViewModel
         await _server2RefreshLock.WaitAsync();
         try
         {
+            var tab = ActiveLeftTab;
+            if (tab == null) return;
             var path = string.IsNullOrWhiteSpace(Server2Path) ? "/" : Server2Path;
-            if (!silent) { IsServer2Busy = true; SftpStatusMessage = $"Lettura {Server2Name}: {path}..."; }
+            if (!silent) { IsServer2Busy = true; IsServer2Reading = true; SftpStatusMessage = $"Lettura {Server2Name}: {path}..."; }
 
-            var entries = await _server2.ListDirectoryAsync(path);
-            if (!SamePath(Server2Path, path)) return;
+            var entries = await tab.Service.ListDirectoryAsync(path);
+            // Nel frattempo si è cambiata scheda o cartella: questa lettura non serve più
+            if (!ReferenceEquals(tab, ActiveLeftTab) || !SamePath(Server2Path, path)) return;
+            var checker = _server2Checker;
+            checker?.UpdateFromListing(path, entries);
 
             // Modifiche fatte da fuori: l'albero di Videobox si riallinea (come per il server principale)
             bool samePath = SamePath(_lastListedServer2Path, path);
             bool differs = !samePath || !SameListing(Server2Entries, entries);
 
-            foreach (var e in entries) e.HasZeroByteIssue = !e.IsDirectory && e.Size == 0;
-            var sorted = SftpEntrySorter.SortRemoteEntries(entries, RemoteSortOption.Mode, RemoteSortAscending);
+            foreach (var e in entries)
+            {
+                if (!e.IsDirectory) { e.HasZeroByteIssue = e.Size == 0; continue; }
+                // Risultati del controllo 0 byte di questo server (anche se fatto dalla scheda di destra)
+                var normalized = e.FullPath.TrimEnd('/');
+                e.HasZeroByteIssue = checker != null && checker.TryGetFolderFlag(normalized, out var flag) && flag;
+                if (checker != null && checker.TryGetFolderContents(normalized, out var info)) e.ContentsInfo = info;
+            }
+            var sorted = SftpEntrySorter.SortRemoteEntries(entries, Server2SortOption.Mode, Server2SortAscending);
             SftpEntrySorter.SyncCollection(Server2Entries, sorted, e => e.FullPath, SftpEntrySorter.UpdateRemoteEntryFromSource);
+            AutoCheckNewFolders(checker, tab.Service, tab.Config, path, entries);
             _lastListedServer2Path = path;
-            if (!silent || (samePath && differs)) _server2.NotifyRemoteChanged(new SftpRemoteChange(path));
+            if (!silent || (samePath && differs)) tab.Service.NotifyRemoteChanged(new SftpRemoteChange(path));
 
             int dirs = Server2Entries.Count(e => e.IsDirectory);
             Server2Stats = Server2Entries.Count == 0
@@ -233,11 +417,11 @@ public partial class SftpTabViewModel
         catch (Exception ex)
         {
             if (!silent) SftpStatusMessage = $"Errore su '{Server2Name}': {ex.Message}";
-            if (!_server2.IsConnected) IsServer2Connected = false;
+            NotifyServer2Layout();
         }
         finally
         {
-            if (!silent) IsServer2Busy = false;
+            if (!silent) { IsServer2Busy = false; IsServer2Reading = false; }
             _server2RefreshLock.Release();
         }
     }
@@ -361,39 +545,32 @@ public partial class SftpTabViewModel
     //  COPIA TRA SERVER
     // ============================================================
 
-    /// <summary>Dal secondo server (sinistra) alla cartella aperta del server principale (destra).</summary>
+    /// <summary>Dal secondo server (sinistra) alla cartella aperta della scheda di destra.</summary>
     [RelayCommand]
     private async Task CopyServer2ToMainAsync()
     {
-        if (!IsSftpConnected || !IsServer2Connected || _server2Config == null)
+        if (!IsRemoteConnected || RemoteConfig == null || !IsServer2Connected || _server2Config == null)
         { SftpStatusMessage = "Collega entrambi i server."; return; }
 
         var selected = SelectedServer2Entries.Count > 0
             ? SelectedServer2Entries.ToList()
             : SelectedServer2Entry != null ? new List<SftpRemoteEntry> { SelectedServer2Entry } : new();
 
-        await EnqueueRelayAsync(selected, _server2, _server2Config, BuildMainConfigForRelay(), SftpCurrentRemotePath);
+        await EnqueueRelayAsync(selected, _server2, _server2Config, RemoteConfig, SftpCurrentRemotePath);
     }
 
-    /// <summary>Dal server principale (destra) alla cartella aperta del secondo server (sinistra).</summary>
+    /// <summary>Dalla scheda di destra alla cartella aperta del secondo server (sinistra).</summary>
     [RelayCommand]
     private async Task CopyMainToServer2Async()
     {
-        if (!IsSftpConnected || !IsServer2Connected || _server2Config == null)
+        if (!IsRemoteConnected || RemoteConfig == null || !IsServer2Connected || _server2Config == null)
         { SftpStatusMessage = "Collega entrambi i server."; return; }
 
         var selected = SelectedRemoteEntries.Count > 0
             ? SelectedRemoteEntries.ToList()
             : SftpSelectedRemoteEntry != null ? new List<SftpRemoteEntry> { SftpSelectedRemoteEntry } : new();
 
-        await EnqueueRelayAsync(selected, _sftpService, BuildMainConfigForRelay(), _server2Config, Server2Path);
-    }
-
-    private SftpConfig BuildMainConfigForRelay()
-    {
-        var config = BuildCurrentSftpConfig();
-        if (string.IsNullOrWhiteSpace(config.Name)) config.Name = "Server principale";
-        return config;
+        await EnqueueRelayAsync(selected, Remote, RemoteConfig, _server2Config, Server2Path);
     }
 
     private async Task EnqueueRelayAsync(List<SftpRemoteEntry> entries, ISftpService sourceService,
@@ -460,12 +637,8 @@ public partial class SftpTabViewModel
     private void OnRelayJobCompleted(SftpRelayJob job)
     {
         var folder = TransferJobBase.GetRemoteParent(job.DestinationPath);
-        bool toServer2 = _server2Config != null && SameServer(job.DestinationConfig, _server2Config);
-        bool toMain = SameServer(job.DestinationConfig, BuildCurrentSftpConfig());
-
         SftpChangeHub.Publish(job.DestinationConfig.ServerKey, new SftpRemoteChange(folder));
-        if (toMain && IsInOrUnder(folder, SftpCurrentRemotePath)) ScheduleMainRefresh();
-        if (toServer2 && IsInOrUnder(folder, Server2Path)) ScheduleServer2Refresh();
+        RefreshPanesShowing(job.DestinationConfig, folder);
     }
 
     private static bool SameServer(SftpConfig a, SftpConfig b) =>
@@ -512,7 +685,11 @@ public partial class SftpTabViewModel
     private void DisposeRelay()
     {
         try { _relayQueue.CancelAll(); } catch { }
-        try { _server2.DisconnectAsync().Wait(TimeSpan.FromSeconds(3)); } catch { }
-        try { _server2.Dispose(); } catch { }
+        SftpChangeHub.Changed -= OnServerChanged;
+        foreach (var tab in LeftTabs.ToList())
+        {
+            try { tab.Service.DisconnectAsync().Wait(TimeSpan.FromSeconds(3)); } catch { }
+            try { (tab.Service as IDisposable)?.Dispose(); } catch { }
+        }
     }
 }

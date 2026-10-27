@@ -35,10 +35,29 @@ public sealed class VideoboxSftpPool : IDisposable
 
     public async Task<List<SftpProfileOption>> GetProfileOptionsAsync()
     {
-        var options = new List<SftpProfileOption> { new(SharedProfileId, "Connessione della tab SFTP") };
+        // Solo i profili salvati: ogni sorgente ha la sua connessione, indipendente dalla tab SFTP
+        var options = new List<SftpProfileOption>();
         try { options.AddRange((await _profiles.GetAllAsync()).Select(p => new SftpProfileOption(p.Id, p.Name))); }
         catch (Exception ex) { _logger.LogWarning(ex, "[VB-SFTP] Lettura profili fallita"); }
         return options;
+    }
+
+    /// <summary>
+    /// Profilo salvato dello stesso server della vecchia opzione "connessione della tab SFTP":
+    /// quello della connessione aperta, se c'è; altrimenti l'unico profilo salvato. null = non si sa.
+    /// </summary>
+    public async Task<int?> ResolveSharedProfileAsync()
+    {
+        List<SftpConfig> profiles;
+        try { profiles = (await _profiles.GetAllAsync()).ToList(); }
+        catch { return null; }
+        var key = _shared.ServerKey;
+        if (key != null)
+        {
+            var match = profiles.FirstOrDefault(p => string.Equals(p.ServerKey, key, StringComparison.OrdinalIgnoreCase));
+            if (match != null) return match.Id;
+        }
+        return profiles.Count == 1 ? profiles[0].Id : null;
     }
 
     public bool IsConnected(int profileId) => profileId == SharedProfileId

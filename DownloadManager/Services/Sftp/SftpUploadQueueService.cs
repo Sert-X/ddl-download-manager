@@ -29,9 +29,10 @@ public class SftpUploadQueueService : SftpQueueServiceBase<SftpUploadJob>
     //  ENQUEUE SPECIFICO UPLOAD
     // ============================================================
 
-    public async Task<int> EnqueueFolderAsync(string localFolder, string remoteBaseFolder)
+    /// <param name="server">Server di destinazione (null = quello configurato nella coda).</param>
+    public async Task<int> EnqueueFolderAsync(string localFolder, string remoteBaseFolder, SftpConfig? server = null)
     {
-        if (CurrentConfig == null)
+        if ((server ?? CurrentConfig) == null)
             throw new InvalidOperationException("Nessuna configurazione SFTP impostata.");
 
         if (!Directory.Exists(localFolder))
@@ -52,6 +53,7 @@ public class SftpUploadQueueService : SftpQueueServiceBase<SftpUploadJob>
             {
                 LocalPath = localFile,
                 RemotePath = remoteFile,
+                Server = server,
                 TotalBytes = new FileInfo(localFile).Length,
                 Status = SftpJobStatus.Pending
             };
@@ -68,9 +70,9 @@ public class SftpUploadQueueService : SftpQueueServiceBase<SftpUploadJob>
     /// Le cartelle vengono espanse in una sottocartella con lo stesso nome;
     /// i file vengono accodati direttamente.
     /// </summary>
-    public async Task<int> EnqueuePathsAsync(IEnumerable<string> localPaths, string remoteBaseFolder)
+    public async Task<int> EnqueuePathsAsync(IEnumerable<string> localPaths, string remoteBaseFolder, SftpConfig? server = null)
     {
-        if (CurrentConfig == null)
+        if ((server ?? CurrentConfig) == null)
             throw new InvalidOperationException("Nessuna configurazione SFTP impostata.");
 
         int total = 0;
@@ -79,7 +81,7 @@ public class SftpUploadQueueService : SftpQueueServiceBase<SftpUploadJob>
         {
             if (Directory.Exists(localPath))
             {
-                total += await EnqueueFolderAsync(localPath, remoteBaseFolder);
+                total += await EnqueueFolderAsync(localPath, remoteBaseFolder, server);
             }
             else if (File.Exists(localPath))
             {
@@ -90,6 +92,7 @@ public class SftpUploadQueueService : SftpQueueServiceBase<SftpUploadJob>
                 {
                     LocalPath = localPath,
                     RemotePath = remotePath,
+                    Server = server,
                     TotalBytes = new FileInfo(localPath).Length,
                     Status = SftpJobStatus.Pending
                 };
@@ -110,7 +113,7 @@ public class SftpUploadQueueService : SftpQueueServiceBase<SftpUploadJob>
     {
         var remoteDir = Path.GetDirectoryName(job.RemotePath)?.Replace('\\', '/') ?? "";
         if (!string.IsNullOrEmpty(remoteDir))
-            EnsureRemoteDir(session, remoteDir);
+            EnsureRemoteDir(session, remoteDir, GetSessionConfig(job)?.ServerKey ?? "");
 
         var transferOptions = new TransferOptions
         {
@@ -140,10 +143,14 @@ public class SftpUploadQueueService : SftpQueueServiceBase<SftpUploadJob>
     //  HELPERS
     // ============================================================
 
-    private void EnsureRemoteDir(Session session, string remoteDir)
+    private void EnsureRemoteDir(Session session, string remoteDir, string serverKey)
     {
         if (string.IsNullOrEmpty(remoteDir)) return;
-        if (!_ensuredDirs.Add(remoteDir)) return;
+        // Per server: la stessa cartella può mancare su un server e non sull'altro
+        lock (_ensuredDirs)
+        {
+            if (!_ensuredDirs.Add(serverKey + "|" + remoteDir)) return;
+        }
 
         var parts = remoteDir.Replace('\\', '/').Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
         var current = "";

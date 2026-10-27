@@ -56,6 +56,7 @@ public partial class MainWindow : Window
     public MainWindow(MainWindowViewModel viewModel, ISftpService sftpService)
     {
         InitializeComponent();
+        HookMappingGrid();
 
         Opened += (s, e) =>
         {
@@ -160,6 +161,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        HookMappingGrid();
     }
 
     private MainWindowViewModel? Vm => DataContext as MainWindowViewModel;
@@ -212,6 +214,35 @@ public partial class MainWindow : Window
             grid.SelectedItem = _contextItem;
     }
 
+    // ============================================================
+    //  VIDEOBOX: SELEZIONE MULTIPLA NELLA TABELLA DELL'ANTEPRIMA
+    // ============================================================
+
+    private void OnMappingSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        // Il ViewModel è quello della tabella stessa (la tab Videobox)
+        if (sender is not DataGrid { DataContext: VideoboxTabViewModel vb } grid) return;
+        vb.SelectedMappingRows.Clear();
+        if (grid.SelectedItems != null)
+            foreach (var item in grid.SelectedItems)
+                if (item is EpisodeMappingItem row) vb.SelectedMappingRows.Add(row);
+    }
+
+    /// <summary>Spazio: spunta (o toglie la spunta a) tutte le righe selezionate insieme.</summary>
+    private void OnMappingGridKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Space || sender is not DataGrid { DataContext: VideoboxTabViewModel vb }) return;
+        if (vb.SelectedMappingRows.Count == 0 || e.Source is TextBox) return;
+        e.Handled = true;
+        vb.ToggleSelectedRows();
+    }
+
+    private void HookMappingGrid()
+    {
+        // In "tunnel": la tabella non deve usare lo Spazio per conto suo (modifica della cella)
+        this.FindControl<DataGrid>("MappingGrid")?.AddHandler(KeyDownEvent, OnMappingGridKeyDown, RoutingStrategies.Tunnel);
+    }
+
     private async Task<string?> PickFolderAsync(string title)
     {
         var storage = StorageProvider;
@@ -227,14 +258,21 @@ public partial class MainWindow : Window
         return folders[0].TryGetLocalPath();
     }
 
-    private async Task<string?> PickRemoteFolderAsync(string title)
+    /// <param name="service">Server in cui scegliere (null = connessione principale).</param>
+    private async Task<string?> PickRemoteFolderAsync(string title, ISftpService? service = null, string? start = null)
     {
-        if (_sftpService == null) return null;
-        if (!_sftpService.IsConnected) return null;
+        service ??= _sftpService;
+        if (service == null || !service.IsConnected) return null;
 
-        var start = Vm?.Sftp.SftpCurrentRemotePath ?? "/";
-        return await RemoteFolderPickerDialog.ShowAsync(this, _sftpService, start, title);
+        // Si parte dalla cartella aperta su quel server
+        start ??= (ReferenceEquals(service, _sftpService) ? Vm?.Sftp.MainRemotePath : Vm?.Sftp.SftpCurrentRemotePath) ?? "/";
+        return await RemoteFolderPickerDialog.ShowAsync(this, service, start, title);
     }
+
+    /// <summary>Cartelle del server scelto in Organizza file.</summary>
+    private Task<string?> PickOrganizerRemoteFolderAsync(string title, string? current) =>
+        PickRemoteFolderAsync(title, Vm?.Organizer.RemoteService,
+            string.IsNullOrWhiteSpace(current) || !current.StartsWith('/') ? Vm?.Organizer.RemoteStartPath : current);
 
     // ============================================================
     //  RICERCA
@@ -364,31 +402,31 @@ public partial class MainWindow : Window
 
     private async void OnBrowseOrganizeFolderRemoteClick(object? sender, RoutedEventArgs e)
     {
-        var folder = await PickRemoteFolderAsync("Seleziona cartella remota da organizzare");
+        var folder = await PickOrganizerRemoteFolderAsync("Seleziona cartella remota da organizzare", Vm?.Organizer.OrganizeFolder);
         if (!string.IsNullOrEmpty(folder) && Vm != null) Vm.Organizer.OrganizeFolder = folder;
     }
 
     private async void OnBrowseMergeDestRemoteClick(object? sender, RoutedEventArgs e)
     {
-        var folder = await PickRemoteFolderAsync("Seleziona destinazione remota per il merge");
+        var folder = await PickOrganizerRemoteFolderAsync("Seleziona destinazione remota per il merge", Vm?.Organizer.MergeDestinationFolder);
         if (!string.IsNullOrEmpty(folder) && Vm != null) Vm.Organizer.MergeDestinationFolder = folder;
     }
 
     private async void OnBrowseSplitSourceRemoteClick(object? sender, RoutedEventArgs e)
     {
-        var folder = await PickRemoteFolderAsync("Seleziona cartella remota da dividere");
+        var folder = await PickOrganizerRemoteFolderAsync("Seleziona cartella remota da dividere", Vm?.Organizer.SplitSourceFolder);
         if (!string.IsNullOrEmpty(folder) && Vm != null) Vm.Organizer.SplitSourceFolder = folder;
     }
 
     private async void OnBrowseSplitDestRemoteClick(object? sender, RoutedEventArgs e)
     {
-        var folder = await PickRemoteFolderAsync("Seleziona destinazione remota per lo split");
+        var folder = await PickOrganizerRemoteFolderAsync("Seleziona destinazione remota per lo split", Vm?.Organizer.SplitDestinationFolder);
         if (!string.IsNullOrEmpty(folder) && Vm != null) Vm.Organizer.SplitDestinationFolder = folder;
     }
 
     private async void OnBrowseMergeAddRemoteFolderClick(object? sender, RoutedEventArgs e)
     {
-        var folder = await PickRemoteFolderAsync("Aggiungi cartella sorgente remota");
+        var folder = await PickOrganizerRemoteFolderAsync("Aggiungi cartella sorgente remota", null);
         if (!string.IsNullOrEmpty(folder)) Vm?.Organizer.AddMergeFolder(folder);
     }
 
@@ -421,7 +459,9 @@ public partial class MainWindow : Window
         }
         else
         {
-            await PickRemoteFolderAsync("Aggiungi cartella sorgente remota");
+            // Prima la cartella scelta veniva ignorata
+            var folder = await PickOrganizerRemoteFolderAsync("Aggiungi cartella sorgente remota", null);
+            if (!string.IsNullOrEmpty(folder)) Vm.Organizer.AddMergeFolder(folder);
         }
     }
 
@@ -828,7 +868,8 @@ public partial class MainWindow : Window
         if (entries.Count == 0 || Vm == null) return;
 
         var title = entries.Count == 1 ? $"Sposta '{entries[0].Name}' in..." : $"Sposta {entries.Count} elementi in...";
-        var dest = await PickRemoteFolderAsync(title);
+        // Cartelle del server della scheda aperta nel pannello di destra
+        var dest = await PickRemoteFolderAsync(title, Vm.Sftp.ActiveRemoteService);
         if (string.IsNullOrEmpty(dest)) return;
 
         await Vm.Sftp.SftpRemoteMoveManyAsync(entries, dest);

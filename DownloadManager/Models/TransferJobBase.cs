@@ -14,6 +14,15 @@ public abstract partial class TransferJobBase : ObservableObject
     public string LocalPath { get; set; } = string.Empty;
     public string RemotePath { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Server del trasferimento (scheda del pannello remoto da cui è partito). null = il server
+    /// configurato nella coda (connessione principale).
+    /// </summary>
+    public SftpConfig? Server { get; set; }
+
+    /// <summary>Nome del server, per la colonna "Server" delle code.</summary>
+    public string ServerName => Server?.Name ?? "";
+
     [ObservableProperty] private long _totalBytes;
     [ObservableProperty] private SftpJobStatus _status = SftpJobStatus.Pending;
     [ObservableProperty] private double _speedBytesPerSecond;

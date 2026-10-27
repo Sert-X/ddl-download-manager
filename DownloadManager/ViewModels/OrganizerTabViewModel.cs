@@ -106,9 +106,53 @@ public partial class OrganizerTabViewModel : ViewModelBase
         set => _shared.CreateSeriesFolder = value;
     }
 
-    private string SharedSftpRemotePath => _shared.SftpCurrentRemotePath;
-    private bool SharedIsSftpConnected => _shared.IsSftpConnected;
-    public bool IsSftpConnected => _shared.IsSftpConnected;
+    // ============================================================
+    //  SERVER REMOTO (uno dei server aperti nelle schede SFTP)
+    // ============================================================
+
+    /// <summary>Server aperti nella tab SFTP: si sceglie su quale lavorare, senza riconnettersi.</summary>
+    public ObservableCollection<RemoteServerTab> SftpServers => _shared.SftpServers;
+
+    [ObservableProperty] private RemoteServerTab? _organizerServer;
+
+    /// <summary>Connessione su cui lavorano le operazioni remote.</summary>
+    public ISftpService RemoteService => OrganizerServer?.Service ?? _sftpService;
+
+    /// <summary>Cartella aperta su quel server nella tab SFTP.</summary>
+    public string RemoteStartPath => OrganizerServer?.Path ?? _shared.SftpCurrentRemotePath;
+
+    private string SharedSftpRemotePath => RemoteStartPath;
+    private bool SharedIsSftpConnected => RemoteService.IsConnected;
+    /// <summary>C'è almeno un server aperto (abilita la modalità Remoto).</summary>
+    public bool IsSftpConnected => SftpServers.Count > 0;
+    public bool HasSeveralServers => SftpServers.Count > 1;
+
+    partial void OnOrganizerServerChanged(RemoteServerTab? value)
+    {
+        _fileOrganizer.UseRemoteServer(value?.Service);
+        OnPropertyChanged(nameof(RemoteService));
+        OnPropertyChanged(nameof(RemoteStartPath));
+        // Cambiando server, le cartelle remote ripartono da quella aperta su quel server
+        if (value != null && !OrganizeModeIsLocal) FillRemoteFolders(value.Path);
+    }
+
+    private void OnSftpServersChanged()
+    {
+        OnPropertyChanged(nameof(IsSftpConnected));
+        OnPropertyChanged(nameof(HasSeveralServers));
+        if (OrganizerServer == null || !SftpServers.Contains(OrganizerServer))
+            OrganizerServer = SftpServers.FirstOrDefault();
+        if (SftpServers.Count == 0) OrganizeModeIsLocal = true;
+    }
+
+    private void FillRemoteFolders(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return;
+        OrganizeFolder = path;
+        MergeDestinationFolder = path;
+        SplitSourceFolder = path;
+        SplitDestinationFolder = path;
+    }
 
     // ============================================================
     //  COMPUTED
@@ -196,6 +240,7 @@ public partial class OrganizerTabViewModel : ViewModelBase
         SplitDestinationFolder = _settings.Current.BaseDownloadFolder;
 
         _shared.PropertyChanged += OnSharedPropertyChanged;
+        _shared.SftpServers.CollectionChanged += (_, _) => OnSftpServersChanged();
 
         AddSplitSegment();
         _ = Task.Run(LoadHistoryAsync);
@@ -217,7 +262,6 @@ public partial class OrganizerTabViewModel : ViewModelBase
                 break;
             case nameof(SharedState.IsSftpConnected):
                 OnPropertyChanged(nameof(IsSftpConnected));
-                if (!_shared.IsSftpConnected) OrganizeModeIsLocal = true;
                 break;
         }
     }
@@ -229,13 +273,7 @@ public partial class OrganizerTabViewModel : ViewModelBase
         OnPropertyChanged(nameof(SplitSourceLabel));
         OnPropertyChanged(nameof(SplitDestinationLabel));
 
-        if (!value && SharedIsSftpConnected && !string.IsNullOrWhiteSpace(SharedSftpRemotePath))
-        {
-            OrganizeFolder = SharedSftpRemotePath;
-            MergeDestinationFolder = SharedSftpRemotePath;
-            SplitSourceFolder = SharedSftpRemotePath;
-            SplitDestinationFolder = SharedSftpRemotePath;
-        }
+        if (!value && SharedIsSftpConnected) FillRemoteFolders(SharedSftpRemotePath);
     }
 
     partial void OnOrganizePatternChanged(string value) => OnPropertyChanged(nameof(OrganizePatternPreview));
@@ -479,7 +517,7 @@ public partial class OrganizerTabViewModel : ViewModelBase
             else
             {
                 if (!SharedIsSftpConnected) return;
-                var entries = await _sftpService.ListDirectoryAsync(folder.Path.TrimEnd('/'), CancellationToken.None);
+                var entries = await RemoteService.ListDirectoryAsync(folder.Path.TrimEnd('/'), CancellationToken.None);
                 count = entries.Count(e => !e.IsDirectory && FileOrganizerService.IsVideoFile(e.Name));
             }
             folder.FileCount = count;
@@ -785,7 +823,7 @@ public partial class OrganizerTabViewModel : ViewModelBase
             List<SftpRemoteEntry> entries;
             try
             {
-                entries = await _sftpService.ListDirectoryAsync(SplitSourceFolder.TrimEnd('/'), CancellationToken.None);
+                entries = await RemoteService.ListDirectoryAsync(SplitSourceFolder.TrimEnd('/'), CancellationToken.None);
             }
             catch (Exception ex)
             {

@@ -24,8 +24,8 @@ public sealed class ZeroByteCheckerService
     private static readonly TimeSpan PerFolderTimeout = TimeSpan.FromSeconds(90);
     private static readonly TimeSpan AbortGracePeriod = TimeSpan.FromSeconds(10);
 
-    private readonly ISftpService _sftp;
-    private readonly Func<bool> _isConnected;
+    private ISftpService _sftp;
+    private Func<bool> _isConnected;
 
     private readonly Dictionary<string, bool> _flagCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, string> _contentsCache = new(StringComparer.OrdinalIgnoreCase);
@@ -35,6 +35,15 @@ public sealed class ZeroByteCheckerService
         new(StringComparer.OrdinalIgnoreCase);
 
     private readonly object _cacheLock = new();
+    /// <summary>Cartelle in cui è stato avviato un controllo: lì le cartelle nuove o rinominate si controllano da sole.</summary>
+    private readonly HashSet<string> _checkedParents = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>In questa cartella è stato fatto un controllo (le sue sottocartelle vanno tenute aggiornate).</summary>
+    public bool WasCheckedIn(string? folder)
+    {
+        if (string.IsNullOrEmpty(folder)) return false;
+        lock (_cacheLock) return _checkedParents.Contains(Normalize(folder));
+    }
 
     private CancellationTokenSource? _cts;
 
@@ -54,6 +63,17 @@ public sealed class ZeroByteCheckerService
 
     public ZeroByteCheckerService(ISftpService sftp, Func<bool> isConnected)
     {
+        _sftp = sftp;
+        _isConnected = isConnected;
+    }
+
+    /// <summary>
+    /// Connessione con cui fare i prossimi controlli. Lo stesso server può essere aperto in più
+    /// pannelli: i risultati sono del server, il controllo usa il pannello da cui parte.
+    /// </summary>
+    public void UseConnection(ISftpService sftp, Func<bool> isConnected)
+    {
+        if (IsChecking) return;   // un controllo in corso continua con la sua connessione
         _sftp = sftp;
         _isConnected = isConnected;
     }
@@ -113,6 +133,19 @@ public sealed class ZeroByteCheckerService
             _contentsCache.Remove(key);
             _zeroFilesByFolder.Remove(key);
             _flaggedSubsByFolder.Remove(key);
+        }
+    }
+
+    /// <summary>Dimentica tutti i risultati (la connessione è passata a un altro server).</summary>
+    public void ClearAll()
+    {
+        lock (_cacheLock)
+        {
+            _flagCache.Clear();
+            _contentsCache.Clear();
+            _zeroFilesByFolder.Clear();
+            _flaggedSubsByFolder.Clear();
+            _checkedParents.Clear();
         }
     }
 
@@ -335,6 +368,15 @@ public sealed class ZeroByteCheckerService
             Completed?.Invoke(this, "Nessuna cartella da controllare.");
             return;
         }
+
+        // Si ricorda dove è stato avviato: lì le cartelle nuove o rinominate si controllano da sole
+        lock (_cacheLock)
+            foreach (var f in folders)
+            {
+                var path = Normalize(f.FullPath);
+                int slash = path.LastIndexOf('/');
+                _checkedParents.Add(slash <= 0 ? "/" : path.Substring(0, slash));
+            }
 
         _cts = new CancellationTokenSource();
         var token = _cts.Token;

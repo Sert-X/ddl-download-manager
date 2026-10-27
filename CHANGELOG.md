@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.4.3] — 2026-10-27
+
+### 📡 SFTP: più server insieme
+- **Schede in entrambi i pannelli**: a destra un server per scheda, a sinistra "Locale" più i server che vuoi. "+ Connetti server" apre un altro server con un clic sul profilo; ogni scheda ha la sua connessione e ricorda la sua cartella. Il riquadro di connessione è nuovo, centrato, con l'elenco dei profili.
+- **File diversi su server diversi in contemporanea**: upload e download vanno al server della scheda aperta e continuano anche cambiando o chiudendo la scheda. Le code hanno la colonna "Server" e i trasferimenti paralleli valgono **per ogni server**.
+- **Copie tra due server qualsiasi**: con un server a sinistra le frecce al centro copiano verso la scheda di destra e viceversa.
+- **Disconnessione chiara**: il simbolo rosso sta dentro la scheda, accanto al nome del server; quello grande nella barra disconnette la scheda aperta. "Configurazione connessione SFTP" ora serve solo a gestire i profili.
+- **Pannelli sempre allineati**: con lo stesso server aperto a destra e a sinistra, ogni modifica (upload, copie, rinomina, elimina, crea, sposta, duplica) aggiorna entrambi in tempo reale.
+- **Ordinamento e colonna "Contenuto"** anche nella tabella di sinistra; stato "Lettura cartella in corso…" sulla riga dei conteggi, senza spostare la tabella.
+
+### 🔍 Controllo dei file a 0 byte
+- **Uno per server, anche in contemporanea** su più schede, e anche nel pannello di sinistra. Lo stesso server aperto in due pannelli condivide esiti e avanzamento in tempo reale.
+- **Si tiene aggiornato da solo**: dopo un controllo, le sottocartelle nuove, rinominate o arrivate con un upload vengono controllate in automatico.
+
+### ⚡ Fluidità
+- **Tab SFTP e Videobox molto più leggere**: la pagina veniva ricalcolata per intero a ogni aggiornamento (circa 28 ms l'uno, decine al secondo durante i trasferimenti); ora circa 0,2 ms. La barra di scorrimento non "impazzisce" più.
+- **Finestra bassa**: le tabelle non salgono più sopra i pulsanti; la pagina scorre e le tabelle restano utilizzabili. Dimensione minima della finestra 1200 × 700.
+
+### 🗂 Organizza file
+- **Menu "Server"** in modalità Remoto: si lavora su uno qualsiasi dei server aperti nella tab SFTP, a destra o a sinistra, senza riconnettersi.
+- **"Annulla" sicuro**: ogni operazione remota ricorda il suo server; se è selezionato un altro server, l'annullamento si rifiuta invece di rinominare file sul server sbagliato.
+- In modalità Remoto, "Aggiungi cartella" del merge ignorava la cartella scelta: risolto.
+
+### 🎬 Videobox Corrector
+- **Nuovo pannello del post e dell'anteprima**: scheda del post con stato, numero di link e apertura nel browser; titolo e cartella con etichette chiare; senza un post selezionato, i tre passi da seguire.
+- **Tabella leggibile**: "Sul forum ora" → "Diventa" con il nome del file in grande (l'episodio sempre visibile) e sotto server e cartella; numero di riga e riepilogo che dice esattamente cosa farà "Applica" (file abbinati, link tolti o aggiunti).
+- **I file hanno la precedenza**: dopo "Mappa", anche di un singolo file, le righe senza file perdono la spunta e vengono tolte. Le frecce "Ordine" spostano anche la spunta; mappando di nuovo, le righe aggiunte in precedenza non restano in tabella.
+- **Selezione multipla**: con Ctrl o Maiusc selezioni più righe, poi Spazio o clic destro per metterle o toglierle tutte insieme.
+- **Mappa** e **Applica** disattivati finché non c'è niente da fare, con il suggerimento sempre visibile.
+- Colori degli stati uguali al resto dell'app; ogni sorgente usa il proprio profilo SFTP (l'opzione "connessione della tab SFTP" viene convertita da sola nel profilo dello stesso server).
+
+### 🧹 Varie
+- Niente più riquadro bianco sulla cella cliccata nelle tabelle.
+- Guide aggiornate: SFTP (riscritta) e Videobox Corrector.
+
 ## [1.4.2] — 2026-10-27
 
 ### 🗂 Videobox Corrector

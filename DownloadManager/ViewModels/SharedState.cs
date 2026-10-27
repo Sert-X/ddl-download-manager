@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace DownloadManager.ViewModels;
@@ -26,6 +27,9 @@ public partial class SharedState : ObservableObject
 
     /// <summary>True se il client SFTP è connesso (abilita Organizer remoto).</summary>
     [ObservableProperty] private bool _isSftpConnected;
+
+    /// <summary>Server SFTP aperti nelle schede della tab SFTP (Organizza file ci lavora sopra).</summary>
+    public ObservableCollection<RemoteServerTab> SftpServers { get; } = new();
 
     /// <summary>True = Organizer in modalità Locale, false = Remoto.</summary>
     [ObservableProperty] private bool _organizeModeIsLocal = true;

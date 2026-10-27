@@ -1269,5 +1269,67 @@
         <Style Selector="Border.proxyBadge.proxyActive > TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource AppProxyBadgeActiveTextBrush}"/>
         </Style>
+        <!-- (in fondo: vince sugli stili generici delle icone e dei pulsanti) -->
+        <!-- Schede dei server nella tab SFTP: nome e disconnessione nella stessa "pillola",
+             così è chiaro quale server si disconnette -->
+        <Style Selector="Border.serverTab">
+            <Setter Property="Background" Value="{DynamicResource AppSurface2Brush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="999"/>
+            <Setter Property="Padding" Value="2"/>
+        </Style>
+        <Style Selector="Border.serverTab.active">
+            <Setter Property="Background" Value="{DynamicResource AppAccentSoftBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
+        <Style Selector="Border.serverTab Button.tabName">
+            <Setter Property="Padding" Value="10,3,6,3"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="CornerRadius" Value="999"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style Selector="Border.serverTab.active Button.tabName">
+            <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Border.serverTab.active Button.tabName Path.icon">
+            <Setter Property="Stroke" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
+        <Style Selector="Border.serverTab Button.tabClose">
+            <Setter Property="Width" Value="24"/>
+            <Setter Property="Height" Value="24"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Border.serverTab Button.tabClose Path.icon">
+            <Setter Property="Width" Value="11"/>
+            <Setter Property="Height" Value="11"/>
+            <Setter Property="Stroke" Value="{DynamicResource AppDangerBrush}"/>
+        </Style>
+        <Style Selector="Border.serverTab Button.tabClose:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppDangerSoftBrush}"/>
+        </Style>
+        <Style Selector="Border.serverTab Rectangle.tabSep">
+            <Setter Property="Width" Value="1"/>
+            <Setter Property="Height" Value="14"/>
+            <Setter Property="Margin" Value="2,0"/>
+            <Setter Property="Fill" Value="{DynamicResource AppBorderBrush}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- Tabelle: niente riquadro bianco sulla cella cliccata. Le tabelle dell'app lavorano per
+             righe (la riga selezionata è già evidenziata): il riquadro della "cella corrente"
+             disturbava e sembrava un campo da modificare. -->
+        <!-- Trasparenti, non nascosti: il tema li riaccende (IsVisible) quando la cella diventa
+             "corrente" o ha il focus, l'opacità invece non la tocca -->
+        <Style Selector="DataGridCell /template/ Rectangle#CurrencyVisual">
+            <Setter Property="Opacity" Value="0"/>
+        </Style>
+        <Style Selector="DataGridCell /template/ Grid#FocusVisual">
+            <Setter Property="Opacity" Value="0"/>
+        </Style>
     </Application.Styles>
 </Application>

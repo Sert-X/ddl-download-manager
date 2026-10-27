@@ -15,14 +15,14 @@ public class NodeStatusToBrushConverter : IValueConverter
         {
             return status switch
             {
-                NodeStatus.Valid => Brushes.LimeGreen,
-                NodeStatus.Invalid => Brushes.OrangeRed,
-                NodeStatus.Mixed => Brushes.Gold,
-                NodeStatus.Mismatch => Brushes.MediumPurple, // <-- VIOLA
-                _ => Brushes.Gray
+                NodeStatus.Valid => VideoboxPalette.Green,
+                NodeStatus.Invalid => VideoboxPalette.Red,
+                NodeStatus.Mixed => VideoboxPalette.Orange,
+                NodeStatus.Mismatch => VideoboxPalette.Purple,
+                _ => VideoboxPalette.Gray
             };
         }
-        return Brushes.Gray;
+        return VideoboxPalette.Gray;
     }
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) 

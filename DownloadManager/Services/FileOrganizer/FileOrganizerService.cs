@@ -12,6 +12,12 @@ public class FileOrganizerService : IFileOrganizerService
     private readonly ILogger<FileOrganizerService> _logger;
     private readonly FileOperationRepository _repository;
     private readonly ISftpService _sftpService;
+    private ISftpService? _remoteOverride;
+
+    /// <summary>Server su cui lavorano le operazioni remote: quello scelto, altrimenti la connessione principale.</summary>
+    private ISftpService Remote => _remoteOverride ?? _sftpService;
+
+    public void UseRemoteServer(ISftpService? service) => _remoteOverride = service;
 
     private static readonly HashSet<string> VideoExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -421,14 +427,14 @@ public class FileOrganizerService : IFileOrganizerService
         var result = new List<ProposedOperation>();
 
         if (string.IsNullOrWhiteSpace(remoteFolder)) return result;
-        if (!_sftpService.IsConnected)
+        if (!Remote.IsConnected)
             throw new InvalidOperationException("Non connesso al server SFTP.");
         if (startingEpisode < 1) startingEpisode = 1;
 
         var remoteBase = remoteFolder.TrimEnd('/');
         if (string.IsNullOrEmpty(remoteBase)) remoteBase = "/";
 
-        var entries = await _sftpService.ListDirectoryAsync(remoteBase, ct);
+        var entries = await Remote.ListDirectoryAsync(remoteBase, ct);
 
         // Precalcolo info + ordinamento per numero episodio (poi per nome).
         var files = entries
@@ -528,7 +534,7 @@ public class FileOrganizerService : IFileOrganizerService
     {
         var result = new List<ProposedOperation>();
         if (sourceFolders.Count == 0) return result;
-        if (!_sftpService.IsConnected)
+        if (!Remote.IsConnected)
             throw new InvalidOperationException("Non connesso al server SFTP.");
         if (startingEpisode < 1) startingEpisode = 1;
 
@@ -554,7 +560,7 @@ public class FileOrganizerService : IFileOrganizerService
             List<SftpRemoteEntry> entries;
             try
             {
-                entries = await _sftpService.ListDirectoryAsync(sourcePath, ct);
+                entries = await Remote.ListDirectoryAsync(sourcePath, ct);
             }
             catch (Exception ex)
             {
@@ -644,7 +650,7 @@ public class FileOrganizerService : IFileOrganizerService
         SplitNumberingMode mode, CancellationToken ct = default)
     {
         var result = new List<ProposedOperation>();
-        if (!_sftpService.IsConnected)
+        if (!Remote.IsConnected)
             throw new InvalidOperationException("Non connesso al server SFTP.");
         if (segmentSizes == null || segmentSizes.Count == 0) return result;
         if (string.IsNullOrWhiteSpace(folderPattern)) folderPattern = "{Number}";
@@ -655,7 +661,7 @@ public class FileOrganizerService : IFileOrganizerService
         var destBase = remoteDestinationFolder.TrimEnd('/');
         if (string.IsNullOrEmpty(destBase)) destBase = sourceBase;
 
-        var entries = await _sftpService.ListDirectoryAsync(sourceBase, ct);
+        var entries = await Remote.ListDirectoryAsync(sourceBase, ct);
         var files = entries
             .Where(e => !e.IsDirectory && VideoExtensions.Contains(Path.GetExtension(e.Name)))
             .Select(e => new
@@ -785,7 +791,7 @@ public class FileOrganizerService : IFileOrganizerService
         {
             try
             {
-                var destEntries = await _sftpService.ListDirectoryAsync(destFolder, ct);
+                var destEntries = await Remote.ListDirectoryAsync(destFolder, ct);
                 existingNames = new HashSet<string>(
                     destEntries.Where(e => !e.IsDirectory).Select(e => e.Name),
                     StringComparer.OrdinalIgnoreCase);
@@ -915,12 +921,12 @@ public class FileOrganizerService : IFileOrganizerService
                         foreach (var dir in chain)
                         {
                             if (dir != destDir && !createdDirs.Add(dir)) continue;
-                            try { await _sftpService.CreateDirectoryAsync(dir, ct); }
+                            try { await Remote.CreateDirectoryAsync(dir, ct); }
                             catch { /* già esiste */ }
                         }
                     }
 
-                    await _sftpService.RenameAsync(op.OriginalPath, op.NewPath, ct);
+                    await Remote.RenameAsync(op.OriginalPath, op.NewPath, ct);
 
                     log.Add(new FileOperation
                     {
@@ -928,7 +934,8 @@ public class FileOrganizerService : IFileOrganizerService
                         OriginalPath = op.OriginalPath,
                         NewPath = op.NewPath,
                         BatchId = batchId,
-                        IsRemote = true
+                        IsRemote = true,
+                        ServerKey = Remote.ServerKey
                     });
 
                     applied++;
@@ -1005,6 +1012,17 @@ public class FileOrganizerService : IFileOrganizerService
         var lastBatch = await _repository.GetLastBatchAsync(isRemote: true);
         if (lastBatch.Count == 0) return 0;
 
+        // L'ultima operazione è stata fatta su un altro server: annullarla qui rinominerebbe
+        // file sbagliati (o inesistenti). Si chiede di scegliere quel server.
+        var batchServer = lastBatch[0].ServerKey;
+        if (!string.IsNullOrEmpty(batchServer) &&
+            !string.Equals(batchServer, Remote.ServerKey, StringComparison.OrdinalIgnoreCase))
+        {
+            var host = batchServer.Split(':')[0];
+            throw new InvalidOperationException(
+                $"l'ultima operazione è stata fatta su un altro server ({host}): sceglilo nel menu Server per annullarla");
+        }
+
         int undone = 0;
 
         foreach (var op in lastBatch)
@@ -1016,7 +1034,7 @@ public class FileOrganizerService : IFileOrganizerService
                 {
                     case FileOperationType.Move:
                     case FileOperationType.Rename:
-                        await _sftpService.RenameAsync(op.NewPath, op.OriginalPath, ct);
+                        await Remote.RenameAsync(op.NewPath, op.OriginalPath, ct);
                         break;
 
                     case FileOperationType.CreateDir:

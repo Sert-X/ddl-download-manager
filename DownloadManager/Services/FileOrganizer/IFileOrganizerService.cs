@@ -1,4 +1,5 @@
 using DownloadManager.Models;
+using DownloadManager.Services.Sftp;
 
 namespace DownloadManager.Services.FileOrganizer;
 
@@ -111,6 +112,9 @@ public interface IFileOrganizerService
 
     Task<int> ApplyRemoteAsync(List<ProposedOperation> operations, CancellationToken ct = default);
     Task<int> UndoLastRemoteBatchAsync(CancellationToken ct = default);
+
+    /// <summary>Server su cui lavorare in remoto (null = connessione principale della tab SFTP).</summary>
+    void UseRemoteServer(ISftpService? service);
 
     // ============================================================
     //  COMUNE

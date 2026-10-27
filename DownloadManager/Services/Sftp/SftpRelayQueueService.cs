@@ -26,6 +26,8 @@ public class SftpRelayQueueService : SftpQueueServiceBase<SftpRelayJob>
     // Ogni job ha i suoi due server: la configurazione della coda non serve.
     protected override bool IsConfigured => true;
     protected override SftpConfig? GetSessionConfig(SftpRelayJob job) => job.SourceConfig;
+    // Limite proprio della coda (32 sessioni): non dipende dal server principale
+    protected override SftpSessionLimiter LimiterFor(SftpRelayJob job) => _sessionLimiter;
     protected override bool UsesSessionProgress => false;
 
     protected override void SetProgressBytes(SftpRelayJob job, long bytes) => job.TransferredBytes = bytes;

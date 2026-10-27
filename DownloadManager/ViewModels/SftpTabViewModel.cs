@@ -89,11 +89,32 @@ public partial class SftpTabViewModel : ViewModelBase
     public ObservableCollection<LocalFileEntry> SelectedLocalEntries { get; } = new();
     public ObservableCollection<SftpRemoteEntry> SelectedRemoteEntries { get; } = new();
 
+    /// <summary>
+    /// Cartella aperta nel pannello di destra. Per la scheda principale è quella condivisa con
+    /// le altre tab (Organizza file); per le altre schede è la cartella della scheda.
+    /// </summary>
     public string SftpCurrentRemotePath
     {
-        get => _shared.SftpCurrentRemotePath;
-        set => _shared.SftpCurrentRemotePath = value;
+        get => ActiveRemoteTab is { IsMain: false } ? _remoteTabPath : _shared.SftpCurrentRemotePath;
+        set
+        {
+            // Ogni scheda ricorda la sua cartella (serve anche a Organizza file)
+            if (ActiveRemoteTab != null) ActiveRemoteTab.Path = value;
+            if (ActiveRemoteTab is { IsMain: false })
+            {
+                if (_remoteTabPath == value) return;
+                _remoteTabPath = value;
+                OnPropertyChanged();
+            }
+            else _shared.SftpCurrentRemotePath = value;
+        }
     }
+
+    /// <summary>Server della connessione principale (prima scheda aperta).</summary>
+    private SftpConfig? _mainConfig;
+
+    /// <summary>Ci sono profili salvati (altrimenti la configurazione si apre da sola).</summary>
+    public bool HasSftpProfiles => SftpProfiles.Count > 0;
 
     public string SftpCurrentLocalPath
     {
@@ -131,13 +152,15 @@ public partial class SftpTabViewModel : ViewModelBase
             j.Status == SftpJobStatus.Transferring || j.Status == SftpJobStatus.Pending);
 
     // Pallino della tab: grigio se disconnesso, altrimenti rosso (errori) / giallo (attività) / verde.
-    public bool ShowSftpGray => !IsSftpConnected;
+    private bool AnyServerOpen => IsSftpConnected || RemoteTabs.Count > 0 || LeftTabs.Count > 0;
 
-    public bool ShowSftpRed => IsSftpConnected && HasFailedSftpItems;
+    public bool ShowSftpGray => !AnyServerOpen;
 
-    public bool ShowSftpYellow => IsSftpConnected && HasActiveSftpItems && !HasFailedSftpItems;
+    public bool ShowSftpRed => AnyServerOpen && HasFailedSftpItems;
 
-    public bool ShowSftpGreen => IsSftpConnected && !HasActiveSftpItems && !HasFailedSftpItems;
+    public bool ShowSftpYellow => AnyServerOpen && HasActiveSftpItems && !HasFailedSftpItems;
+
+    public bool ShowSftpGreen => AnyServerOpen && !HasActiveSftpItems && !HasFailedSftpItems;
 
     public string RemoteStatusText
     {
@@ -155,6 +178,17 @@ public partial class SftpTabViewModel : ViewModelBase
     }
 
     public bool HasRemoteStatus => !string.IsNullOrEmpty(RemoteStatusText);
+
+    // Stato in linea del pannello locale (come quello di destra, nella riga sotto i pulsanti:
+    // non sposta la tabella)
+    [ObservableProperty] private bool _isRefreshingLocal;
+    public string LocalStatusText => IsRefreshingLocal ? "Lettura cartella in corso..." : "";
+    public bool HasLocalStatus => IsRefreshingLocal;
+    partial void OnIsRefreshingLocalChanged(bool value)
+    {
+        OnPropertyChanged(nameof(LocalStatusText));
+        OnPropertyChanged(nameof(HasLocalStatus));
+    }
 
     public SftpTabViewModel(
         ISftpService sftpService,
@@ -174,15 +208,17 @@ public partial class SftpTabViewModel : ViewModelBase
         _zeroByteChecker = zeroByteChecker;
         _logger = logger;
         _shared = shared;
+        InitTabs(loggerFactory);
         InitRelay(relayQueue, loggerFactory);
 
         LocalSortOption = SortOptions[0];
         RemoteSortOption = SortOptions[0];
+        Server2SortOption = SortOptions[0];
 
         // LogSink del checker → logger UI. Ora il checker chiama LogSink
         // SOLO per messaggi importanti (START, FINE, TIMEOUT, errore),
         // non per ogni cartella. Così la UI non viene saturata.
-        _zeroByteChecker.LogSink = msg => _logger.LogInformation("{Msg}", msg);
+        AttachChecker(_zeroByteChecker);
 
         _localWatcherDebounce = new DispatcherTimer
         {
@@ -201,9 +237,6 @@ public partial class SftpTabViewModel : ViewModelBase
         _sftpUploadQueue.MaxConcurrency = SftpMaxUploadConcurrency;
         _sftpDownloadQueue.MaxConcurrency = SftpMaxDownloadConcurrency;
 
-        _zeroByteChecker.StateChanged += OnZeroByteCheckerStateChanged;
-        _zeroByteChecker.Completed += OnZeroByteCheckerCompleted;
-        _zeroByteChecker.FolderScanned += OnZeroByteCheckerFolderScanned;
 
         _shared.PropertyChanged += OnSharedPropertyChanged;
 
@@ -239,7 +272,8 @@ public partial class SftpTabViewModel : ViewModelBase
 
     private void OnIsSftpConnectedChanged(bool value)
     {
-        if (!value) SftpRemoteEntries.Clear();
+        if (!value && IsActiveTabMain) SftpRemoteEntries.Clear();
+        NotifyRemoteTabLayout();
     }
 
     partial void OnLocalSortOptionChanged(SortOption value)
@@ -567,7 +601,7 @@ public partial class SftpTabViewModel : ViewModelBase
         {
             try
             {
-                _zeroByteChecker.PatchAfterUpload(job.RemotePath);
+                CheckerFor(job.Server)?.PatchAfterUpload(job.RemotePath);
             }
             catch (Exception ex)
             {
@@ -581,18 +615,19 @@ public partial class SftpTabViewModel : ViewModelBase
 
         Dispatcher.UIThread.Post(() =>
         {
+            var checker = ActiveChecker;
             foreach (var entry in SftpRemoteEntries)
             {
                 if (!entry.IsDirectory) continue;
 
                 var normalized = entry.FullPath.TrimEnd('/');
 
-                if (_zeroByteChecker.TryGetFolderFlag(normalized, out var flag))
+                if (checker.TryGetFolderFlag(normalized, out var flag))
                     entry.HasZeroByteIssue = flag;
                 else
                     entry.HasZeroByteIssue = false;
 
-                if (_zeroByteChecker.TryGetFolderContents(normalized, out var info))
+                if (checker.TryGetFolderContents(normalized, out var info))
                     entry.ContentsInfo = info;
             }
         });
@@ -706,52 +741,13 @@ public partial class SftpTabViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private async Task SftpConnectAsync()
-    {
-        try
-        {
-            IsSftpBusy = true;
-            SftpStatusMessage = "Connessione...";
-
-            var config = BuildCurrentSftpConfig();
-            await _sftpService.ConnectAsync(config);
-
-            IsSftpConnected = true;
-            SftpCurrentRemotePath = _sftpService.CurrentRemotePath;
-
-            _sftpUploadQueue.Configure(config);
-            _sftpUploadQueue.MaxConcurrency = SftpMaxUploadConcurrency;
-
-            _sftpDownloadQueue.Configure(config);
-            _sftpDownloadQueue.MaxConcurrency = SftpMaxDownloadConcurrency;
-
-            await SftpRefreshAsync();
-            SftpStatusMessage = $"Connesso a {SftpCurrentRemotePath}";
-        }
-        catch (Exception ex) { IsSftpConnected = false; SftpStatusMessage = $"Errore: {ex.Message}"; }
-        finally { IsSftpBusy = false; }
-    }
-
-    [RelayCommand]
-    private async Task SftpDisconnectAsync()
-    {
-        try
-        {
-            await _sftpService.DisconnectAsync();
-            IsSftpConnected = false;
-            SftpRemoteEntries.Clear();
-            RemoteBrowserStats = "";
-            SftpStatusMessage = "Disconnesso.";
-        }
-        catch (Exception ex) { SftpStatusMessage = $"Errore: {ex.Message}"; }
-    }
-
-    [RelayCommand]
     private async Task SftpRefreshAsync() => await SftpRefreshInternalAsync(silent: false);
 
     private async Task SftpRefreshInternalAsync(bool silent)
     {
-        if (!IsSftpConnected) return;
+        if (!IsRemoteConnected) return;
+        var service = Remote;
+        var checker = ActiveChecker;
 
         await _remoteRefreshLock.WaitAsync();
         try
@@ -765,12 +761,14 @@ public partial class SftpTabViewModel : ViewModelBase
                 IsRefreshingRemote = true;
                 if (!silent) { IsSftpBusy = true; SftpStatusMessage = $"Lettura {pathToRead}..."; }
 
-                var entries = await _sftpService.ListDirectoryAsync(pathToRead);
+                var entries = await service.ListDirectoryAsync(pathToRead);
 
-                if (SftpCurrentRemotePath != pathToRead) return;
+                // Nel frattempo si è cambiata scheda o cartella: questa lettura non serve più
+                if (!ReferenceEquals(service, Remote) || SftpCurrentRemotePath != pathToRead) return;
 
-                // Quello che si vede ora aggiorna i file a 0 byte della cartella (e il rosso delle superiori)
-                _zeroByteChecker.UpdateFromListing(pathToRead, entries);
+                // Quello che si vede ora aggiorna i file a 0 byte della cartella (e il rosso delle
+                // superiori), nel controllo di questo server
+                checker.UpdateFromListing(pathToRead, entries);
 
                 foreach (var e in entries)
                 {
@@ -781,8 +779,8 @@ public partial class SftpTabViewModel : ViewModelBase
                     else
                     {
                         var normalized = e.FullPath.TrimEnd('/');
-                        e.HasZeroByteIssue = _zeroByteChecker.TryGetFolderFlag(normalized, out var flag) && flag;
-                        if (_zeroByteChecker.TryGetFolderContents(normalized, out var cachedInfo))
+                        e.HasZeroByteIssue = checker.TryGetFolderFlag(normalized, out var flag) && flag;
+                        if (checker.TryGetFolderContents(normalized, out var cachedInfo))
                             e.ContentsInfo = cachedInfo;
                     }
                 }
@@ -797,9 +795,10 @@ public partial class SftpTabViewModel : ViewModelBase
                 _lastListedRemotePath = pathToRead;
 
                 if (!silent || (samePath && differs))
-                    _sftpService.NotifyRemoteChanged(new SftpRemoteChange(pathToRead));
+                    service.NotifyRemoteChanged(new SftpRemoteChange(pathToRead));
 
                 UpdateRemoteBrowserStats();
+                AutoCheckNewFolders(checker, service, RemoteConfig, pathToRead, entries);
 
                 if (!silent)
                     SftpStatusMessage = $"{entries.Count} elementi in {pathToRead} ({DateTime.Now:HH:mm:ss})";
@@ -831,7 +830,7 @@ public partial class SftpTabViewModel : ViewModelBase
     [RelayCommand]
     private async Task SftpGoUpAsync()
     {
-        if (!IsSftpConnected) return;
+        if (!IsRemoteConnected) return;
         var path = SftpCurrentRemotePath.TrimEnd('/');
         if (string.IsNullOrEmpty(path)) { SftpCurrentRemotePath = "/"; await SftpRefreshAsync(); return; }
         int lastSlash = path.LastIndexOf('/');
@@ -842,15 +841,15 @@ public partial class SftpTabViewModel : ViewModelBase
     [RelayCommand]
     private async Task SftpGoHomeAsync()
     {
-        if (!IsSftpConnected) return;
-        SftpCurrentRemotePath = _sftpService.GetWorkingDirectory();
+        if (!IsRemoteConnected) return;
+        SftpCurrentRemotePath = Remote.GetWorkingDirectory();
         await SftpRefreshAsync();
     }
 
     [RelayCommand]
     private async Task SftpForceReloadAsync()
     {
-        if (!IsSftpConnected) return;
+        if (!IsRemoteConnected) return;
         if (_isForceReloading) return;
         if (IsRefreshingRemote) return;
 
@@ -858,11 +857,12 @@ public partial class SftpTabViewModel : ViewModelBase
         try
         {
             SftpStatusMessage = "Riconnessione per ricaricare dati freschi...";
-            var config = BuildCurrentSftpConfig();
+            var config = RemoteConfig!;
+            var service = Remote;
             var savedPath = SftpCurrentRemotePath;
 
-            await _sftpService.DisconnectAsync();
-            await _sftpService.ConnectAsync(config);
+            await service.DisconnectAsync();
+            await service.ConnectAsync(config);
             SftpCurrentRemotePath = savedPath;
 
             _logger.LogInformation("[SFTP] Force reload: riconnesso a {Path}", savedPath);
@@ -919,6 +919,7 @@ public partial class SftpTabViewModel : ViewModelBase
 
             try
             {
+                if (!silent) IsRefreshingLocal = true;
                 var entries = await Task.Run(() =>
                 {
                     // Un'unica enumerazione: dimensione e data arrivano già con la lettura
@@ -951,6 +952,7 @@ public partial class SftpTabViewModel : ViewModelBase
             {
                 if (!silent) SftpStatusMessage = $"Errore lettura locale: {ex.Message}";
             }
+            finally { IsRefreshingLocal = false; }
         }
         finally { _localRefreshLock.Release(); }
     }
@@ -965,13 +967,16 @@ public partial class SftpTabViewModel : ViewModelBase
     {
         try
         {
-            if (!IsSftpConnected)
+            if (!IsRemoteConnected)
             {
-                SftpStatusMessage = "Non connesso: connetti prima l'SFTP.";
+                SftpStatusMessage = "Nessun server aperto: connettine uno nel pannello di destra.";
                 return;
             }
 
-            if (_zeroByteChecker.IsChecking)
+            var checker = ActiveChecker;
+            var service = Remote;
+            checker.UseConnection(service, () => service.IsConnected);
+            if (checker.IsChecking)
             {
                 SftpStatusMessage = "Un check 0-byte è già in corso. Usa ⏹ per fermarlo.";
                 return;
@@ -988,7 +993,7 @@ public partial class SftpTabViewModel : ViewModelBase
 
             _logger.LogInformation("[ZERO-BYTE] Check manuale avviato su {Count} cartelle", folders.Count);
 
-            _ = _zeroByteChecker.RunCheckAsync(folders);
+            _ = checker.RunCheckAsync(folders);
         }
         catch (Exception ex)
         {
@@ -998,25 +1003,40 @@ public partial class SftpTabViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void StopZeroByteCheck() => _zeroByteChecker.Stop();
+    private void StopZeroByteCheck() => ActiveChecker.Stop();
 
     private void OnZeroByteCheckerStateChanged(object? sender, EventArgs e)
     {
+        // Si mostra solo il controllo della scheda aperta; gli altri continuano in sottofondo
         Dispatcher.UIThread.Post(() =>
         {
-            IsCheckingZeroByte = _zeroByteChecker.IsChecking;
-            ZeroByteCheckStatus = _zeroByteChecker.IsChecking ? _zeroByteChecker.ProgressStatus : string.Empty;
+            if (ReferenceEquals(sender, ActiveChecker)) SyncZeroByteState();
+            if (ReferenceEquals(sender, _server2Checker)) SyncServer2ZeroByteState();
         });
     }
 
     private void OnZeroByteCheckerCompleted(object? sender, string message)
-        => Dispatcher.UIThread.Post(() => SftpStatusMessage = message);
+        => Dispatcher.UIThread.Post(() =>
+        {
+            // Finito su un'altra scheda: si dice su quale server
+            var name = ServerNameOfChecker(sender);
+            SftpStatusMessage = name == null ? message : $"{name}: {message}";
+        });
 
     private void OnZeroByteCheckerFolderScanned(object? sender, ZeroByteFolderResult result)
     {
         Dispatcher.UIThread.Post(() =>
         {
             var normalized = result.FullPath.TrimEnd('/');
+            // Lo stesso server può essere aperto anche nel Server 2 a sinistra: si aggiorna anche lì
+            if (ReferenceEquals(sender, _server2Checker))
+                foreach (var entry in Server2Entries)
+                    if (string.Equals(entry.FullPath.TrimEnd('/'), normalized, StringComparison.OrdinalIgnoreCase))
+                    {
+                        entry.HasZeroByteIssue = result.HasZeroByte;
+                        entry.ContentsInfo = result.ContentsSummary;
+                    }
+            if (!ReferenceEquals(sender, ActiveChecker)) return;   // cartella di un'altra scheda
             foreach (var entry in SftpRemoteEntries)
             {
                 if (string.Equals(entry.FullPath.TrimEnd('/'), normalized, StringComparison.OrdinalIgnoreCase))
@@ -1037,7 +1057,7 @@ public partial class SftpTabViewModel : ViewModelBase
     private void InvalidateZeroByteCacheRecursive(string? folderPath)
     {
         if (string.IsNullOrEmpty(folderPath) || SamePath(folderPath, SftpCurrentRemotePath)) return;
-        _zeroByteChecker.InvalidateFolder(folderPath);
+        ActiveChecker.InvalidateFolder(folderPath);
     }
 
     [RelayCommand]
@@ -1191,7 +1211,7 @@ public partial class SftpTabViewModel : ViewModelBase
 
     public async Task SftpRemoteDuplicateAsync(SftpRemoteEntry entry, string newName)
     {
-        if (!IsSftpConnected) { SftpStatusMessage = "Non connesso."; return; }
+        if (!IsRemoteConnected) { SftpStatusMessage = "Nessun server aperto: connettine uno nel pannello di destra."; return; }
         if (SftpRemoteEntries.Any(e => string.Equals(e.Name, newName.Trim(), StringComparison.Ordinal)))
         { SftpStatusMessage = $"Esiste già un elemento chiamato '{newName}'."; return; }
 
@@ -1200,7 +1220,7 @@ public partial class SftpTabViewModel : ViewModelBase
             IsSftpBusy = true;
             SftpStatusMessage = $"Duplicazione di '{entry.Name}' sul server...";
             var target = $"{TransferJobBase.GetRemoteParent(entry.FullPath).TrimEnd('/')}/{newName.Trim()}";
-            await _sftpService.DuplicateAsync(entry.FullPath, target);
+            await Remote.DuplicateAsync(entry.FullPath, target);
             SftpStatusMessage = $"Creata la copia: {newName}";
             await SftpRefreshAsync();
             InvalidateZeroByteCacheRecursive(SftpCurrentRemotePath);
@@ -1211,7 +1231,7 @@ public partial class SftpTabViewModel : ViewModelBase
 
     public async Task SftpRemoteDeleteManyAsync(IEnumerable<SftpRemoteEntry> entries)
     {
-        if (!IsSftpConnected) { SftpStatusMessage = "Non connesso."; return; }
+        if (!IsRemoteConnected) { SftpStatusMessage = "Nessun server aperto: connettine uno nel pannello di destra."; return; }
 
         var list = entries.Where(e => e != null).ToList();
         if (list.Count == 0) return;
@@ -1225,8 +1245,8 @@ public partial class SftpTabViewModel : ViewModelBase
             SftpStatusMessage = $"Eliminazione in corso dal server ({++done}/{list.Count}): {entry.Name}";
             try
             {
-                if (entry.IsDirectory) await _sftpService.DeleteDirectoryAsync(entry.FullPath);
-                else await _sftpService.DeleteFileAsync(entry.FullPath);
+                if (entry.IsDirectory) await Remote.DeleteDirectoryAsync(entry.FullPath);
+                else await Remote.DeleteFileAsync(entry.FullPath);
                 success++;
                 InvalidateZeroByteCacheRecursive(TransferJobBase.GetRemoteParent(entry.FullPath));
             }
@@ -1251,13 +1271,13 @@ public partial class SftpTabViewModel : ViewModelBase
 
     public async Task SftpRemoteCreateFolderAsync(string name)
     {
-        if (!IsSftpConnected) { SftpStatusMessage = "Non connesso."; return; }
+        if (!IsRemoteConnected) { SftpStatusMessage = "Nessun server aperto: connettine uno nel pannello di destra."; return; }
 
         try
         {
             var full = $"{SftpCurrentRemotePath.TrimEnd('/')}/{name}";
             SftpStatusMessage = $"Creazione della cartella '{name}'...";
-            await _sftpService.CreateDirectoryAsync(full);
+            await Remote.CreateDirectoryAsync(full);
             SftpStatusMessage = $"Cartella remota creata: {name}";
             await SftpRefreshAsync();
             InvalidateZeroByteCacheRecursive(SftpCurrentRemotePath);
@@ -1308,7 +1328,7 @@ public partial class SftpTabViewModel : ViewModelBase
     /// <summary>Sposta file/cartelle remoti in un'altra cartella del server (rinomina di percorso).</summary>
     public async Task SftpRemoteMoveManyAsync(IReadOnlyList<SftpRemoteEntry> entries, string destinationFolder)
     {
-        if (!IsSftpConnected) { SftpStatusMessage = "Non connesso."; return; }
+        if (!IsRemoteConnected) { SftpStatusMessage = "Nessun server aperto: connettine uno nel pannello di destra."; return; }
         if (entries.Count == 0 || string.IsNullOrWhiteSpace(destinationFolder)) return;
 
         var dest = destinationFolder.Replace('\\', '/').TrimEnd('/');
@@ -1327,7 +1347,7 @@ public partial class SftpTabViewModel : ViewModelBase
                 if (entry.IsDirectory && (dest + "/").StartsWith(entry.FullPath.TrimEnd('/') + "/", StringComparison.Ordinal))
                     throw new InvalidOperationException("non si può spostare una cartella dentro sé stessa");
 
-                await _sftpService.RenameAsync(entry.FullPath, target);
+                await Remote.RenameAsync(entry.FullPath, target);
                 moved++;
             }
             catch (Exception ex) { errors.Add($"{entry.Name}: {ex.Message}"); }
@@ -1346,7 +1366,7 @@ public partial class SftpTabViewModel : ViewModelBase
 
     public async Task SftpRemoteRenameAsync(SftpRemoteEntry entry, string newName)
     {
-        if (!IsSftpConnected) { SftpStatusMessage = "Non connesso."; return; }
+        if (!IsRemoteConnected) { SftpStatusMessage = "Nessun server aperto: connettine uno nel pannello di destra."; return; }
 
         try
         {
@@ -1354,7 +1374,7 @@ public partial class SftpTabViewModel : ViewModelBase
             var newPath = $"{dir}/{newName}";
 
             SftpStatusMessage = $"Rinomina in corso: {entry.Name} → {newName}";
-            await _sftpService.RenameAsync(entry.FullPath, newPath);
+            await Remote.RenameAsync(entry.FullPath, newPath);
             SftpStatusMessage = $"Rinominato in: {newName}";
             await SftpRefreshAsync();
             InvalidateZeroByteCacheRecursive(SftpCurrentRemotePath);
@@ -1365,7 +1385,7 @@ public partial class SftpTabViewModel : ViewModelBase
     [RelayCommand]
     private async Task SftpUploadSelectedAsync()
     {
-        if (!IsSftpConnected) { SftpStatusMessage = "Non connesso."; return; }
+        if (!IsRemoteConnected) { SftpStatusMessage = "Nessun server aperto: connettine uno nel pannello di destra."; return; }
 
         var selected = SelectedLocalEntries.Count > 0
             ? SelectedLocalEntries.ToList()
@@ -1376,15 +1396,15 @@ public partial class SftpTabViewModel : ViewModelBase
         try
         {
             SftpStatusMessage = "Preparazione dell'upload...";
-            _sftpUploadQueue.Configure(BuildCurrentSftpConfig());
             _sftpUploadQueue.MaxConcurrency = SftpMaxUploadConcurrency;
+            var server = RemoteConfig;
 
             int totalQueued = 0;
             foreach (var local in selected)
             {
                 if (local.IsDirectory)
                 {
-                    var count = await _sftpUploadQueue.EnqueueFolderAsync(local.FullPath, SftpCurrentRemotePath);
+                    var count = await _sftpUploadQueue.EnqueueFolderAsync(local.FullPath, SftpCurrentRemotePath, server);
                     totalQueued += count;
                 }
                 else
@@ -1392,6 +1412,7 @@ public partial class SftpTabViewModel : ViewModelBase
                     var remotePath = $"{SftpCurrentRemotePath.TrimEnd('/')}/{local.Name}";
                     var job = new SftpUploadJob
                     {
+                        Server = server,
                         LocalPath = local.FullPath,
                         RemotePath = remotePath,
                         TotalBytes = new FileInfo(local.FullPath).Length,
@@ -1409,26 +1430,27 @@ public partial class SftpTabViewModel : ViewModelBase
 
     public async Task EnqueueUploadsFromPathsAsync(IEnumerable<string> localPaths, string? remoteDir = null)
     {
-        if (!IsSftpConnected) { SftpStatusMessage = "Non connesso."; return; }
+        if (!IsRemoteConnected) { SftpStatusMessage = "Nessun server aperto: connettine uno nel pannello di destra."; return; }
 
         var targetDir = string.IsNullOrWhiteSpace(remoteDir) ? SftpCurrentRemotePath : remoteDir;
         if (string.IsNullOrWhiteSpace(targetDir)) { SftpStatusMessage = "Nessuna cartella remota di destinazione."; return; }
 
         try
         {
-            _sftpUploadQueue.Configure(BuildCurrentSftpConfig());
             _sftpUploadQueue.MaxConcurrency = SftpMaxUploadConcurrency;
+            var server = RemoteConfig;
 
             int totalQueued = 0;
             foreach (var path in localPaths)
             {
                 if (Directory.Exists(path))
-                    totalQueued += await _sftpUploadQueue.EnqueueFolderAsync(path, targetDir);
+                    totalQueued += await _sftpUploadQueue.EnqueueFolderAsync(path, targetDir, server);
                 else if (File.Exists(path))
                 {
                     var remotePath = $"{targetDir.TrimEnd('/')}/{Path.GetFileName(path)}";
                     var job = new SftpUploadJob
                     {
+                        Server = server,
                         LocalPath = path,
                         RemotePath = remotePath,
                         TotalBytes = new FileInfo(path).Length,
@@ -1450,7 +1472,7 @@ public partial class SftpTabViewModel : ViewModelBase
     [RelayCommand]
     private async Task SftpDownloadSelectedAsync()
     {
-        if (!IsSftpConnected) { SftpStatusMessage = "Non connesso."; return; }
+        if (!IsRemoteConnected) { SftpStatusMessage = "Nessun server aperto: connettine uno nel pannello di destra."; return; }
 
         var selected = SelectedRemoteEntries.Count > 0
             ? SelectedRemoteEntries.ToList()
@@ -1460,8 +1482,8 @@ public partial class SftpTabViewModel : ViewModelBase
 
         try
         {
-            _sftpDownloadQueue.Configure(BuildCurrentSftpConfig());
             _sftpDownloadQueue.MaxConcurrency = SftpMaxDownloadConcurrency;
+            var server = RemoteConfig;
 
             var targetDir = string.IsNullOrWhiteSpace(SftpDownloadLocalFolder) ? SftpCurrentLocalPath : SftpDownloadLocalFolder;
             if (!Directory.Exists(targetDir)) Directory.CreateDirectory(targetDir);
@@ -1474,7 +1496,7 @@ public partial class SftpTabViewModel : ViewModelBase
                     : "Preparazione del download...";
                 if (remote.IsDirectory)
                 {
-                    await DownloadRemoteFolderRecursiveAsync(remote.FullPath, targetDir);
+                    await DownloadRemoteFolderRecursiveAsync(remote.FullPath, targetDir, server);
                     queued++;
                 }
                 else
@@ -1482,6 +1504,7 @@ public partial class SftpTabViewModel : ViewModelBase
                     var localPath = Path.Combine(targetDir, remote.Name);
                     var job = new SftpDownloadJob
                     {
+                        Server = server,
                         RemotePath = remote.FullPath,
                         LocalPath = localPath,
                         TotalBytes = remote.Size,
@@ -1497,22 +1520,23 @@ public partial class SftpTabViewModel : ViewModelBase
         catch (Exception ex) { SftpStatusMessage = $"Errore: {ex.Message}"; }
     }
 
-    private async Task DownloadRemoteFolderRecursiveAsync(string remoteFolder, string localTarget)
+    private async Task DownloadRemoteFolderRecursiveAsync(string remoteFolder, string localTarget, SftpConfig? server)
     {
         var remoteName = Path.GetFileName(remoteFolder.TrimEnd('/'));
         var localFolder = Path.Combine(localTarget, remoteName);
         Directory.CreateDirectory(localFolder);
 
-        var entries = await _sftpService.ListDirectoryAsync(remoteFolder);
+        var entries = await Remote.ListDirectoryAsync(remoteFolder);
         foreach (var entry in entries)
         {
             if (entry.IsDirectory)
-                await DownloadRemoteFolderRecursiveAsync(entry.FullPath, localFolder);
+                await DownloadRemoteFolderRecursiveAsync(entry.FullPath, localFolder, server);
             else
             {
                 var localPath = Path.Combine(localFolder, entry.Name);
                 var job = new SftpDownloadJob
                 {
+                    Server = server,
                     RemotePath = entry.FullPath,
                     LocalPath = localPath,
                     TotalBytes = entry.Size,
@@ -1543,7 +1567,8 @@ public partial class SftpTabViewModel : ViewModelBase
     public void PlayRemoteFile(SftpRemoteEntry entry, SftpConfig? server)
     {
         if (entry == null || entry.IsDirectory) return;
-        if (server == null && !IsSftpConnected) { SftpStatusMessage = "Non connesso."; return; }
+        server ??= RemoteConfig;
+        if (server == null) { SftpStatusMessage = "Nessun server aperto."; return; }
 
         var ext = Path.GetExtension(entry.Name).ToLowerInvariant();
         var playable = new HashSet<string>
@@ -1560,7 +1585,7 @@ public partial class SftpTabViewModel : ViewModelBase
 
         try
         {
-            var cfg = server ?? BuildCurrentSftpConfig();
+            var cfg = server;
 
             // URL senza credenziali (le passiamo come opzioni Media a LibVLC)
             var segments = entry.FullPath.TrimStart('/').Split('/');
@@ -1585,16 +1610,16 @@ public partial class SftpTabViewModel : ViewModelBase
     [RelayCommand]
     private async Task SftpEnqueueFolderAsync()
     {
-        if (!IsSftpConnected) { SftpStatusMessage = "Non connesso."; return; }
+        if (!IsRemoteConnected) { SftpStatusMessage = "Nessun server aperto: connettine uno nel pannello di destra."; return; }
         if (string.IsNullOrWhiteSpace(SftpUploadLocalFolder) || !Directory.Exists(SftpUploadLocalFolder))
         { SftpStatusMessage = "Seleziona una cartella locale valida."; return; }
 
         try
         {
-            _sftpUploadQueue.Configure(BuildCurrentSftpConfig());
             _sftpUploadQueue.MaxConcurrency = SftpMaxUploadConcurrency;
+            var server = RemoteConfig;
 
-            var count = await _sftpUploadQueue.EnqueueFolderAsync(SftpUploadLocalFolder, SftpUploadRemoteFolder);
+            var count = await _sftpUploadQueue.EnqueueFolderAsync(SftpUploadLocalFolder, SftpUploadRemoteFolder, server);
             SftpStatusMessage = $"{count} file accodati per upload.";
         }
         catch (Exception ex) { SftpStatusMessage = $"Errore: {ex.Message}"; }
@@ -1631,5 +1656,6 @@ public partial class SftpTabViewModel : ViewModelBase
         StopLocalWatcher();
         _localWatcherDebounce?.Stop();
         DisposeRelay();
+        DisposeTabs();
     }
 }

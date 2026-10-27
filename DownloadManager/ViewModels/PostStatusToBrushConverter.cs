@@ -15,14 +15,14 @@ public class PostStatusToBrushConverter : IValueConverter
         {
             return status switch
             {
-                PostStatus.Valid => Brushes.LimeGreen,
-                PostStatus.Invalid => Brushes.OrangeRed,
-                PostStatus.Mixed => Brushes.Gold,
-                PostStatus.Mismatch => Brushes.MediumPurple, // <-- VIOLA
-                _ => Brushes.Gray
+                PostStatus.Valid => VideoboxPalette.Green,
+                PostStatus.Invalid => VideoboxPalette.Red,
+                PostStatus.Mixed => VideoboxPalette.Orange,
+                PostStatus.Mismatch => VideoboxPalette.Purple,
+                _ => VideoboxPalette.Gray
             };
         }
-        return Brushes.Gray;
+        return VideoboxPalette.Gray;
     }
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) 
