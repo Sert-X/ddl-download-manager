@@ -368,29 +368,57 @@ public partial class App : Application
         }
     }
 
+    /// <summary>App installata con l'installer (Velopack), non avviata dal progetto in sviluppo.</summary>
+    private static bool IsInstalledBuild()
+    {
+        try
+        {
+            var mgr = new Velopack.UpdateManager(new Velopack.Sources.GithubSource(
+                "https://github.com/Sert-X/ddl-download-manager", accessToken: null, prerelease: false));
+            return mgr.IsInstalled;
+        }
+        catch { return false; }
+    }
+
     /// <summary>Primo avvio dopo un aggiornamento: finestra "Aggiornamento completato" con le novità.</summary>
     private static async Task ShowWhatsNewIfUpdatedAsync(IClassicDesktopStyleApplicationLifetime desktop)
     {
         try
         {
-            var settings = Services!.GetRequiredService<SettingsService>();
             var v = System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version;
             if (v == null) return;
-            var current = $"{v.Major}.{v.Minor}.{v.Build}";
-            var previous = settings.Current.LastRunVersion;
+            var current = new Version(v.Major, v.Minor, Math.Max(0, v.Build));
 
-            if (previous == current) return;
-            settings.Current.LastRunVersion = current;
+            // Solo l'app installata: avviata da Visual Studio (bin\Debug) non deve né mostrare né
+            // segnare niente, altrimenti le due versioni si "rubano" la finestra a vicenda.
+            if (!IsInstalledBuild()) return;
+
+            // L'ultima versione vista sta in un file suo, scritto solo qui e solo verso l'alto.
+            // Prima stava in settings.json, che ogni copia dell'app in esecuzione riscrive per
+            // intero con i propri valori: la versione vista tornava indietro e la finestra
+            // "Aggiornamento completato" ricompariva ai riavvii successivi.
+            var settings = Services!.GetRequiredService<SettingsService>();
+            var seenPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "DDLDownloadManager", "last_seen_version.txt");
+            Version? previous = null;
+            try { if (File.Exists(seenPath)) Version.TryParse(File.ReadAllText(seenPath).Trim(), out previous); } catch { }
+            if (previous == null) Version.TryParse(settings.Current.LastRunVersion, out previous);   // installazioni precedenti
+
+            if (previous != null && current <= previous) return;   // già vista (o versione più vecchia)
+            try { File.WriteAllText(seenPath, current.ToString(3)); }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[UPDATE] Versione vista non salvata: {ex.Message}"); return; }
+            settings.Current.LastRunVersion = current.ToString(3);
             settings.Save();
-            if (string.IsNullOrEmpty(previous)) return;   // prima installazione: niente novità da mostrare
+            if (previous == null) return;   // prima installazione: niente novità da mostrare
 
             var changelog = await DownloadManager.Services.Update.GitHubReleaseFetcher.FetchChangelogAsync(
-                "Sert-X", "ddl-download-manager", "v" + current);
+                "Sert-X", "ddl-download-manager", "v" + current.ToString(3));
 
             await Dispatcher.UIThread.InvokeAsync(async () =>
             {
                 if (desktop.MainWindow is { } win)
-                    await Views.UpdateDialog.ShowUpdatedAsync(win, current, changelog);
+                    await Views.UpdateDialog.ShowUpdatedAsync(win, current.ToString(3), changelog);
             });
         }
         catch (Exception ex)

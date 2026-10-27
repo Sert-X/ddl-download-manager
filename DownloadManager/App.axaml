@@ -75,6 +75,8 @@
                     <SolidColorBrush x:Key="AppWarningBrush">#FBBF24</SolidColorBrush>
                     <SolidColorBrush x:Key="AppDangerBrush">#F87171</SolidColorBrush>
                     <SolidColorBrush x:Key="AppInfoBrush">#38BDF8</SolidColorBrush>
+                    <!-- Download in coda: grigio-azzurro, distinto dal blu di "in download" -->
+                    <SolidColorBrush x:Key="AppQueuedBrush">#8094B4</SolidColorBrush>
                     <SolidColorBrush x:Key="AppHoverBrush">#1A1E30</SolidColorBrush>
                     <SolidColorBrush x:Key="AppSelectedBrush">#232848</SolidColorBrush>
 
@@ -196,6 +198,7 @@
                     <SolidColorBrush x:Key="AppWarningBrush">#B45309</SolidColorBrush>
                     <SolidColorBrush x:Key="AppDangerBrush">#DC2626</SolidColorBrush>
                     <SolidColorBrush x:Key="AppInfoBrush">#0284C7</SolidColorBrush>
+                    <SolidColorBrush x:Key="AppQueuedBrush">#7486A6</SolidColorBrush>
                     <SolidColorBrush x:Key="AppHoverBrush">#E3E7F3</SolidColorBrush>
                     <SolidColorBrush x:Key="AppSelectedBrush">#D3DBF2</SolidColorBrush>
 
@@ -293,6 +296,9 @@
             <StreamGeometry x:Key="IconBoltOff">M 12.41,6.75 L 13,2 L 10.57,4.92 M 18.57,12.91 L 21,10 L 15.66,10 M 8,8 L 3,14 L 12,14 L 11,22 L 16,16 M 2,2 L 22,22</StreamGeometry>
             <StreamGeometry x:Key="IconCheckCircle">M 22,12 A 10,10 0 1 1 2,12 A 10,10 0 1 1 22,12 Z M 8,12 L 11,15 L 16,9</StreamGeometry>
             <StreamGeometry x:Key="IconChevronDownSmall">M 6,9 L 12,15 L 18,9</StreamGeometry>
+            <StreamGeometry x:Key="IconBell">M 6,8 A 6,6 0 0 1 18,8 C 18,15 21,17 21,17 L 3,17 C 3,17 6,15 6,8 Z M 10.3,21 A 2,2 0 0 0 13.7,21</StreamGeometry>
+            <StreamGeometry x:Key="IconBellOff">M 13.7,21 A 2,2 0 0 1 10.3,21 M 18.6,13 A 17,17 0 0 1 18,8 M 6.3,6.3 A 5.8,5.8 0 0 0 6,8 C 6,15 3,17 3,17 L 17,17 M 18,8 A 6,6 0 0 0 9.2,2.7 M 2,2 L 22,22</StreamGeometry>
+            <StreamGeometry x:Key="IconKeyboard">M 2,6 L 22,6 L 22,18 L 2,18 Z M 6,10 L 6,10.01 M 10,10 L 10,10.01 M 14,10 L 14,10.01 M 18,10 L 18,10.01 M 7,14 L 17,14</StreamGeometry>
             <StreamGeometry x:Key="IconBan">M 22,12 A 10,10 0 1 1 2,12 A 10,10 0 1 1 22,12 Z M 4.93,4.93 L 19.07,19.07</StreamGeometry>
             <StreamGeometry x:Key="IconAlertCircle">M 22,12 A 10,10 0 1 1 2,12 A 10,10 0 1 1 22,12 Z M 12,8 L 12,12 M 12,16 L 12,16.01</StreamGeometry>
             <StreamGeometry x:Key="IconClock">M 22,12 A 10,10 0 1 1 2,12 A 10,10 0 1 1 22,12 Z M 12,6 L 12,12 L 16,14</StreamGeometry>
@@ -1041,12 +1047,21 @@
             <Setter Property="FontWeight" Value="Normal"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
         </Style>
-        <Style Selector="DropDownButton.trackPicker:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <!-- Il colore va sul bordo esterno, che copre anche la freccia: prima al passaggio del
+             mouse si colorava solo la parte col testo e dietro la freccia restava il grigio del tema -->
+        <Style Selector="DropDownButton.trackPicker /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <Style Selector="DropDownButton.trackPicker:pointerover /template/ Border#RootBorder">
             <Setter Property="Background" Value="{DynamicResource AppHoverBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}"/>
         </Style>
-        <Style Selector="DropDownButton.trackPicker:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Style Selector="DropDownButton.trackPicker:pressed /template/ Border#RootBorder">
             <Setter Property="Background" Value="{DynamicResource AppSelectedBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
+        <Style Selector="DropDownButton.trackPicker:pointerover /template/ PathIcon#DropDownGlyph">
+            <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}"/>
         </Style>
         <Style Selector="FlyoutPresenter.trackFlyout">
             <Setter Property="Background" Value="{DynamicResource ComboBoxDropDownBackground}"/>
@@ -1376,6 +1391,92 @@
             <Setter Property="Width" Value="12"/>
             <Setter Property="Height" Value="12"/>
         </Style>
+        <!-- Barre di avanzamento colorate per stato: completato (verde), in pausa (arancione),
+             errore (rosso), in coda (grigio-azzurro), annullato (grigio spento) -->
+        <Style Selector="ProgressBar.done">
+            <Setter Property="Foreground" Value="{DynamicResource AppSuccessBrush}"/>
+        </Style>
+        <Style Selector="ProgressBar.paused">
+            <Setter Property="Foreground" Value="{DynamicResource AppWarningBrush}"/>
+        </Style>
+        <Style Selector="ProgressBar.failed">
+            <Setter Property="Foreground" Value="{DynamicResource AppDangerBrush}"/>
+        </Style>
+        <Style Selector="ProgressBar.queued">
+            <Setter Property="Foreground" Value="{DynamicResource AppQueuedBrush}"/>
+        </Style>
+        <Style Selector="ProgressBar.cancelled">
+            <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}"/>
+            <Setter Property="Opacity" Value="0.55"/>
+        </Style>
+
+        <!-- Barra di stato in basso: un "chip" per sezione al lavoro -->
+        <Style Selector="Button.statusChip">
+            <Setter Property="Background" Value="{DynamicResource AppSurface2Brush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="999"/>
+            <Setter Property="Padding" Value="10,2"/>
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Button.statusChip TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Button.statusChip TextBlock.chipValue">
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}"/>
+        </Style>
+        <Style Selector="Button.statusChip Path.icon">
+            <Setter Property="Width" Value="12"/>
+            <Setter Property="Height" Value="12"/>
+            <Setter Property="Stroke" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
+        <Style Selector="Button.statusChip.failed">
+            <Setter Property="BorderBrush" Value="{DynamicResource AppDangerBrush}"/>
+        </Style>
+        <Style Selector="Button.statusChip.failed Path.icon">
+            <Setter Property="Stroke" Value="{DynamicResource AppDangerBrush}"/>
+        </Style>
+
+        <!-- Tasto nella legenda delle scorciatoie -->
+        <Style Selector="Border.kbd">
+            <Setter Property="Background" Value="{DynamicResource AppSurface2Brush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1,1,1,2"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Border.kbd TextBlock">
+            <Setter Property="FontFamily" Value="Consolas,Menlo,monospace"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Button.bell Path.bellOff">
+            <Setter Property="Stroke" Value="{DynamicResource AppTextMutedBrush}"/>
+        </Style>
+
+        <!-- Videobox, colonna "Diventa": dopo "Applica" si vede cosa ha salvato il forum -->
+        <Style Selector="TextBlock.unchanged">
+            <Setter Property="FontStyle" Value="Italic"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.unchanged.saved">
+            <Setter Property="FontStyle" Value="Normal"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppSuccessBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.unchanged.notConfirmed">
+            <Setter Property="FontStyle" Value="Normal"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppWarningBrush}"/>
+        </Style>
+
         <!-- Voce di menu distruttiva ("Elimina tutto…") -->
         <Style Selector="MenuItem.dangerItem">
             <Setter Property="Foreground" Value="{DynamicResource AppDangerBrush}"/>

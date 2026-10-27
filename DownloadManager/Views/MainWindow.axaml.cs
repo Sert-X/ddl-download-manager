@@ -57,6 +57,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         HookMappingGrid();
+        AddHandler(KeyDownEvent, OnGlobalKeyDown, RoutingStrategies.Tunnel);
 
         Opened += (s, e) =>
         {
@@ -87,6 +88,17 @@ public partial class MainWindow : Window
 
         DataContext = viewModel;
         _sftpService = sftpService;
+
+        // Notifiche di Windows (servono la finestra già aperta) e domande prima di accodare
+        Opened += (_, _) =>
+        {
+            _notifier ??= new DownloadManager.Services.Notifications.WindowsNotifier(() => TryGetPlatformHandle()?.Handle ?? IntPtr.Zero);
+            viewModel.Activity.Notify = (title, text, kind) => _notifier.Show(title, text, kind);
+            viewModel.Activity.IsUserLooking = () => IsActive && WindowState != WindowState.Minimized;
+        };
+        Closed += (_, _) => _notifier?.Dispose();
+        DownloadManager.Services.Download.EnqueueGuard.Ask = (title, prompt, ok, cancel) =>
+            ConfirmDialog.ShowAsync(this, prompt, title, safeDefault: true, okText: ok, cancelText: cancel);
 
         // Clic destro su una riga di qualunque tabella: la seleziona prima che si apra
         // il menu della tabella (i menu sono uno per tabella, non uno per riga).
@@ -166,7 +178,78 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         HookMappingGrid();
+        AddHandler(KeyDownEvent, OnGlobalKeyDown, RoutingStrategies.Tunnel);
     }
+
+    private DownloadManager.Services.Notifications.WindowsNotifier? _notifier;
+
+    // ============================================================
+    //  SCORCIATOIE DA TASTIERA
+    // ============================================================
+
+    /// <summary>Ctrl+1…8 apre una tab, Ctrl+F va alla ricerca, Ctrl+L apre/chiude il log, Ctrl+H la cronologia.</summary>
+    private void OnGlobalKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.KeyModifiers != KeyModifiers.Control) return;
+        var tabs = MainTabs;
+        int digit = e.Key is >= Key.D1 and <= Key.D9 ? e.Key - Key.D1
+                  : e.Key is >= Key.NumPad1 and <= Key.NumPad9 ? e.Key - Key.NumPad1 : -1;
+        if (digit >= 0)
+        {
+            if (digit < tabs.ItemCount) tabs.SelectedIndex = digit;
+            e.Handled = true;
+            return;
+        }
+        switch (e.Key)
+        {
+            case Key.F:
+                Control? box = tabs.SelectedIndex switch
+                {
+                    0 => SearchComboBox,
+                    1 => StreamingSearchComboBox,
+                    5 => this.FindControl<TextBox>("VbPostSearchBox"),
+                    6 => this.FindControl<TextBox>("ProxySearchBox"),
+                    _ => null
+                };
+                if (box == null) return;
+                box.Focus();
+                if (box is TextBox tb) tb.SelectAll();
+                e.Handled = true;
+                break;
+            case Key.L:
+                ToggleLogButton.IsChecked = ToggleLogButton.IsChecked != true;
+                OnToggleLogClick(ToggleLogButton, new RoutedEventArgs());
+                e.Handled = true;
+                break;
+            case Key.H:
+                ShowHistory(tabs.SelectedIndex == 1 ? "streaming" : tabs.SelectedIndex == 0 ? "anime" : null);
+                e.Handled = true;
+                break;
+        }
+    }
+
+    // ============================================================
+    //  CRONOLOGIA DOWNLOAD E BARRA DI STATO
+    // ============================================================
+
+    private async void ShowHistory(string? category)
+    {
+        var queue = App.Services?.GetService(typeof(DownloadManager.Services.Download.DownloadQueueService)) as DownloadManager.Services.Download.DownloadQueueService;
+        if (queue == null) return;
+        await new HistoryWindow(queue.Repository, category).ShowDialog(this);
+    }
+
+    private void OnAnimeHistoryClick(object? sender, RoutedEventArgs e) => ShowHistory("anime");
+    private void OnStreamingHistoryClick(object? sender, RoutedEventArgs e) => ShowHistory("streaming");
+
+    private void OnToggleNotificationsClick(object? sender, RoutedEventArgs e)
+    {
+        if (Vm?.Activity is { } a) a.NotificationsEnabled = !a.NotificationsEnabled;
+    }
+
+    private void OnStatusAnimeClick(object? sender, RoutedEventArgs e) => MainTabs.SelectedIndex = 0;
+    private void OnStatusStreamingClick(object? sender, RoutedEventArgs e) => MainTabs.SelectedIndex = 1;
+    private void OnStatusSftpClick(object? sender, RoutedEventArgs e) => MainTabs.SelectedIndex = 4;
 
     private MainWindowViewModel? Vm => DataContext as MainWindowViewModel;
 

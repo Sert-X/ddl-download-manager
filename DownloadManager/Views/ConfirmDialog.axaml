@@ -27,10 +27,10 @@
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
             <Button x:Name="CancelButton" Classes="ghost" MinWidth="100" IsCancel="True" Click="OnCancelClick">
-                <TextBlock Text="Annulla"/>
+                <TextBlock x:Name="CancelText" Text="Annulla"/>
             </Button>
             <Button x:Name="OkButton" Classes="danger" MinWidth="110" IsDefault="True" Click="OnOkClick">
-                <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCheck}"/><TextBlock Text="Conferma"/></StackPanel>
+                <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCheck}"/><TextBlock x:Name="OkText" Text="Conferma"/></StackPanel>
             </Button>
         </StackPanel>
     </StackPanel>

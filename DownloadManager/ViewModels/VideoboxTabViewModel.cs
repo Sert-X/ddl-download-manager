@@ -41,6 +41,8 @@ public partial class EpisodeMappingItem : ObservableObject
     [ObservableProperty] private string? newUrl;
     [ObservableProperty] private MappingStatus status = MappingStatus.Unknown;
     [ObservableProperty] private bool isSelectedForUpdate = true;
+    /// <summary>Dopo "Applica": true = il forum ha salvato questo link, false = inviato ma non confermato, null = niente.</summary>
+    [ObservableProperty] private bool? savedOnForum;
     /// <summary>Numero della riga (1, 2, 3...).</summary>
     [ObservableProperty] private int index;
 
@@ -56,7 +58,21 @@ public partial class EpisodeMappingItem : ObservableObject
     /// <summary>In "Diventa" si mostra il nuovo file solo se la riga verrà inviata (con "Usa").</summary>
     public bool ShowNew => HasNew && IsSelectedForUpdate;
     /// <summary>Riga senza nuovo link: sul forum resta com'è (o viene tolta se "Usa" è spento).</summary>
-    public string UnchangedText => IsSelectedForUpdate ? "resta com'è" : "verrà tolto dal post";
+    public string UnchangedText => SavedOnForum switch
+    {
+        true => "✓ salvato sul forum",
+        false => "inviato, non ancora confermato dal forum",
+        _ => IsSelectedForUpdate ? "resta com'è" : "verrà tolto dal post"
+    };
+    public bool IsSavedOnForum => SavedOnForum == true;
+    public bool IsNotConfirmed => SavedOnForum == false;
+
+    partial void OnSavedOnForumChanged(bool? value)
+    {
+        OnPropertyChanged(nameof(UnchangedText));
+        OnPropertyChanged(nameof(IsSavedOnForum));
+        OnPropertyChanged(nameof(IsNotConfirmed));
+    }
 
     partial void OnOldUrlChanged(string value)
     {
@@ -720,14 +736,24 @@ public partial class VideoboxTabViewModel : ObservableObject
     }
     partial void OnSearchQueryChanged(string value) { _currentPage = 1; ApplyFilterAndPaginate(); }
 
-    private void ApplyFilterAndPaginate()
+    /// <param name="keepOpenPost">
+    /// Aggiornamento automatico (colori, post nuovi o modificati): il post aperto resta in lista e
+    /// selezionato. false quando è l'utente a cambiare pagina, filtro o ricerca.
+    /// </param>
+    private void ApplyFilterAndPaginate(bool keepOpenPost = false)
     {
+        // Il post aperto resta in lista e selezionato anche se, cambiando colore (es. diventa
+        // verde dopo "Applica"), il filtro degli stati lo nasconderebbe o finirebbe in un'altra
+        // pagina: prima si deselezionava e la tabella della mappatura spariva.
+        var open = SelectedPost;
+        bool openWasShown = keepOpenPost && open != null && CategoryPosts.Contains(open);
+
         var filtered = _allPosts.AsEnumerable();
 
-        filtered = filtered.Where(p => IsStatusShown(p.Status));
+        filtered = filtered.Where(p => IsStatusShown(p.Status) || (openWasShown && ReferenceEquals(p, open)));
 
         if (!string.IsNullOrWhiteSpace(SearchQuery))
-            filtered = filtered.Where(p => p.Title.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase));
+            filtered = filtered.Where(p => p.Title.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase) || (openWasShown && ReferenceEquals(p, open)));
 
         var filteredList = filtered.ToList();
 
@@ -735,12 +761,24 @@ public partial class VideoboxTabViewModel : ObservableObject
         PageNumbers.Clear();
         for (int i = 1; i <= totalPages; i++) PageNumbers.Add(i);
 
+        if (openWasShown)
+        {
+            int idx = filteredList.IndexOf(open!);
+            if (idx >= 0) _currentPage = idx / PageSize + 1;   // la pagina dove si trova ora
+        }
         if (_currentPage > totalPages) _currentPage = Math.Max(1, totalPages);
         CurrentPageDisplay = _currentPage;
 
-        CategoryPosts.Clear();
         var pageItems = filteredList.Skip((_currentPage - 1) * PageSize).Take(PageSize).ToList();
-        foreach (var item in pageItems) CategoryPosts.Add(item);
+        _restoringSelection = true;
+        try
+        {
+            CategoryPosts.Clear();
+            foreach (var item in pageItems) CategoryPosts.Add(item);
+            if (openWasShown && CategoryPosts.Contains(open!) && !ReferenceEquals(SelectedPost, open))
+                SelectedPost = open;   // senza ricaricare la mappatura
+        }
+        finally { _restoringSelection = false; }
 
         int hiddenCount = _allPosts.Count - filteredList.Count;
         TotalPostsText = $"Mostrati: {filteredList.Count} | Nascosti: {hiddenCount} | Totale: {_allPosts.Count}";
@@ -1678,7 +1716,7 @@ public partial class VideoboxTabViewModel : ObservableObject
 
         // Durante il refresh automatico non ricostruiamo la lista dei post,
         // altrimenti si perderebbe la selezione (e la mappatura in corso).
-        if (repaginate) ApplyFilterAndPaginate();
+        if (repaginate) ApplyFilterAndPaginate(keepOpenPost: true);
         else UpdateStatusCounts();
     }
 
@@ -1971,17 +2009,30 @@ public partial class VideoboxTabViewModel : ObservableObject
                 CurrentPostTitle = updatedPost.title;
                 EditablePostTitle = updatedPost.title;
             }
+            var sent = finalUrls.ToHashSet(StringComparer.Ordinal);
             if (savedServer?.online is { Count: > 0 } online)
             {
                 _currentServerId = savedServer.id.ToString();
                 FillMappingItems(online.Values);
+                // Ogni riga dice se il suo link è tra quelli salvati sul forum
+                foreach (var m in MappingItems) m.SavedOnForum = sent.Contains(m.OldUrl) ? true : null;
+                // Inviati ma non tornati dal forum: si aggiungono in fondo, segnati come non confermati
+                var savedSet = online.Values.Select(e => e.vbo_url).ToHashSet(StringComparer.Ordinal);
+                foreach (var u in finalUrls.Where(u => !savedSet.Contains(u)))
+                {
+                    var missing = new EpisodeMappingItem { OldUrl = u, SavedOnForum = false };
+                    missing.EvaluateStatus(_settingsService.Current.AllValidStorageDomains);
+                    MappingItems.Add(missing);
+                }
             }
             else
             {
                 FillMappingItems(finalUrls.Select((u, i) => new VideoboxEpisodeDto { vbo_id = i, vbo_url = u }));
+                foreach (var m in MappingItems) m.SavedOnForum = false;
             }
             foreach (var m in MappingItems)
                 if (fileByUrl.TryGetValue(m.OldUrl, out var file)) m.SftpFileName = file;
+            UpdateMappingCounts();
 
             UpdateSftpTreeColors();
 

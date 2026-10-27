@@ -1112,6 +1112,11 @@ public partial class StreamingTabViewModel : ViewModelBase
 
         try
         {
+            var guard = new EnqueueGuard(_queueService.Repository, CategoryName);
+            var keep = await guard.FilterAsync(new List<int> { 1 }, n => n, movie.Title, 0, BaseDownloadFolder, "film");
+            if (keep == null) { StatusMessage = "Accodamento annullato: spazio su disco insufficiente."; return; }
+            if (keep.Count == 0) { StatusMessage = $"«{movie.Title}» già scaricato in passato: non accodato."; return; }
+
             if (IsCb01)
             {
                 // Il link (HD/SD, Maxstream/Mixdrop) si sceglie al via del download, provando quelli del post
@@ -1165,6 +1170,7 @@ public partial class StreamingTabViewModel : ViewModelBase
         if (IsBatchActive) { StatusMessage = "Accodamento già in corso."; return; }
         if (SelectedResult == null || SelectedSeason == null) return;
 
+        _guard = null;
         _batchCts = new CancellationTokenSource();
         var token = _batchCts.Token;
         IsBatchActive = true;
@@ -1195,7 +1201,7 @@ public partial class StreamingTabViewModel : ViewModelBase
 
             var msg = $"{queued} episodi accodati";
             if (skipped > 0) msg += $", {skipped} già in coda";
-            StatusMessage = msg + ".";
+            StatusMessage = msg + (_guard?.Note ?? "") + ".";
         }
         catch (OperationCanceledException) { StatusMessage = "Annullato."; }
         catch (Exception ex) { StatusMessage = $"Errore: {ex.Message}"; }
@@ -1229,6 +1235,7 @@ public partial class StreamingTabViewModel : ViewModelBase
             return;
         }
 
+        _guard = null;
         _batchCts = new CancellationTokenSource();
         var token = _batchCts.Token;
         IsBatchActive = true;
@@ -1278,6 +1285,7 @@ public partial class StreamingTabViewModel : ViewModelBase
         if (IsBatchActive) { StatusMessage = "Accodamento già in corso."; return; }
 
         var series = SelectedResult;
+        _guard = null;
         _batchCts = new CancellationTokenSource();
         var token = _batchCts.Token;
         IsBatchActive = true;
@@ -1318,7 +1326,7 @@ public partial class StreamingTabViewModel : ViewModelBase
                 }
             }
 
-            StatusMessage = $"Tutta la serie: {totalQueued} episodi accodati.";
+            StatusMessage = $"Tutta la serie: {totalQueued} episodi accodati{_guard?.Note}.";
         }
         catch (OperationCanceledException) { StatusMessage = $"Annullato dopo {totalQueued}."; }
         catch (Exception ex)
@@ -1343,10 +1351,21 @@ public partial class StreamingTabViewModel : ViewModelBase
     /// pre-estrarli per un'intera stagione era solo attesa sprecata (venivano
     /// comunque ri-estratti per tutti gli episodi non partiti subito).
     /// </summary>
+    /// <summary>Controlli dell'accodamento in corso (una scelta vale per tutte le stagioni).</summary>
+    private EnqueueGuard? _guard;
+
     private async Task<int> EnqueueEpisodesAsync(
         string seriesLink, int seasonNumber, string seriesName,
         List<StreamingEpisode> episodes, CancellationToken ct, string group = "")
     {
+        if (episodes.Count == 0) return 0;
+
+        _guard ??= new EnqueueGuard(_queueService.Repository, CategoryName);
+        var filtered = await _guard.FilterAsync(episodes,
+            e => IsCb01 && e.IsMovie ? 0 : (int.TryParse(e.Number, out var k) ? k : 0),
+            seriesName, seasonNumber, BaseDownloadFolder);
+        if (filtered == null) throw new OperationCanceledException();
+        episodes = filtered;
         if (episodes.Count == 0) return 0;
 
         var existing = _queueService.SnapshotExistingEpisodeKeys(CategoryName, seriesName);

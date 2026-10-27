@@ -59,6 +59,34 @@
                     <Button Classes="iconCircle" Command="{Binding CheckUpdatesCommand}" ToolTip.Tip="Controlla aggiornamenti" Margin="0,0,4,0">
                         <Path Classes="icon" Data="{StaticResource IconRefresh}"/>
                     </Button>
+                    <Button Classes="iconCircle bell" Click="OnToggleNotificationsClick" ToolTip.Tip="{Binding Activity.NotificationsTip}">
+                        <Panel>
+                            <Path Classes="icon accent" Data="{StaticResource IconBell}" IsVisible="{Binding Activity.NotificationsEnabled}"/>
+                            <Path Classes="icon bellOff" Data="{StaticResource IconBellOff}" IsVisible="{Binding !Activity.NotificationsEnabled}"/>
+                        </Panel>
+                    </Button>
+                    <Button Classes="iconCircle" ToolTip.Tip="Scorciatoie da tastiera" Margin="0,0,4,0">
+                        <Path Classes="icon" Data="{StaticResource IconKeyboard}"/>
+                        <Button.Flyout>
+                            <Flyout Placement="BottomEdgeAlignedRight">
+                                <StackPanel Spacing="6" Margin="4" MinWidth="300">
+                                    <TextBlock Text="Scorciatoie da tastiera" FontWeight="Bold" Margin="0,0,0,4"/>
+                                    <Grid ColumnDefinitions="110, *" RowDefinitions="Auto, Auto, Auto, Auto, Auto">
+                                        <Border Grid.Row="0" Classes="kbd"><TextBlock Text="Ctrl + 1 … 8"/></Border>
+                                        <TextBlock Grid.Row="0" Grid.Column="1" Text="Apri la tab (1 = Anime, 2 = Film/Serie, … 8 = Domini)" TextWrapping="Wrap" Margin="10,4,0,4" FontSize="12"/>
+                                        <Border Grid.Row="1" Classes="kbd"><TextBlock Text="Ctrl + F"/></Border>
+                                        <TextBlock Grid.Row="1" Grid.Column="1" Text="Vai al campo di ricerca della tab aperta" TextWrapping="Wrap" Margin="10,4,0,4" FontSize="12"/>
+                                        <Border Grid.Row="2" Classes="kbd"><TextBlock Text="Invio"/></Border>
+                                        <TextBlock Grid.Row="2" Grid.Column="1" Text="Nel campo di ricerca: cerca" TextWrapping="Wrap" Margin="10,4,0,4" FontSize="12"/>
+                                        <Border Grid.Row="3" Classes="kbd"><TextBlock Text="Ctrl + L"/></Border>
+                                        <TextBlock Grid.Row="3" Grid.Column="1" Text="Apri o chiudi il Log globale" TextWrapping="Wrap" Margin="10,4,0,4" FontSize="12"/>
+                                        <Border Grid.Row="4" Classes="kbd"><TextBlock Text="Ctrl + H"/></Border>
+                                        <TextBlock Grid.Row="4" Grid.Column="1" Text="Cronologia dei download" TextWrapping="Wrap" Margin="10,4,0,4" FontSize="12"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
 
                     <Border Classes="proxyBadge"
                             Classes.proxyActive="{Binding IsProxyActive}"
@@ -242,7 +270,10 @@
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Suggerimenti</Run><LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Accodamento:</Run> con tante puntate gli episodi vengono accodati a blocchi: i primi partono subito mentre gli altri vengono preparati. "Stop accodamento" interrompe senza perdere quelli già in coda.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Priorità:</Run> il fulmine (sulla riga o sulla serie) fa partire subito l'episodio: se i download paralleli sono tutti occupati, quello meno avanzato va in pausa e riparte appena possibile, da dove era arrivato.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Errori:</Run> un episodio fallito ha la riga rossa con il motivo (tutto il messaggio passandoci sopra); la serie mostra il badge rosso "N falliti" anche chiusa. "Riscarica" riprova.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Errori:</Run> se un download fallisce per un problema temporaneo (rete, proxy, server occupato) riprova da solo fino a 3 volte (dopo 30 s, 2 e 5 minuti), ripartendo da dove era. Se fallisce ancora la riga diventa rossa con il motivo (tutto il messaggio passandoci sopra) e la serie mostra il badge "N falliti". "Riscarica" riprova a mano.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Cronologia:</Run> tutto ciò che hai scaricato, anche dopo aver pulito la coda (Ctrl+H). Accodando episodi già scaricati in passato l'app chiede se riscaricarli o saltarli; se lo spazio su disco stimato non basta chiede conferma, e con meno di 1 GB libero i download si fermano in pausa.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Notifiche e barra di stato:</Run> con l'app in secondo piano Windows avvisa a fine serie, per i download falliti e se il disco è pieno (campanella in alto per spegnerle). In basso, accanto al Log, si vede sempre cosa sta scaricando, da qualsiasi tab. Le scorciatoie da tastiera sono nel pulsante con la tastiera in alto.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Colori delle barre:</Run> verde completato, blu in download, arancione in pausa, rosso errore, grigio-azzurro in coda, grigio spento annullato. Le colonne restano allineate qualunque sia lo stato; dimensione, velocità e tempo rimanente stanno in un'unica colonna.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Pulisci lista:</Run> toglie dalla lista completati, annullati o falliti (i file restano su disco). "Elimina tutto…" è in fondo al menu e chiede sempre conferma.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Download simultanei:</Run> il cursore della coda regola quanti episodi scaricare insieme.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Problemi:</Run> se un provider non risponde controlla la tab Domini (indirizzo aggiornato) e la tab Proxy. Gli errori compaiono anche nel Log globale, che si può filtrare per sezione.
@@ -274,7 +305,7 @@
                                         <TextBlock Text="Pulisci"/>
                                     </StackPanel>
                                 </Button>
-                                <Button Grid.Column="4" Classes="iconCircle" ToolTip.Tip="Svuota cronologia" Click="OnClearSearchHistoryClick">
+                                <Button Grid.Column="4" Classes="iconCircle" ToolTip.Tip="Svuota le ricerche recenti (il menu a tendina del campo di ricerca)" Click="OnClearSearchHistoryClick">
                                     <Path Classes="icon" Data="{StaticResource IconTrash}"/>
                                 </Button>
                             </Grid>
@@ -482,6 +513,9 @@
                                             <Button ToolTip.Tip="Annulla tutti i download anime non ancora completati" Classes="danger" Command="{Binding CancelAllDownloadsCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconClose}"/><TextBlock Text="Annulla tutti"/></StackPanel></Button>
                                             <Button ToolTip.Tip="Interrompe l'accodamento in corso (gli episodi già accodati restano in coda)" Classes="danger" Command="{Binding CancelBatchCommand}" IsVisible="{Binding IsBatchActive}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconStop}"/><TextBlock Text="Stop accodamento"/></StackPanel></Button>
                                             <Border Width="1" Height="26" Background="{DynamicResource AppBorderBrush}" Margin="6,0" VerticalAlignment="Center"/>
+                                            <Button ToolTip.Tip="Tutto ciò che hai scaricato, anche dopo aver pulito la coda: ricerca, cartella del file, già scaricati" Click="OnAnimeHistoryClick">
+                                                <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconList}"/><TextBlock Text="Cronologia"/></StackPanel>
+                                            </Button>
                                             <Button ToolTip.Tip="Togli dalla lista completati, annullati o falliti (i file restano dove sono). «Elimina tutto» è in fondo al menu e chiede conferma.">
                                                 <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTrash}"/><TextBlock Text="Pulisci lista"/><Path Classes="icon" Data="{StaticResource IconChevronDownSmall}" Width="10" Height="10" Margin="2,0,0,0"/></StackPanel>
                                                 <Button.Flyout>
@@ -524,7 +558,7 @@
                                                 <Expander Theme="{StaticResource DownloadGroupExpanderTheme}" IsExpanded="{Binding IsExpanded, Mode=TwoWay}">
                                                     <Expander.Header>
                                                         <Border Classes="groupHeader" Classes.failed="{Binding HasFailed}">
-                                                        <Grid ColumnDefinitions="2*, 130, 110, 1.5*, 100, Auto">
+                                                        <Grid ColumnDefinitions="2.6*, 120, 90, 1.3*, 80, 284">
                                                             <DockPanel Grid.Column="0" Margin="0,0,10,0">
                                                                 <Border DockPanel.Dock="Left" Classes="failBadge" IsVisible="{Binding HasFailed}" Margin="0,0,8,0" VerticalAlignment="Center"
                                                                         ToolTip.Tip="Alcuni episodi non sono stati scaricati: apri la serie per vedere il motivo, oppure premi «Riscarica i falliti» a destra">
@@ -535,11 +569,11 @@
                                                             <TextBlock Grid.Column="1" Text="{Binding TotalSizeText}" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,0,10,0"/>
                                                             <TextBlock Grid.Column="2" Text="{Binding TotalSpeedText}" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource AppSuccessBrush}" Margin="0,0,10,0"/>
                                                             <Grid Grid.Column="3" ColumnDefinitions="*, Auto" Margin="10,0">
-                                                                <ProgressBar Grid.Column="0" Value="{Binding OverallPercentage}" Minimum="0" Maximum="100" Height="14"/>
-                                                                <TextBlock Grid.Column="1" Text="{Binding OverallPercentage, StringFormat={}{0:F1}%}" Margin="8,0,0,0" VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold"/>
+                                                                <ProgressBar Grid.Column="0" Value="{Binding OverallPercentage}" Minimum="0" Maximum="100" Height="14" MinWidth="0" Classes.done="{Binding IsAllCompleted}" Classes.paused="{Binding IsAllPaused}"/>
+                                                                <TextBlock Grid.Column="1" Text="{Binding OverallPercentage, StringFormat={}{0:F1}%}" Width="50" TextAlignment="Right" Margin="4,0,0,0" VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold"/>
                                                             </Grid>
                                                             <TextBlock Grid.Column="4" Text="{Binding OverallEtaText}" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="10,0"/>
-                                                            <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                                            <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right" VerticalAlignment="Center">
                                                                 <Button Classes="iconCircle success" Width="30" Height="30" ToolTip.Tip="Avvia serie" Click="OnResumeGroupClick"><Path Classes="icon" Data="{StaticResource IconPlay}"/></Button>
                                                                 <Button Classes="iconCircle warning" Width="30" Height="30" ToolTip.Tip="Pausa serie" Click="OnPauseGroupClick"><Path Classes="icon" Data="{StaticResource IconPause}"/></Button>
                                                                 <Button Classes="iconCircle" Width="30" Height="30" ToolTip.Tip="Forza priorità" Click="OnForceGroupClick"><Path Classes="icon" Data="{StaticResource IconBolt}"/></Button>
@@ -572,20 +606,18 @@
                                                                             <MenuItem Header="Rimuovi dalla lista" Click="OnRemoveDownloadClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconTrash}"/></MenuItem.Icon></MenuItem>
                                                                         </ContextMenu>
                                                                     </Border.ContextMenu>
-                                                                    <Grid ColumnDefinitions="24, 2*, 50, 110, 2*, 160, 90, 90, Auto">
+                                                                    <Grid ColumnDefinitions="24, 2*, 46, 1.4*, 1.6*, 250, 130">
                                                                         <Path Grid.Column="0" Classes="icon warn" Width="13" Height="13" HorizontalAlignment="Left" Data="{StaticResource IconBolt}" IsVisible="{Binding IsPriority}"/>
                                                                         <Path Grid.Column="0" Classes="icon failIcon" Width="14" Height="14" HorizontalAlignment="Left" Data="{StaticResource IconAlert}" IsVisible="{Binding IsFailed}"/>
                                                                         <TextBlock Grid.Column="1" Text="{Binding FileName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" FontWeight="Medium"/>
                                                                         <TextBlock Grid.Column="2" Text="{Binding EpisodeNumber}" VerticalAlignment="Center"/>
-                                                                        <TextBlock Grid.Column="3" Classes="rowStatus" Text="{Binding StatusText}" ToolTip.Tip="{Binding StatusTip}" TextTrimming="CharacterEllipsis" Margin="0,0,6,0" VerticalAlignment="Center" FontSize="11"/>
+                                                                        <TextBlock Grid.Column="3" Classes="rowStatus" Text="{Binding StatusText}" ToolTip.Tip="{Binding StatusTip}" TextTrimming="CharacterEllipsis" Margin="0,0,10,0" VerticalAlignment="Center" FontSize="11"/>
                                                                         <Grid Grid.Column="4" ColumnDefinitions="*, 44" Margin="0,0,12,0">
-                                                                            <ProgressBar Value="{Binding Percentage}" Minimum="0" Maximum="100" Height="14"/>
+                                                                            <ProgressBar Value="{Binding Percentage}" Minimum="0" Maximum="100" Height="14" MinWidth="0" Classes.done="{Binding IsCompleted}" Classes.failed="{Binding IsFailed}" Classes.paused="{Binding IsPaused}" Classes.queued="{Binding IsQueued}" Classes.cancelled="{Binding IsCancelled}"/>
                                                                             <TextBlock Grid.Column="1" Text="{Binding Percentage, StringFormat={}{0:F0}%}" TextAlignment="Right" VerticalAlignment="Center" FontSize="11"/>
                                                                         </Grid>
-                                                                        <TextBlock Grid.Column="5" Text="{Binding SizeText}" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,0,15,0"/>
-                                                                        <TextBlock Grid.Column="6" Text="{Binding SpeedText}" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource AppSuccessBrush}" Margin="0,0,15,0"/>
-                                                                        <TextBlock Grid.Column="7" Text="{Binding EtaText}" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,0,15,0"/>
-                                                                        <StackPanel Grid.Column="8" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center" Margin="8,0,0,0">
+                                                                        <TextBlock Grid.Column="5" Text="{Binding InfoText}" ToolTip.Tip="{Binding InfoText}" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" TextTrimming="CharacterEllipsis" Margin="0,0,10,0"/>
+                                                                        <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="2" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="8,0,0,0">
                                                                             <Button Classes="iconCircle success" Width="26" Height="26" ToolTip.Tip="Riprendi" IsVisible="{Binding CanResume}" Click="OnDownloadItemResumeClick"><Path Classes="icon" Width="12" Height="12" Data="{StaticResource IconPlay}"/></Button>
                                                                             <Button Classes="iconCircle" Width="26" Height="26" ToolTip.Tip="Forza priorità" IsVisible="{Binding CanForce}" Click="OnDownloadItemForceClick"><Path Classes="icon" Width="12" Height="12" Data="{StaticResource IconBolt}"/></Button>
                                                                             <Button Classes="iconCircle warning" Width="26" Height="26" ToolTip.Tip="Pausa" IsVisible="{Binding CanPause}" Click="OnDownloadItemPauseClick"><Path Classes="icon" Width="12" Height="12" Data="{StaticResource IconPause}"/></Button>
@@ -643,7 +675,10 @@
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 3. Dettaglio:</Run> fai doppio clic su un risultato, o passaci sopra e premi "Analizza": a destra compaiono locandina, informazioni e stagioni con gli episodi (serie) oppure il pulsante "Scarica film".<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 4. Scarica:</Run> "Scarica selezionati" per gli episodi spuntati, "Scarica stagione" per la stagione aperta, "Scarica tutta la serie" per tutte le stagioni.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Priorità:</Run> il fulmine fa partire subito un episodio o una serie: se gli slot sono pieni, il download meno avanzato va in pausa e riparte appena possibile.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Errori:</Run> un episodio fallito ha la riga rossa con il motivo (tutto il messaggio passandoci sopra); la serie mostra il badge rosso "N falliti" anche chiusa. "Riscarica" riprova.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Errori:</Run> se un download fallisce per un problema temporaneo (rete, proxy, server occupato) riprova da solo fino a 3 volte (dopo 30 s, 2 e 5 minuti), ripartendo da dove era. Se fallisce ancora la riga diventa rossa con il motivo (tutto il messaggio passandoci sopra) e la serie mostra il badge "N falliti". "Riscarica" riprova a mano.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Cronologia:</Run> tutto ciò che hai scaricato, anche dopo aver pulito la coda (Ctrl+H). Accodando episodi già scaricati in passato l'app chiede se riscaricarli o saltarli; se lo spazio su disco stimato non basta chiede conferma, e con meno di 1 GB libero i download si fermano in pausa.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Notifiche e barra di stato:</Run> con l'app in secondo piano Windows avvisa a fine serie, per i download falliti e se il disco è pieno (campanella in alto per spegnerle). In basso, accanto al Log, si vede sempre cosa sta scaricando, da qualsiasi tab. Le scorciatoie da tastiera sono nel pulsante con la tastiera in alto.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Colori delle barre:</Run> verde completato, blu in download, arancione in pausa, rosso errore, grigio-azzurro in coda, grigio spento annullato. Le colonne restano allineate qualunque sia lo stato; dimensione, velocità e tempo rimanente stanno in un'unica colonna.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Pulisci lista:</Run> toglie dalla lista completati, annullati o falliti (i file restano su disco). "Elimina tutto…" è in fondo al menu e chiede sempre conferma.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Pulisci:</Run> svuota risultati, Dettaglio e campo di ricerca, come all'apertura dell'app. I download in coda e in corso continuano. La cronologia delle ricerche resta (per svuotarla c'è il cestino).<LineBreak/>
                                         <LineBreak/>
@@ -693,7 +728,7 @@
                                         <TextBlock Text="Pulisci"/>
                                     </StackPanel>
                                 </Button>
-                                <Button Grid.Column="4" Classes="iconCircle" ToolTip.Tip="Svuota cronologia" Click="OnStreamingClearSearchHistoryClick">
+                                <Button Grid.Column="4" Classes="iconCircle" ToolTip.Tip="Svuota le ricerche recenti (il menu a tendina del campo di ricerca)" Click="OnStreamingClearSearchHistoryClick">
                                     <Path Classes="icon" Data="{StaticResource IconTrash}"/>
                                 </Button>
                             </Grid>
@@ -1142,6 +1177,9 @@
                                             <Button ToolTip.Tip="Mette in pausa tutti i download di film e serie in corso" Classes="warning" Command="{Binding PauseAllCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconPause}"/><TextBlock Text="Pausa tutti"/></StackPanel></Button>
                                             <Button ToolTip.Tip="Annulla tutti i download di film e serie non ancora completati" Classes="danger" Command="{Binding CancelAllDownloadsCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconClose}"/><TextBlock Text="Annulla tutti"/></StackPanel></Button>
                                             <Border Width="1" Height="26" Background="{DynamicResource AppBorderBrush}" Margin="6,0" VerticalAlignment="Center"/>
+                                            <Button ToolTip.Tip="Tutto ciò che hai scaricato, anche dopo aver pulito la coda: ricerca, cartella del file, già scaricati" Click="OnStreamingHistoryClick">
+                                                <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconList}"/><TextBlock Text="Cronologia"/></StackPanel>
+                                            </Button>
                                             <Button ToolTip.Tip="Togli dalla lista completati, annullati o falliti (i file restano dove sono). «Elimina tutto» è in fondo al menu e chiede conferma.">
                                                 <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTrash}"/><TextBlock Text="Pulisci lista"/><Path Classes="icon" Data="{StaticResource IconChevronDownSmall}" Width="10" Height="10" Margin="2,0,0,0"/></StackPanel>
                                                 <Button.Flyout>
@@ -1184,7 +1222,7 @@
                                                 <Expander Theme="{StaticResource DownloadGroupExpanderTheme}" IsExpanded="{Binding IsExpanded, Mode=TwoWay}">
                                                     <Expander.Header>
                                                         <Border Classes="groupHeader" Classes.failed="{Binding HasFailed}">
-                                                        <Grid ColumnDefinitions="2*, 130, 110, 1.5*, 100, Auto">
+                                                        <Grid ColumnDefinitions="2.6*, 120, 90, 1.3*, 80, 284">
                                                             <DockPanel Grid.Column="0" Margin="0,0,10,0">
                                                                 <Border DockPanel.Dock="Left" Classes="failBadge" IsVisible="{Binding HasFailed}" Margin="0,0,8,0" VerticalAlignment="Center"
                                                                         ToolTip.Tip="Alcuni episodi non sono stati scaricati: apri la serie per vedere il motivo, oppure premi «Riscarica i falliti» a destra">
@@ -1195,11 +1233,11 @@
                                                             <TextBlock Grid.Column="1" Text="{Binding TotalSizeText}" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,0,10,0"/>
                                                             <TextBlock Grid.Column="2" Text="{Binding TotalSpeedText}" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource AppSuccessBrush}" Margin="0,0,10,0"/>
                                                             <Grid Grid.Column="3" ColumnDefinitions="*, Auto" Margin="10,0">
-                                                                <ProgressBar Grid.Column="0" Value="{Binding OverallPercentage}" Minimum="0" Maximum="100" Height="14"/>
-                                                                <TextBlock Grid.Column="1" Text="{Binding OverallPercentage, StringFormat={}{0:F1}%}" Margin="8,0,0,0" VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold"/>
+                                                                <ProgressBar Grid.Column="0" Value="{Binding OverallPercentage}" Minimum="0" Maximum="100" Height="14" MinWidth="0" Classes.done="{Binding IsAllCompleted}" Classes.paused="{Binding IsAllPaused}"/>
+                                                                <TextBlock Grid.Column="1" Text="{Binding OverallPercentage, StringFormat={}{0:F1}%}" Width="50" TextAlignment="Right" Margin="4,0,0,0" VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold"/>
                                                             </Grid>
                                                             <TextBlock Grid.Column="4" Text="{Binding OverallEtaText}" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="10,0"/>
-                                                            <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                                            <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right" VerticalAlignment="Center">
                                                                 <Button Classes="iconCircle success" Width="30" Height="30" ToolTip.Tip="Avvia serie" Click="OnStreamingResumeGroupClick"><Path Classes="icon" Data="{StaticResource IconPlay}"/></Button>
                                                                 <Button Classes="iconCircle" Width="30" Height="30" ToolTip.Tip="Forza priorità serie" Click="OnStreamingForceGroupClick"><Path Classes="icon" Data="{StaticResource IconBolt}"/></Button>
                                                                 <Button Classes="iconCircle" Width="30" Height="30" ToolTip.Tip="Rimuovi priorità serie" Click="OnStreamingUnforceGroupClick"><Path Classes="icon" Data="{StaticResource IconBoltOff}"/></Button>
@@ -1219,20 +1257,18 @@
                                                         <ItemsControl.ItemTemplate>
                                                             <DataTemplate DataType="models:DownloadItem">
                                                                 <Border Classes="episodeRow" Classes.failed="{Binding IsFailed}" Padding="10,7" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="0,0,0,1">
-                                                                    <Grid ColumnDefinitions="24, 2*, 50, 110, 2*, 160, 90, 90, Auto">
+                                                                    <Grid ColumnDefinitions="24, 2*, 46, 1.4*, 1.6*, 250, 130">
                                                                         <Path Grid.Column="0" Classes="icon warn" Width="13" Height="13" HorizontalAlignment="Left" Data="{StaticResource IconBolt}" IsVisible="{Binding IsPriority}"/>
                                                                         <Path Grid.Column="0" Classes="icon failIcon" Width="14" Height="14" HorizontalAlignment="Left" Data="{StaticResource IconAlert}" IsVisible="{Binding IsFailed}"/>
                                                                         <TextBlock Grid.Column="1" Text="{Binding FileName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" FontWeight="Medium"/>
                                                                         <TextBlock Grid.Column="2" Text="{Binding EpisodeNumber}" VerticalAlignment="Center"/>
-                                                                        <TextBlock Grid.Column="3" Classes="rowStatus" Text="{Binding StatusText}" ToolTip.Tip="{Binding StatusTip}" TextTrimming="CharacterEllipsis" Margin="0,0,6,0" VerticalAlignment="Center" FontSize="11"/>
+                                                                        <TextBlock Grid.Column="3" Classes="rowStatus" Text="{Binding StatusText}" ToolTip.Tip="{Binding StatusTip}" TextTrimming="CharacterEllipsis" Margin="0,0,10,0" VerticalAlignment="Center" FontSize="11"/>
                                                                         <Grid Grid.Column="4" ColumnDefinitions="*, 44" Margin="0,0,12,0">
-                                                                            <ProgressBar Value="{Binding Percentage}" Minimum="0" Maximum="100" Height="14"/>
+                                                                            <ProgressBar Value="{Binding Percentage}" Minimum="0" Maximum="100" Height="14" MinWidth="0" Classes.done="{Binding IsCompleted}" Classes.failed="{Binding IsFailed}" Classes.paused="{Binding IsPaused}" Classes.queued="{Binding IsQueued}" Classes.cancelled="{Binding IsCancelled}"/>
                                                                             <TextBlock Grid.Column="1" Text="{Binding Percentage, StringFormat={}{0:F0}%}" TextAlignment="Right" VerticalAlignment="Center" FontSize="11"/>
                                                                         </Grid>
-                                                                        <TextBlock Grid.Column="5" Text="{Binding SizeText}" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,0,15,0"/>
-                                                                        <TextBlock Grid.Column="6" Text="{Binding SpeedText}" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource AppSuccessBrush}" Margin="0,0,15,0"/>
-                                                                        <TextBlock Grid.Column="7" Text="{Binding EtaText}" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,0,15,0"/>
-                                                                        <StackPanel Grid.Column="8" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center" Margin="8,0,0,0">
+                                                                        <TextBlock Grid.Column="5" Text="{Binding InfoText}" ToolTip.Tip="{Binding InfoText}" VerticalAlignment="Center" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" TextTrimming="CharacterEllipsis" Margin="0,0,10,0"/>
+                                                                        <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="2" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="8,0,0,0">
                                                                             <Button Classes="iconCircle success" Width="26" Height="26" ToolTip.Tip="Riprendi" IsVisible="{Binding CanResume}" Click="OnStreamingDownloadItemResumeClick"><Path Classes="icon" Width="12" Height="12" Data="{StaticResource IconPlay}"/></Button>
                                                                             <Button Classes="iconCircle" Width="26" Height="26" ToolTip.Tip="Forza priorità" IsVisible="{Binding CanForce}" Click="OnStreamingDownloadItemForceClick"><Path Classes="icon" Width="12" Height="12" Data="{StaticResource IconBolt}"/></Button>
                                                                             <Button Classes="iconCircle danger" Width="26" Height="26" ToolTip.Tip="Annulla" IsVisible="{Binding CanCancel}" Click="OnStreamingDownloadItemCancelClick"><Path Classes="icon" Width="12" Height="12" Data="{StaticResource IconClose}"/></Button>
@@ -1461,7 +1497,7 @@
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Segnaposto del pattern</Run><LineBreak/>
                                         {Series} nome della serie · {Episode} o {Episode:D3} numero episodio · {Title} titolo. Una "/" nel pattern crea una sottocartella. I menu propongono pattern adatti a ogni modalità.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Dividi, nome sottocartella:</Run> {Number} numero della cartella, {Start}/{End} primo e ultimo episodio, {Series} nome della serie. Anche qui la "/" crea più livelli (es. "{Series}/Parte {Number}"); l'anteprima a destra mostra i nomi delle prime cartelle.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Svuota cronologia:</Run> chiede conferma, perché dopo non si può più annullare quanto fatto.
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Pulisci ▾:</Run> accanto a Undo, contiene "Svuota proposte" e "Svuota cronologia…"; quest'ultima chiede conferma, perché dopo non si può più annullare quanto fatto.
                                     </TextBlock>
                                     </ScrollViewer>
                                 </Border>
@@ -1538,8 +1574,17 @@
                                                     <Button ToolTip.Tip="Calcola le rinomine senza modificare nulla: controlla la tabella prima di applicare" Classes="info" Command="{Binding PreviewOrganizeCommand}" IsEnabled="{Binding !IsOrganizeBusy}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconEye}"/><TextBlock Text="Anteprima"/></StackPanel></Button>
                                                     <Button ToolTip.Tip="Esegue le operazioni proposte (annullabili con Undo)" Classes="success" Command="{Binding ApplyOrganizeCommand}" IsEnabled="{Binding !IsOrganizeBusy}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCheck}"/><TextBlock Text="Applica"/></StackPanel></Button>
                                                     <Button ToolTip.Tip="Annulla l'ultimo gruppo di operazioni applicate (rinomine/spostamenti)" Classes="warning" Command="{Binding UndoLastBatchCommand}" IsEnabled="{Binding !IsOrganizeBusy}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconUndo}"/><TextBlock Text="Undo ultimo batch"/></StackPanel></Button>
-                                                    <Button ToolTip.Tip="Svuota la tabella delle operazioni proposte" Command="{Binding ClearPreviewOperationsCommand}" IsEnabled="{Binding !IsOrganizeBusy}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTrash}"/><TextBlock Text="Svuota proposte"/></StackPanel></Button>
-                                                    <Button ToolTip.Tip="Cancella la cronologia delle operazioni (i file non vengono toccati, ma non si potrà più fare Undo)" Tag="{Binding ClearHistoryCommand}" CommandParameter="Cancellare la cronologia delle operazioni? I file non vengono toccati, ma non si potrà più annullare (Undo) niente di quanto fatto finora." Click="OnConfirmRemoveAllClick"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTrash}"/><TextBlock Text="Svuota cronologia"/></StackPanel></Button>
+                                                    <Border Width="1" Height="26" Background="{DynamicResource AppBorderBrush}" Margin="6,0" VerticalAlignment="Center"/>
+                                                    <Button ToolTip.Tip="Svuota la tabella delle proposte o la cronologia delle operazioni (questa chiede conferma)">
+                                                        <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTrash}"/><TextBlock Text="Pulisci"/><Path Classes="icon" Data="{StaticResource IconChevronDownSmall}" Width="10" Height="10" Margin="2,0,0,0"/></StackPanel>
+                                                        <Button.Flyout>
+                                                            <MenuFlyout Placement="BottomEdgeAlignedLeft">
+                                                                <MenuItem Header="Svuota proposte" Command="{Binding ClearPreviewOperationsCommand}" IsEnabled="{Binding !IsOrganizeBusy}"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconTrash}"/></MenuItem.Icon></MenuItem>
+                                                                <Separator/>
+                                                                <MenuItem Classes="dangerItem" Header="Svuota cronologia…" Tag="{Binding ClearHistoryCommand}" CommandParameter="Cancellare la cronologia delle operazioni? I file non vengono toccati, ma non si potrà più annullare (Undo) niente di quanto fatto finora." Click="OnConfirmRemoveAllClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconTrash}"/></MenuItem.Icon></MenuItem>
+                                                            </MenuFlyout>
+                                                        </Button.Flyout>
+                                                    </Button>
                                                 </WrapPanel>
                                             </StackPanel>
                                         </Border>
@@ -1637,8 +1682,17 @@
                                                     <Button ToolTip.Tip="Calcola spostamenti e rinumerazione senza modificare nulla: controlla la tabella prima di applicare" Classes="info" Command="{Binding PreviewMergeCommand}" IsEnabled="{Binding !IsMergeBusy}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconEye}"/><TextBlock Text="Anteprima merge"/></StackPanel></Button>
                                                     <Button ToolTip.Tip="Esegue il merge proposto (annullabile con Undo)" Classes="success" Command="{Binding ApplyMergeCommand}" IsEnabled="{Binding !IsMergeBusy}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCheck}"/><TextBlock Text="Applica merge"/></StackPanel></Button>
                                                     <Button ToolTip.Tip="Annulla l'ultimo gruppo di operazioni applicate (rinomine/spostamenti)" Classes="warning" Command="{Binding UndoLastBatchCommand}" IsEnabled="{Binding !IsMergeBusy}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconUndo}"/><TextBlock Text="Undo ultimo batch"/></StackPanel></Button>
-                                                    <Button ToolTip.Tip="Svuota la tabella delle operazioni proposte" Command="{Binding ClearMergePreviewOperationsCommand}" IsEnabled="{Binding !IsMergeBusy}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTrash}"/><TextBlock Text="Svuota proposte"/></StackPanel></Button>
-                                                    <Button ToolTip.Tip="Cancella la cronologia delle operazioni (i file non vengono toccati, ma non si potrà più fare Undo)" Tag="{Binding ClearHistoryCommand}" CommandParameter="Cancellare la cronologia delle operazioni? I file non vengono toccati, ma non si potrà più annullare (Undo) niente di quanto fatto finora." Click="OnConfirmRemoveAllClick"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTrash}"/><TextBlock Text="Svuota cronologia"/></StackPanel></Button>
+                                                    <Border Width="1" Height="26" Background="{DynamicResource AppBorderBrush}" Margin="6,0" VerticalAlignment="Center"/>
+                                                    <Button ToolTip.Tip="Svuota la tabella delle proposte o la cronologia delle operazioni (questa chiede conferma)">
+                                                        <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTrash}"/><TextBlock Text="Pulisci"/><Path Classes="icon" Data="{StaticResource IconChevronDownSmall}" Width="10" Height="10" Margin="2,0,0,0"/></StackPanel>
+                                                        <Button.Flyout>
+                                                            <MenuFlyout Placement="BottomEdgeAlignedLeft">
+                                                                <MenuItem Header="Svuota proposte" Command="{Binding ClearMergePreviewOperationsCommand}" IsEnabled="{Binding !IsMergeBusy}"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconTrash}"/></MenuItem.Icon></MenuItem>
+                                                                <Separator/>
+                                                                <MenuItem Classes="dangerItem" Header="Svuota cronologia…" Tag="{Binding ClearHistoryCommand}" CommandParameter="Cancellare la cronologia delle operazioni? I file non vengono toccati, ma non si potrà più annullare (Undo) niente di quanto fatto finora." Click="OnConfirmRemoveAllClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconTrash}"/></MenuItem.Icon></MenuItem>
+                                                            </MenuFlyout>
+                                                        </Button.Flyout>
+                                                    </Button>
                                                 </WrapPanel>
                                             </StackPanel>
                                         </Border>
@@ -1765,8 +1819,17 @@
                                                     <Button ToolTip.Tip="Calcola la suddivisione in sottocartelle senza modificare nulla: controlla la tabella prima di applicare" Classes="info" Command="{Binding PreviewSplitCommand}" IsEnabled="{Binding !IsSplitBusy}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconEye}"/><TextBlock Text="Anteprima split"/></StackPanel></Button>
                                                     <Button ToolTip.Tip="Esegue la suddivisione proposta (annullabile con Undo)" Classes="success" Command="{Binding ApplySplitCommand}" IsEnabled="{Binding !IsSplitBusy}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCheck}"/><TextBlock Text="Applica split"/></StackPanel></Button>
                                                     <Button ToolTip.Tip="Annulla l'ultimo gruppo di operazioni applicate (rinomine/spostamenti)" Classes="warning" Command="{Binding UndoLastBatchCommand}" IsEnabled="{Binding !IsSplitBusy}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconUndo}"/><TextBlock Text="Undo ultimo batch"/></StackPanel></Button>
-                                                    <Button ToolTip.Tip="Svuota la tabella delle operazioni proposte" Command="{Binding ClearSplitPreviewOperationsCommand}" IsEnabled="{Binding !IsSplitBusy}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTrash}"/><TextBlock Text="Svuota proposte"/></StackPanel></Button>
-                                                    <Button ToolTip.Tip="Cancella la cronologia delle operazioni (i file non vengono toccati, ma non si potrà più fare Undo)" Tag="{Binding ClearHistoryCommand}" CommandParameter="Cancellare la cronologia delle operazioni? I file non vengono toccati, ma non si potrà più annullare (Undo) niente di quanto fatto finora." Click="OnConfirmRemoveAllClick"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTrash}"/><TextBlock Text="Svuota cronologia"/></StackPanel></Button>
+                                                    <Border Width="1" Height="26" Background="{DynamicResource AppBorderBrush}" Margin="6,0" VerticalAlignment="Center"/>
+                                                    <Button ToolTip.Tip="Svuota la tabella delle proposte o la cronologia delle operazioni (questa chiede conferma)">
+                                                        <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTrash}"/><TextBlock Text="Pulisci"/><Path Classes="icon" Data="{StaticResource IconChevronDownSmall}" Width="10" Height="10" Margin="2,0,0,0"/></StackPanel>
+                                                        <Button.Flyout>
+                                                            <MenuFlyout Placement="BottomEdgeAlignedLeft">
+                                                                <MenuItem Header="Svuota proposte" Command="{Binding ClearSplitPreviewOperationsCommand}" IsEnabled="{Binding !IsSplitBusy}"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconTrash}"/></MenuItem.Icon></MenuItem>
+                                                                <Separator/>
+                                                                <MenuItem Classes="dangerItem" Header="Svuota cronologia…" Tag="{Binding ClearHistoryCommand}" CommandParameter="Cancellare la cronologia delle operazioni? I file non vengono toccati, ma non si potrà più annullare (Undo) niente di quanto fatto finora." Click="OnConfirmRemoveAllClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconTrash}"/></MenuItem.Icon></MenuItem>
+                                                            </MenuFlyout>
+                                                        </Button.Flyout>
+                                                    </Button>
                                                 </WrapPanel>
                                             </StackPanel>
                                         </Border>
@@ -1856,7 +1919,7 @@
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Stato:</Run> sotto i pulsanti di ogni tabella, a destra del conteggio, compaiono "Lettura cartella in corso…" e l'avanzamento dei controlli, senza spostare la tabella.<LineBreak/>
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Code: Upload, Download, Server ↔ Server</Run><LineBreak/>
-                                        Ogni trasferimento va in coda con avanzamento, velocità e tempo rimanente; la colonna "Server" dice su quale server. Pausa, ripresa (riparte da dove era arrivato) e annulla sono sia in alto, per tutti, sia sulla riga, per uno solo. Il numero di trasferimenti simultanei vale <Run FontWeight="SemiBold">per ogni server</Run>: con 6 sono 6 su un server e 6 sull'altro. Una copia tra server messa in pausa riparte dall'inizio del file. "Pulisci lista" toglie completati, annullati o falliti; "Elimina tutto…" è in fondo al menu e chiede conferma.<LineBreak/>
+                                        Ogni trasferimento va in coda con avanzamento, velocità e tempo rimanente; la colonna "Server" dice su quale server. Pausa, ripresa (riparte da dove era arrivato) e annulla sono sia in alto, per tutti, sia sulla riga, per uno solo. Il numero di trasferimenti simultanei vale <Run FontWeight="SemiBold">per ogni server</Run>: con 6 sono 6 su un server e 6 sull'altro. Una copia tra server messa in pausa riparte dall'inizio del file. "Pulisci lista" toglie completati, annullati o falliti; "Elimina tutto…" è in fondo al menu e chiede conferma. Le barre hanno i colori dello stato (verde completato, blu in corso, arancione in pausa, rosso errore, grigio-azzurro in coda, grigio annullato) e in basso, accanto al Log, la barra di stato mostra upload (↑), download (↓) e copie (⇄) in corso da qualsiasi tab; a fine coda, con l'app in secondo piano, arriva una notifica di Windows.<LineBreak/>
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Controllo dei file a 0 byte</Run><LineBreak/>
                                         La lente nella barra di una scheda controlla le sottocartelle della cartella aperta e cerca file vuoti (0 byte), di solito upload interrotti: le cartelle che ne contengono diventano rosse e la colonna "Contenuto" ne riassume il contenuto.<LineBreak/>
@@ -2476,7 +2539,7 @@
                                                         <DataGridTemplateColumn.CellTemplate>
                                                             <DataTemplate>
                                                                 <Grid ColumnDefinitions="*, Auto" Margin="2">
-                                                                    <ProgressBar Grid.Column="0" Value="{Binding Percentage}" Minimum="0" Maximum="100" Height="14"/>
+                                                                    <ProgressBar Grid.Column="0" Value="{Binding Percentage}" Minimum="0" Maximum="100" Height="14" Classes.done="{Binding IsCompleted}" Classes.failed="{Binding IsFailed}" Classes.paused="{Binding IsPaused}" Classes.queued="{Binding IsQueued}" Classes.cancelled="{Binding IsCancelled}"/>
                                                                     <TextBlock Grid.Column="1" Text="{Binding Percentage, StringFormat={}{0:F0}%}" Margin="8,0,0,0" VerticalAlignment="Center" FontSize="11"/>
                                                                 </Grid>
                                                             </DataTemplate>
@@ -2561,7 +2624,7 @@
                                                         <DataGridTemplateColumn.CellTemplate>
                                                             <DataTemplate>
                                                                 <Grid ColumnDefinitions="*, Auto" Margin="2">
-                                                                    <ProgressBar Grid.Column="0" Value="{Binding Percentage}" Minimum="0" Maximum="100" Height="14"/>
+                                                                    <ProgressBar Grid.Column="0" Value="{Binding Percentage}" Minimum="0" Maximum="100" Height="14" Classes.done="{Binding IsCompleted}" Classes.failed="{Binding IsFailed}" Classes.paused="{Binding IsPaused}" Classes.queued="{Binding IsQueued}" Classes.cancelled="{Binding IsCancelled}"/>
                                                                     <TextBlock Grid.Column="1" Text="{Binding Percentage, StringFormat={}{0:F0}%}" Margin="8,0,0,0" VerticalAlignment="Center" FontSize="11"/>
                                                                 </Grid>
                                                             </DataTemplate>
@@ -2641,7 +2704,7 @@
                                                         <DataGridTemplateColumn.CellTemplate>
                                                             <DataTemplate>
                                                                 <Grid ColumnDefinitions="*, Auto" Margin="2">
-                                                                    <ProgressBar Grid.Column="0" Value="{Binding Percentage}" Minimum="0" Maximum="100" Height="14"/>
+                                                                    <ProgressBar Grid.Column="0" Value="{Binding Percentage}" Minimum="0" Maximum="100" Height="14" Classes.done="{Binding IsCompleted}" Classes.failed="{Binding IsFailed}" Classes.paused="{Binding IsPaused}" Classes.queued="{Binding IsQueued}" Classes.cancelled="{Binding IsCancelled}"/>
                                                                     <TextBlock Grid.Column="1" Text="{Binding Percentage, StringFormat={}{0:F0}%}" Margin="8,0,0,0" VerticalAlignment="Center" FontSize="11"/>
                                                                 </Grid>
                                                             </DataTemplate>
@@ -2714,7 +2777,7 @@
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 3. Carica l'albero:</Run> scegli dal menu <Run FontWeight="SemiBold">Sorgenti</Run> quali caricare (la scelta resta salvata e vale per tutte le categorie: cambiando categoria alberi e spunte non cambiano) e premi "Carica": ogni sorgente compare come radice dell'albero, e i colori confrontano i post con i file di tutte. Dopo il caricamento l'albero si aggiorna da solo.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 4. Mappa:</Run> seleziona un post, clicca la cartella con i suoi episodi (o un singolo file, per i film) e premi "Mappa": i link vengono abbinati ai file in ordine naturale, col dominio della sorgente del file. Funziona anche con i post <Run FontWeight="SemiBold">senza link</Run>: viene creata una riga per ogni file. Per un film in più parti mappa un file alla volta: va sulla riga selezionata e poi passa alla successiva. Col clic destro puoi copiare titoli, percorsi e link.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 5. Controlla:</Run> ogni riga mostra il file che il post ha ora sul forum e quello che diventerà (in grande il nome del file, sotto server e cartella; l'indirizzo completo passando il mouse). Sopra la tabella i conteggi e un riepilogo: verde se file e link coincidono, arancione se no. Con le frecce di "Ordine" scambi gli abbinamenti. La spunta "Usa" decide cosa va sul forum: una riga senza spunta viene tolta dal post ("verrà tolto dal post"); I file hanno la precedenza: dopo "Mappa" (cartella o singolo file) le righe rimaste senza file perdono la spunta e vengono tolte; se i file sono più dei link, quelli mancanti vengono aggiunti. Per un film in più parti mappa un file alla volta: ognuno riprende la spunta sulla sua riga. Se rimetti la spunta a una riga senza file, quella resta com'è. Con Ctrl (righe sparse) o Maiusc (un intervallo) selezioni più righe: Spazio, o il clic destro, mette o toglie la spunta a tutte insieme.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 6. Applica:</Run> invia al forum i nuovi link e il titolo. La tabella si ricarica con i link salvati dal forum e sotto i conteggi compare il riepilogo dell'ultimo invio, con quanti link il forum ha salvato davvero.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 6. Applica:</Run> invia al forum i nuovi link e il titolo. La tabella si ricarica con i link salvati dal forum: ogni riga dice "✓ salvato sul forum" (verde) oppure "inviato, non ancora confermato" (arancione, aggiunta in fondo se il forum non l'ha restituita). Il post resta aperto e selezionato anche se diventa verde e i verdi sono nascosti. Sotto i conteggi compare il riepilogo dell'ultimo invio, con quanti link il forum ha salvato davvero.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Rinomina:</Run> il titolo del post in alto si può modificare: "Rinomina" cambia solo il titolo e lascia i link come sono sul forum.<LineBreak/>
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Significato dei colori</Run><LineBreak/>
@@ -2941,7 +3004,7 @@
 
                                 <Border Grid.Row="1" Classes="cardElevated" Margin="0,0,0,10" Padding="10">
                                     <StackPanel Spacing="10">
-                                        <TextBox Text="{Binding SearchQuery, Mode=TwoWay}" PlaceholderText="Cerca post per titolo..." ToolTip.Tip="Filtra i post caricati in memoria per titolo"/>
+                                        <TextBox x:Name="VbPostSearchBox" Text="{Binding SearchQuery, Mode=TwoWay}" PlaceholderText="Cerca post per titolo..." ToolTip.Tip="Filtra i post caricati in memoria per titolo"/>
 
                                         <StackPanel Spacing="5">
                                             <TextBlock Text="{Binding TotalPostsText}" FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"/>
@@ -3326,7 +3389,8 @@
                                                                         <TextBlock Text="{Binding NewName}" FontWeight="SemiBold" Foreground="{DynamicResource AppAccentBrush}" TextTrimming="PrefixCharacterEllipsis"/>
                                                                         <TextBlock Text="{Binding NewWhere}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" TextTrimming="PrefixCharacterEllipsis"/>
                                                                     </StackPanel>
-                                                                    <TextBlock Text="{Binding UnchangedText}" FontStyle="Italic" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}"
+                                                                    <TextBlock Classes="unchanged" Classes.saved="{Binding IsSavedOnForum}" Classes.notConfirmed="{Binding IsNotConfirmed}"
+                                                                               Text="{Binding UnchangedText}" FontSize="12"
                                                                                VerticalAlignment="Center" IsVisible="{Binding !ShowNew}"/>
                                                                 </Panel>
                                                             </DataTemplate>
@@ -3680,7 +3744,7 @@
                                     <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto, Auto, *, 280" Margin="0,0,0,12">
                                         <TextBlock Text="{Binding CurrentListTitle}" FontWeight="Bold" FontSize="16" VerticalAlignment="Center"/>
                                         <Border Grid.Column="1" Classes="pill" Margin="10,0,0,0"><TextBlock Text="{Binding VisibleCountText}"/></Border>
-                                        <TextBox Grid.Column="3" Text="{Binding SearchText, Mode=TwoWay}" PlaceholderText="Cerca IP, host o nome..."/>
+                                        <TextBox Grid.Column="3" x:Name="ProxySearchBox" Text="{Binding SearchText, Mode=TwoWay}" PlaceholderText="Cerca IP, host o nome..."/>
                                     </Grid>
                                     <ListBox DockPanel.Dock="Top" ItemsSource="{Binding Filters}" SelectedItem="{Binding SelectedFilter, Mode=TwoWay}" Background="Transparent" Margin="0,0,0,10" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                         <ListBox.ItemsPanel>
@@ -3949,7 +4013,20 @@
                 Margin="12,6,12,0"
                 ClipToBounds="True">
             <DockPanel>
-                <Grid DockPanel.Dock="Top" Height="40" ColumnDefinitions="*, Auto, Auto, Auto, Auto, Auto" Margin="0,0,8,0">
+                <Grid DockPanel.Dock="Top" Height="40" ColumnDefinitions="Auto, *, Auto, Auto, Auto, Auto, Auto" Margin="0,0,8,0">
+                    <!-- Barra di stato: cosa sta lavorando, visibile da ogni tab (clic = apre la tab) -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="6,0,10,0" ClipToBounds="True">
+                        <TextBlock Text="Nessun download o trasferimento in corso" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center" IsVisible="{Binding Activity.IsIdle}"/>
+                        <Button Classes="statusChip" Classes.failed="{Binding Activity.AnimeHasFailed}" IsVisible="{Binding Activity.HasAnime}" ToolTip.Tip="{Binding Activity.AnimeTip}" Click="OnStatusAnimeClick">
+                            <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconPlayCircle}"/><TextBlock Text="Anime"/><TextBlock Classes="chipValue" Text="{Binding Activity.AnimeText}"/></StackPanel>
+                        </Button>
+                        <Button Classes="statusChip" Classes.failed="{Binding Activity.StreamingHasFailed}" IsVisible="{Binding Activity.HasStreaming}" ToolTip.Tip="{Binding Activity.StreamingTip}" Click="OnStatusStreamingClick">
+                            <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconFilm}"/><TextBlock Text="Film/Serie"/><TextBlock Classes="chipValue" Text="{Binding Activity.StreamingText}"/></StackPanel>
+                        </Button>
+                        <Button Classes="statusChip" Classes.failed="{Binding Activity.SftpHasFailed}" IsVisible="{Binding Activity.HasSftp}" ToolTip.Tip="{Binding Activity.SftpTip}" Click="OnStatusSftpClick">
+                            <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCloud}"/><TextBlock Text="SFTP"/><TextBlock Classes="chipValue" Text="{Binding Activity.SftpText}"/></StackPanel>
+                        </Button>
+                    </StackPanel>
                     <ToggleButton Grid.Column="0" x:Name="ToggleLogButton" Classes="guideToggle"
                                 IsChecked="False" Height="40" Padding="14,0"
                                 Click="OnToggleLogClick" ToolTip.Tip="Comprimi / espandi log">
@@ -3962,11 +4039,11 @@
                             </Border>
                         </StackPanel>
                     </ToggleButton>
-                    <ComboBox Grid.Column="1" ItemsSource="{Binding LogLevelFilters}" SelectedIndex="{Binding SelectedLogLevelFilter}" Height="28" MinWidth="150" FontSize="11" Margin="0,0,6,0" VerticalAlignment="Center" ToolTip.Tip="Mostra tutti i messaggi o solo avvisi/errori"/>
-                    <ComboBox Grid.Column="2" ItemsSource="{Binding LogCategories}" SelectedItem="{Binding SelectedLogCategory}" Height="28" MinWidth="150" FontSize="11" Margin="0,0,8,0" VerticalAlignment="Center" ToolTip.Tip="Mostra solo i messaggi di una sezione dell'app"/>
-                    <Button Grid.Column="3" FontSize="11" Padding="10,0" Height="28" Command="{Binding CopyLogsCommand}" Margin="0,0,4,0" ToolTip.Tip="Copia negli appunti i log visibili (filtrati)" Classes="ghost"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCopy}"/><TextBlock Text="Copia"/></StackPanel></Button>
-                    <Button Grid.Column="4" FontSize="11" Padding="10,0" Height="28" Command="{Binding ExportLogsCommand}" Margin="0,0,4,0" ToolTip.Tip="Salva tutto il log su un file di testo" Classes="ghost"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconSave}"/><TextBlock Text="Esporta"/></StackPanel></Button>
-                    <Button Grid.Column="5" FontSize="11" Padding="10,0" Height="28" Command="{Binding ClearLogsCommand}" Classes="ghost" ToolTip.Tip="Svuota il log"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTrash}"/><TextBlock Text="Pulisci"/></StackPanel></Button>
+                    <ComboBox Grid.Column="2" ItemsSource="{Binding LogLevelFilters}" SelectedIndex="{Binding SelectedLogLevelFilter}" Height="28" MinWidth="150" FontSize="11" Margin="0,0,6,0" VerticalAlignment="Center" ToolTip.Tip="Mostra tutti i messaggi o solo avvisi/errori"/>
+                    <ComboBox Grid.Column="3" ItemsSource="{Binding LogCategories}" SelectedItem="{Binding SelectedLogCategory}" Height="28" MinWidth="150" FontSize="11" Margin="0,0,8,0" VerticalAlignment="Center" ToolTip.Tip="Mostra solo i messaggi di una sezione dell'app"/>
+                    <Button Grid.Column="4" FontSize="11" Padding="10,0" Height="28" Command="{Binding CopyLogsCommand}" Margin="0,0,4,0" ToolTip.Tip="Copia negli appunti i log visibili (filtrati)" Classes="ghost"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCopy}"/><TextBlock Text="Copia"/></StackPanel></Button>
+                    <Button Grid.Column="5" FontSize="11" Padding="10,0" Height="28" Command="{Binding ExportLogsCommand}" Margin="0,0,4,0" ToolTip.Tip="Salva tutto il log su un file di testo" Classes="ghost"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconSave}"/><TextBlock Text="Esporta"/></StackPanel></Button>
+                    <Button Grid.Column="6" FontSize="11" Padding="10,0" Height="28" Command="{Binding ClearLogsCommand}" Classes="ghost" ToolTip.Tip="Svuota il log"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTrash}"/><TextBlock Text="Pulisci"/></StackPanel></Button>
                 </Grid>
                 <Border DockPanel.Dock="Top" Height="1" Background="{DynamicResource AppBorderBrush}"/>
                 <ScrollViewer x:Name="LogScrollViewer" IsVisible="False" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">

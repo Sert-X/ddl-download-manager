@@ -57,6 +57,35 @@ public class DownloadRepository
                 ON DownloadChunks(DownloadId);
         ");
 
+        // Cronologia dei download completati: resta anche dopo aver pulito la coda
+        bool hadHistory = await conn.ExecuteScalarAsync<long>(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='DownloadHistory'") > 0;
+        await conn.ExecuteAsync(@"
+            CREATE TABLE IF NOT EXISTS DownloadHistory (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Category TEXT NOT NULL DEFAULT 'anime',
+                SeriesName TEXT NOT NULL DEFAULT '',
+                EpisodeNumber INTEGER NOT NULL DEFAULT 0,
+                SeasonNumber INTEGER NOT NULL DEFAULT 0,
+                FilePath TEXT NOT NULL DEFAULT '',
+                SizeBytes INTEGER NOT NULL DEFAULT 0,
+                CompletedAt TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+            );
+            CREATE INDEX IF NOT EXISTS IX_DownloadHistory_Series ON DownloadHistory(Category, SeriesName, SeasonNumber, EpisodeNumber);
+        ");
+        if (!hadHistory)
+        {
+            // Prima volta: si parte dai download completati ancora in coda
+            try
+            {
+                await conn.ExecuteAsync(@"
+                    INSERT INTO DownloadHistory (Category, SeriesName, EpisodeNumber, SeasonNumber, FilePath, SizeBytes, CompletedAt)
+                    SELECT Category, SeriesName, EpisodeNumber, SeasonNumber, DestinationPath, TotalBytes, CreatedAt
+                    FROM Downloads WHERE Status = @Completed;", new { Completed = (int)DownloadStatus.Completed });
+            }
+            catch (Exception ex) { _logger.LogWarning(ex, "Cronologia: import dei completati fallito"); }
+        }
+
         try
         {
             var cols = (await conn.QueryAsync<string>(
@@ -108,6 +137,64 @@ public class DownloadRepository
         }
 
         _logger.LogInformation("Database inizializzato in {Path}", _dbPath);
+    }
+
+    // ============================================================
+    //  CRONOLOGIA DOWNLOAD
+    // ============================================================
+
+    public async Task AddHistoryAsync(DownloadItem item)
+    {
+        await using var conn = new SqliteConnection(_connectionString);
+        long size = item.TotalBytes;
+        try { if (File.Exists(item.DestinationPath)) size = new FileInfo(item.DestinationPath).Length; } catch { }
+        await conn.ExecuteAsync(@"
+            INSERT INTO DownloadHistory (Category, SeriesName, EpisodeNumber, SeasonNumber, FilePath, SizeBytes, CompletedAt)
+            VALUES (@Category, @SeriesName, @EpisodeNumber, @SeasonNumber, @FilePath, @SizeBytes, @CompletedAt);",
+            new
+            {
+                item.Category, item.SeriesName, item.EpisodeNumber, item.SeasonNumber,
+                FilePath = item.DestinationPath, SizeBytes = size,
+                CompletedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+            });
+    }
+
+    public async Task<List<DownloadHistoryEntry>> GetHistoryAsync(string? category, string? search, int limit = 2000)
+    {
+        await using var conn = new SqliteConnection(_connectionString);
+        var sql = "SELECT * FROM DownloadHistory WHERE 1=1";
+        if (!string.IsNullOrEmpty(category)) sql += " AND Category = @category";
+        if (!string.IsNullOrWhiteSpace(search)) sql += " AND (SeriesName LIKE @like OR FilePath LIKE @like)";
+        sql += " ORDER BY CompletedAt DESC, Id DESC LIMIT @limit";
+        var rows = await conn.QueryAsync<DownloadHistoryEntry>(sql, new { category, like = $"%{search?.Trim()}%", limit });
+        return rows.ToList();
+    }
+
+    public async Task ClearHistoryAsync()
+    {
+        await using var conn = new SqliteConnection(_connectionString);
+        await conn.ExecuteAsync("DELETE FROM DownloadHistory;");
+    }
+
+    /// <summary>Episodi della serie già scaricati in passato (stagione 0 = qualsiasi).</summary>
+    public async Task<HashSet<int>> GetDownloadedEpisodesAsync(string category, string seriesName, int seasonNumber = 0)
+    {
+        await using var conn = new SqliteConnection(_connectionString);
+        var rows = await conn.QueryAsync<int>(@"
+            SELECT EpisodeNumber FROM DownloadHistory
+            WHERE Category = @category AND SeriesName = @seriesName COLLATE NOCASE
+              AND (@seasonNumber = 0 OR SeasonNumber = @seasonNumber);", new { category, seriesName, seasonNumber });
+        return rows.ToHashSet();
+    }
+
+    /// <summary>Dimensione media degli ultimi file scaricati della categoria (0 = nessun dato).</summary>
+    public async Task<long> GetAverageSizeAsync(string category)
+    {
+        await using var conn = new SqliteConnection(_connectionString);
+        var avg = await conn.ExecuteScalarAsync<double?>(@"
+            SELECT AVG(SizeBytes) FROM (SELECT SizeBytes FROM DownloadHistory
+            WHERE Category = @category AND SizeBytes > 0 ORDER BY Id DESC LIMIT 50);", new { category });
+        return (long)(avg ?? 0);
     }
 
     // ============================================================

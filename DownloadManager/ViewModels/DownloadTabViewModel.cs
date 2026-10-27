@@ -768,6 +768,10 @@ public partial class DownloadTabViewModel : ViewModelBase
     {
         ct.ThrowIfCancellationRequested();
         var item = BuildLazyDownloadItem(episode, SelectedAnime?.Name ?? "", SelectedProvider!);
+        var guard = new EnqueueGuard(_queueService.Repository, "anime");
+        var keep = await guard.FilterAsync(new List<DownloadItem> { item }, i => i.EpisodeNumber, item.SeriesName, 0, _shared.BaseDownloadFolder);
+        if (keep == null) { StatusMessage = "Accodamento annullato."; return; }
+        if (keep.Count == 0) { StatusMessage = $"Episodio {episode.Number} già scaricato in passato: saltato."; return; }
         await _queueService.EnqueueAsync(item);
         StatusMessage = $"Episodio {episode.Number} accodato.";
     }
@@ -841,11 +845,17 @@ public partial class DownloadTabViewModel : ViewModelBase
             // del suo download (con ritmo e nuovi tentativi), non tutti insieme adesso:
             // con centinaia di episodi il sito rispondeva 403 e l'accodamento si fermava.
             var provider = SelectedProvider!;
-            var items = toDownload.Select(ep => BuildLazyDownloadItem(ep, seriesName, provider)).ToList();
+            var guard = new EnqueueGuard(_queueService.Repository, "anime");
+            var items = await guard.FilterAsync(
+                toDownload.Select(ep => BuildLazyDownloadItem(ep, seriesName, provider)).ToList(),
+                i => i.EpisodeNumber, seriesName, 0, _shared.BaseDownloadFolder);
+            if (items == null) { StatusMessage = "Accodamento annullato: spazio su disco insufficiente."; return; }
+            if (items.Count == 0) { StatusMessage = $"Niente da accodare{guard.Note}."; return; }
             await _queueService.EnqueueManyAsync(items);
 
-            var msg = $"{items.Count} episodi accodati";
+            var msg = $"{items.Count} {(items.Count == 1 ? "episodio accodato" : "episodi accodati")}";
             if (skipped > 0) msg += $", {skipped} già in coda";
+            msg += guard.Note;
             StatusMessage = msg + ": il link di ognuno viene preso dal sito quando parte il suo download.";
         }
         catch (OperationCanceledException) { StatusMessage = "Accodamento annullato."; }

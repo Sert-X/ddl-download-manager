@@ -34,6 +34,9 @@ public class AppSettings
     public string ThemeVariant { get; set; } = "Default";
     /// <summary>Versione dell'ultimo avvio: se cambia, al primo avvio si mostrano le novità.</summary>
     public string LastRunVersion { get; set; } = "";
+
+    /// <summary>Notifiche di Windows a fine lavoro (serie, code SFTP, errori, disco pieno).</summary>
+    public bool NotificationsEnabled { get; set; } = true;
     /// <summary>Ogni quanti minuti ricontrollare i domini in background (0 = solo all'avvio).</summary>
     public int DomainCheckIntervalMinutes { get; set; } = 10;
     /// <summary>Conversione proposta per i download CB01 (si può cambiare per ogni download).</summary>

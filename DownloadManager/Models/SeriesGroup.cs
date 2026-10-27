@@ -69,6 +69,8 @@ public partial class SeriesGroup : ObservableObject
     public bool HasFailed => FailedCount > 0;
     public string FailedBadge => FailedCount == 1 ? "1 fallito" : $"{FailedCount} {(FailedCount == 1 ? "fallito" : "falliti")}";
     public bool HasCancelled => CancelledCount > 0;
+    public bool IsAllCompleted => TotalCount > 0 && CompletedCount == TotalCount;
+    public bool IsAllPaused => PausedCount > 0 && ActiveCount == 0 && PendingCount == 0;
 
     public double OverallPercentage
     {
@@ -167,5 +169,7 @@ public partial class SeriesGroup : ObservableObject
         OnPropertyChanged(nameof(HasFailed));
         OnPropertyChanged(nameof(FailedBadge));
         OnPropertyChanged(nameof(HasCancelled));
+        OnPropertyChanged(nameof(IsAllCompleted));
+        OnPropertyChanged(nameof(IsAllPaused));
     }
 }

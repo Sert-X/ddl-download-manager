@@ -106,6 +106,11 @@ public abstract partial class TransferJobBase : ObservableObject
     public bool CanPause => Status == SftpJobStatus.Pending || IsActive;
     public bool CanCancel => Status is not (SftpJobStatus.Completed or SftpJobStatus.Cancelled);
     public bool CanRetry => Status is SftpJobStatus.Failed or SftpJobStatus.Cancelled;
+    public bool IsFailed => Status == SftpJobStatus.Failed;
+    public bool IsCompleted => Status == SftpJobStatus.Completed;
+    public bool IsPaused => Status == SftpJobStatus.Paused;
+    public bool IsQueued => Status == SftpJobStatus.Pending;
+    public bool IsCancelled => Status == SftpJobStatus.Cancelled;
 
     partial void OnStatusChanged(SftpJobStatus value)
     {
@@ -115,5 +120,10 @@ public abstract partial class TransferJobBase : ObservableObject
         OnPropertyChanged(nameof(CanPause));
         OnPropertyChanged(nameof(CanCancel));
         OnPropertyChanged(nameof(CanRetry));
+        OnPropertyChanged(nameof(IsFailed));
+        OnPropertyChanged(nameof(IsCompleted));
+        OnPropertyChanged(nameof(IsPaused));
+        OnPropertyChanged(nameof(IsQueued));
+        OnPropertyChanged(nameof(IsCancelled));
     }
 }

@@ -56,6 +56,8 @@ public partial class MainWindowViewModel : ViewModelBase
     public ProxyTabViewModel Proxy { get; }
     public OrganizerTabViewModel Organizer { get; }
     public SftpTabViewModel Sftp { get; }
+    /// <summary>Barra di stato in basso e notifiche di Windows.</summary>
+    public ActivityViewModel Activity { get; }
     public DomainsTabViewModel Domains { get; }
 
     // --- Log globale ---
@@ -168,6 +170,8 @@ public partial class MainWindowViewModel : ViewModelBase
             _settings,
             streamingLogger,
             Shared);
+
+        Activity = new ActivityViewModel(_queueService, _settings, _sftpUploadQueue, _sftpDownloadQueue, sftpRelayQueue);
 
         Account = accountVm;
         Videobox = videobox;

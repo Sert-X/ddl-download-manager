@@ -59,14 +59,19 @@ public partial class DownloadItem : ObservableObject
     public CancellationTokenSource? CancellationTokenSource { get; set; }
     public bool PauseRequested { get; set; }
 
+    /// <summary>Nuovi tentativi automatici già fatti dopo un errore (si azzera riprovando a mano).</summary>
+    public int AutoRetryCount { get; set; }
+
     public string FileName => Path.GetFileName(DestinationPath);
 
     /// <summary>Stato per la coda: a download finito mostra la fase in corso (es. "Conversione 37%").</summary>
     public string StatusText => Status switch
     {
         DownloadStatus.Downloading when !string.IsNullOrEmpty(ErrorMessage) => ErrorMessage,
+        DownloadStatus.Pending when !string.IsNullOrEmpty(ErrorMessage) => ErrorMessage,   // es. "Nuovo tentativo alle 17:42"
         DownloadStatus.Pending => IsPriority ? "In coda (forzato)" : "In coda",
         DownloadStatus.Downloading => "In download",
+        DownloadStatus.Paused when !string.IsNullOrEmpty(ErrorMessage) => "In pausa: " + ErrorMessage,
         DownloadStatus.Paused => "In pausa",
         DownloadStatus.Completed => "Completato",
         DownloadStatus.Failed => string.IsNullOrEmpty(ErrorMessage) ? "Errore" : "Errore: " + ErrorMessage,
@@ -76,6 +81,19 @@ public partial class DownloadItem : ObservableObject
 
     /// <summary>Download fallito: la riga si colora di rosso e mostra il motivo.</summary>
     public bool IsFailed => Status == DownloadStatus.Failed;
+    public bool IsCompleted => Status == DownloadStatus.Completed;
+    public bool IsPaused => Status == DownloadStatus.Paused;
+    public bool IsQueued => Status == DownloadStatus.Pending;
+    public bool IsCancelled => Status == DownloadStatus.Cancelled;
+    public bool IsDownloading => Status == DownloadStatus.Downloading;
+
+    /// <summary>
+    /// Dimensione, velocità e tempo rimanente in una sola colonna: velocità e tempo solo mentre
+    /// scarica (prima erano due colonne quasi sempre con "-").
+    /// </summary>
+    public string InfoText => Status == DownloadStatus.Downloading && SpeedBytesPerSecond > 0
+        ? $"{SizeText}  ·  {SpeedText}  ·  {EtaText}"
+        : SizeText;
 
     /// <summary>Suggerimento sullo stato: per un errore, il messaggio completo e come riprovare.</summary>
     public string StatusTip => IsFailed
@@ -129,6 +147,7 @@ public partial class DownloadItem : ObservableObject
 
     partial void OnDownloadedBytesChanged(long value)
     {
+        OnPropertyChanged(nameof(InfoText));
         OnPropertyChanged(nameof(Percentage));
         OnPropertyChanged(nameof(SizeText));
         OnPropertyChanged(nameof(EtaText));
@@ -136,6 +155,7 @@ public partial class DownloadItem : ObservableObject
 
     partial void OnTotalBytesChanged(long value)
     {
+        OnPropertyChanged(nameof(InfoText));
         OnPropertyChanged(nameof(Percentage));
         OnPropertyChanged(nameof(SizeText));
         OnPropertyChanged(nameof(EtaText));
@@ -143,6 +163,7 @@ public partial class DownloadItem : ObservableObject
 
     partial void OnSpeedBytesPerSecondChanged(double value)
     {
+        OnPropertyChanged(nameof(InfoText));
         OnPropertyChanged(nameof(SpeedText));
         OnPropertyChanged(nameof(EtaText));
     }
@@ -160,6 +181,12 @@ public partial class DownloadItem : ObservableObject
         OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(StatusTip));
         OnPropertyChanged(nameof(IsFailed));
+        OnPropertyChanged(nameof(IsCompleted));
+        OnPropertyChanged(nameof(IsPaused));
+        OnPropertyChanged(nameof(IsQueued));
+        OnPropertyChanged(nameof(IsCancelled));
+        OnPropertyChanged(nameof(IsDownloading));
+        OnPropertyChanged(nameof(InfoText));
     }
 
     partial void OnIsPriorityChanged(bool value)

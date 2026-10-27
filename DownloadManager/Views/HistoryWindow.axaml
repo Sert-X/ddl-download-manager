@@ -1,0 +1,80 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:models="using:DownloadManager.Models"
+        x:Class="DownloadManager.Views.HistoryWindow"
+        x:CompileBindings="False"
+        Title="Cronologia download"
+        Width="1180" Height="680" MinWidth="760" MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Background="{DynamicResource AppBackgroundBrush}">
+
+    <DockPanel Margin="18">
+        <!-- Titolo -->
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto, *" Margin="0,0,0,14">
+            <Border Width="42" Height="42" CornerRadius="21" Background="{DynamicResource AppAccentSoftBrush}" VerticalAlignment="Top">
+                <Path Classes="icon accent" Data="{StaticResource IconCheckCircle}" Width="20" Height="20"/>
+            </Border>
+            <StackPanel Grid.Column="1" Margin="14,0,0,0" Spacing="3" VerticalAlignment="Center">
+                <TextBlock Text="Cronologia download" FontSize="16" FontWeight="Bold"/>
+                <TextBlock FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource AppTextMutedBrush}"
+                           Text="Tutto ciò che è stato scaricato, anche dopo aver pulito la coda. Accodando, gli episodi già presenti qui vengono segnalati per non riscaricarli per errore."/>
+            </StackPanel>
+        </Grid>
+
+        <!-- Filtri -->
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*, Auto, Auto" Margin="0,0,0,10">
+            <TextBox x:Name="SearchBox" PlaceholderText="Cerca per serie o nome del file..." TextChanged="OnSearchChanged" Margin="0,0,8,0"/>
+            <ComboBox Grid.Column="1" x:Name="CategoryBox" SelectedIndex="0" MinWidth="150" SelectionChanged="OnCategoryChanged" Margin="0,0,8,0">
+                <ComboBoxItem Content="Tutti"/>
+                <ComboBoxItem Content="Anime"/>
+                <ComboBoxItem Content="Film/Serie"/>
+            </ComboBox>
+            <TextBlock Grid.Column="2" x:Name="CountText" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}"/>
+        </Grid>
+
+        <!-- Pulsanti -->
+        <Grid DockPanel.Dock="Bottom" ColumnDefinitions="Auto, *, Auto" Margin="0,12,0,0">
+            <Button Grid.Column="0" Click="OnClearClick" ToolTip.Tip="Cancella tutta la cronologia (i file scaricati non vengono toccati). Chiede conferma.">
+                <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTrash}"/><TextBlock Text="Svuota cronologia"/></StackPanel>
+            </Button>
+            <Button Grid.Column="2" Classes="accent" MinWidth="110" Click="OnCloseClick" IsCancel="True">
+                <TextBlock Text="Chiudi"/>
+            </Button>
+        </Grid>
+
+        <Border Classes="cardElevated" Padding="0">
+            <Panel>
+                <DataGrid x:Name="Grid" AutoGenerateColumns="False" IsReadOnly="True" CanUserResizeColumns="True" CanUserSortColumns="True"
+                          DoubleTapped="OnRowDoubleTapped">
+                    <DataGrid.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Apri la cartella" Click="OnOpenFolderClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconFolder}"/></MenuItem.Icon></MenuItem>
+                            <MenuItem Header="Copia il percorso del file" Click="OnCopyPathClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconCopy}"/></MenuItem.Icon></MenuItem>
+                        </ContextMenu>
+                    </DataGrid.ContextMenu>
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Data" Binding="{Binding DateText}" Width="140" SortMemberPath="CompletedAt"/>
+                        <DataGridTextColumn Header="Tipo" Binding="{Binding CategoryText}" Width="100"/>
+                        <DataGridTextColumn Header="Serie / Film" Binding="{Binding SeriesName}" Width="1.3*"/>
+                        <DataGridTextColumn Header="Ep." Binding="{Binding EpisodeText}" Width="70"/>
+                        <DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="1.7*"/>
+                        <DataGridTextColumn Header="Dimensione" Binding="{Binding SizeText}" Width="115" SortMemberPath="SizeBytes"/>
+                        <DataGridTemplateColumn Header="Sul disco" Width="100">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Panel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <Path Classes="icon" Width="14" Height="14" Data="{StaticResource IconCheck}" Stroke="{DynamicResource AppSuccessBrush}" IsVisible="{Binding FileExists}" ToolTip.Tip="Il file è ancora nella sua cartella"/>
+                                        <TextBlock Text="spostato" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding !FileExists}" ToolTip.Tip="Il file non è più nel percorso originale (spostato, rinominato o eliminato)"/>
+                                    </Panel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+                <TextBlock x:Name="EmptyText" Text="Nessun download nella cronologia." HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="False"/>
+            </Panel>
+        </Border>
+    </DockPanel>
+</Window>

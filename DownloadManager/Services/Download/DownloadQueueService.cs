@@ -37,6 +37,22 @@ public class DownloadQueueService
 
     /// <summary>Download in corso fermati per far posto a uno forzato: tornano subito in coda.</summary>
     private readonly HashSet<int> _preempted = new();
+
+    /// <summary>Un download è finito: completato oppure fallito in modo definitivo (per le notifiche).</summary>
+    public event Action<DownloadItem>? ItemFinished;
+
+    /// <summary>Un download non parte perché sul disco resta troppo poco spazio.</summary>
+    public event Action<string, long>? DiskSpaceLow;
+
+    // Nuovi tentativi automatici dopo un errore temporaneo (rete, proxy, server occupato)
+    public const int MaxAutoRetries = 3;
+    public static TimeSpan[] RetryDelays { get; set; } = { TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(5) };
+
+    /// <summary>Spazio minimo da lasciare libero: sotto questa soglia i download non partono.</summary>
+    public const long MinFreeBytes = 1L << 30;   // 1 GB
+    private readonly Dictionary<string, (DateTime At, long Free)> _freeCache = new(StringComparer.OrdinalIgnoreCase);
+
+    public DownloadRepository Repository => _repository;
     private bool _isRunning = true;
 
     public DownloadQueueService(
@@ -366,6 +382,7 @@ public class DownloadQueueService
             item.Status = DownloadStatus.Pending;
             item.PauseRequested = false;
             item.ErrorMessage = string.Empty;
+            item.AutoRetryCount = 0;
 
             int insertAt = 0;
             while (insertAt < _pending.Count && _pending[insertAt].IsPriority)
@@ -502,6 +519,7 @@ public class DownloadQueueService
                 _pending.RemoveAll(i => i.Id == item.Id);
                 _pendingIds.Remove(item.Id);
             }
+            item.ErrorMessage = string.Empty;   // es. "Nuovo tentativo alle..." in attesa
             item.Status = DownloadStatus.Paused;
         }
 
@@ -521,6 +539,7 @@ public class DownloadQueueService
         item.Status = DownloadStatus.Pending;
         item.PauseRequested = false;
         item.ErrorMessage = string.Empty;
+        item.AutoRetryCount = 0;
 
         lock (_queueLock)
         {
@@ -657,6 +676,7 @@ public class DownloadQueueService
             item.Status = DownloadStatus.Pending;
             item.PauseRequested = false;
             item.IsPriority = false;
+            item.AutoRetryCount = 0;
         });
 
         try { await Db(() => _repository.ClearChunksAsync(item.Id)); }
@@ -980,6 +1000,22 @@ public class DownloadQueueService
                             var max = _maxConcurrency.TryGetValue(category, out var m) ? m : DefaultMaxConcurrency;
                             if (activeByCategory.GetValueOrDefault(category) >= max) continue;
 
+                            // Disco quasi pieno: il download non parte e va in pausa con il motivo
+                            if (FreeBytesFor(candidate.DestinationPath) is { } free && free < MinFreeBytes)
+                            {
+                                _pending.RemoveAt(i--);
+                                _pendingIds.Remove(candidate.Id);
+                                var root = SafeRoot(candidate.DestinationPath);
+                                var low = candidate;
+                                Dispatcher.UIThread.Post(() =>
+                                {
+                                    low.ErrorMessage = $"spazio su disco esaurito ({FormatBytes(free)} liberi su {root}). Libera spazio e premi Riprendi";
+                                    low.Status = DownloadStatus.Paused;
+                                });
+                                DiskSpaceLow?.Invoke(root, free);
+                                continue;
+                            }
+
                             item = candidate;
                             _pending.RemoveAt(i);
                             _pendingIds.Remove(candidate.Id);
@@ -1003,14 +1039,72 @@ public class DownloadQueueService
         });
     }
 
+    private static string SafeRoot(string path)
+    {
+        try { return Path.GetPathRoot(Path.GetFullPath(path)) ?? ""; } catch { return ""; }
+    }
+
+    /// <summary>Spazio libero sul disco del percorso (letto al massimo ogni 5 secondi). null = sconosciuto.</summary>
+    private long? FreeBytesFor(string path)
+    {
+        var root = SafeRoot(path);
+        if (root.Length == 0) return null;
+        if (_freeCache.TryGetValue(root, out var c) && DateTime.UtcNow - c.At < TimeSpan.FromSeconds(5)) return c.Free;
+        try
+        {
+            var free = new DriveInfo(root).AvailableFreeSpace;
+            _freeCache[root] = (DateTime.UtcNow, free);
+            return free;
+        }
+        catch { return null; }
+    }
+
+    public static string FormatBytes(long bytes) => bytes >= 1L << 30
+        ? $"{bytes / (double)(1L << 30):F1} GB"
+        : $"{bytes / (double)(1L << 20):F0} MB";
+
+    /// <summary>
+    /// Errore per cui riprovare ha senso (rete, proxy, server occupato). Non si riprova per file
+    /// che non esistono, captcha, disco pieno o permessi.
+    /// </summary>
+    private static bool IsTransient(Exception ex)
+    {
+        var m = ex.ToString();
+        string[] permanent = { "404", "Not Found", "captcha", "Captcha", "not enough space", "spazio", "disk full", "Access to the path", "UnauthorizedAccess", "Accesso negato" };
+        return !permanent.Any(p => m.Contains(p, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Rimette in coda un download fallito dopo l'attesa, se nel frattempo nessuno l'ha toccato.</summary>
+    private async Task AutoRetryLaterAsync(DownloadItem item, TimeSpan delay, int attempt)
+    {
+        await Task.Delay(delay);
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            // Messo in pausa, annullato, rimosso o già ripartito: non si fa niente
+            if (item.Status != DownloadStatus.Pending || item.AutoRetryCount != attempt || !AllItems.Contains(item)) return;
+            item.ErrorMessage = string.Empty;
+            lock (_queueLock)
+            {
+                if (_active.ContainsKey(item.Id) || !_pendingIds.Add(item.Id)) return;
+                _pending.Add(item);
+            }
+            _logger.LogInformation("[QUEUE] Nuovo tentativo {N}/{Max}: {File}", attempt, MaxAutoRetries, item.FileName);
+        });
+        QueueChanged?.Invoke();
+        TryDispatch();
+    }
+
     private async Task RunItemAsync(DownloadItem item, CancellationTokenSource cts)
     {
+        bool completed = false;
+        bool finalFailure = false;
         try
         {
             QueueChanged?.Invoke();
 
             var downloadService = _serviceProvider.GetRequiredService<IDownloadService>();
             await downloadService.DownloadItemAsync(item, cts.Token);
+            completed = true;
         }
         catch (OperationCanceledException)
         {
@@ -1021,7 +1115,10 @@ public class DownloadQueueService
                 Dispatcher.UIThread.Post(() =>
                 {
                     if (item.PauseRequested)
+                    {
+                        item.ErrorMessage = string.Empty;   // es. "Conversione 37%"
                         item.Status = DownloadStatus.Paused;
+                    }
                     else
                         item.Status = DownloadStatus.Cancelled;
                 });
@@ -1029,12 +1126,34 @@ public class DownloadQueueService
         }
         catch (Exception ex)
         {
-            Dispatcher.UIThread.Post(() =>
+            if (item.AutoRetryCount < MaxAutoRetries && IsTransient(ex))
             {
-                item.Status = DownloadStatus.Failed;
-                item.ErrorMessage = ex.Message;
-            });
-            _logger.LogError(ex, "Download fallito: {Url}", item.Url);
+                // Errore temporaneo: si riprova da solo dopo un'attesa crescente (30 s, 2 min, 5 min)
+                int attempt = ++item.AutoRetryCount;
+                var delay = RetryDelays[Math.Min(attempt, RetryDelays.Length) - 1];
+                var at = DateTime.Now + delay;
+                Dispatcher.UIThread.Post(() =>
+                {
+                    item.SpeedBytesPerSecond = 0;
+                    item.ErrorMessage = $"Nuovo tentativo alle {at:HH:mm:ss} ({attempt}/{MaxAutoRetries}) · {ex.Message}";
+                    item.Status = DownloadStatus.Pending;
+                });
+                _logger.LogWarning("Download fallito, nuovo tentativo {N}/{Max} tra {Sec} s: {File} — {Err}",
+                    attempt, MaxAutoRetries, (int)delay.TotalSeconds, item.FileName, ex.Message);
+                _ = AutoRetryLaterAsync(item, delay, attempt);
+            }
+            else
+            {
+                finalFailure = true;
+                Dispatcher.UIThread.Post(() =>
+                {
+                    item.Status = DownloadStatus.Failed;
+                    item.ErrorMessage = item.AutoRetryCount > 0
+                        ? $"{ex.Message} (dopo {item.AutoRetryCount} {(item.AutoRetryCount == 1 ? "nuovo tentativo" : "nuovi tentativi")})"
+                        : ex.Message;
+                });
+                _logger.LogError(ex, "Download fallito: {Url}", item.Url);
+            }
         }
         finally
         {
@@ -1054,6 +1173,15 @@ public class DownloadQueueService
                 }
                 requeue = _preempted.Remove(item.Id);
             }
+
+            if (completed)
+            {
+                item.AutoRetryCount = 0;
+                try { await Db(() => _repository.AddHistoryAsync(item)); }
+                catch (Exception ex) { _logger.LogWarning(ex, "[QUEUE] Cronologia non aggiornata (Id {Id})", item.Id); }
+            }
+            if (completed || finalFailure)
+                Dispatcher.UIThread.Post(() => ItemFinished?.Invoke(item));
 
             if (requeue)
             {
