@@ -89,6 +89,7 @@ public class PatternLegendButton : Button
         new("{Number:D2}", "Numero con 2 cifre", "02"),
         new("{Start}", "Primo episodio della sottocartella", "26"),
         new("{End}", "Ultimo episodio della sottocartella", "50"),
+        new("{Series}", "Nome della serie, ricavato dai file (o dalla cartella)", "Frieren"),
     };
 
     public PatternLegendButton()
@@ -125,7 +126,12 @@ public class PatternLegendButton : Button
                 "Una \"/\" crea sottocartelle: {Series}/{Episode:D3} → Frieren\\005.mp4",
                 "File con più episodi (es. Ep 01-02): {Episode:D2} diventa 01-02.",
             }),
-            "SplitFolder" => ("Segnaposto per il nome delle sottocartelle", SplitFolderTokens, new[] { "Esempio: Puntate {Start}-{End} → Puntate 26-50" }),
+            "SplitFolder" => ("Segnaposto per il nome delle sottocartelle", SplitFolderTokens, new[]
+            {
+                "Esempio: Episodi {Start}-{End} → Episodi 26-50",
+                "Una \"/\" crea più livelli: {Series}/Parte {Number} → Frieren\\Parte 2",
+                "\":D3\" vale anche qui: {Start:D3}-{End:D3} → 026-050",
+            }),
             _ => ("Segnaposto per il nome dei file", AnimeTokens, new[] { "Esempio: {Series} - {Episode:D3} → Frieren - 005" }),
         };
 

@@ -292,6 +292,7 @@
             <StreamGeometry x:Key="IconBolt">M 13,2 L 3,14 L 12,14 L 11,22 L 21,10 L 12,10 Z</StreamGeometry>
             <StreamGeometry x:Key="IconBoltOff">M 12.41,6.75 L 13,2 L 10.57,4.92 M 18.57,12.91 L 21,10 L 15.66,10 M 8,8 L 3,14 L 12,14 L 11,22 L 16,16 M 2,2 L 22,22</StreamGeometry>
             <StreamGeometry x:Key="IconCheckCircle">M 22,12 A 10,10 0 1 1 2,12 A 10,10 0 1 1 22,12 Z M 8,12 L 11,15 L 16,9</StreamGeometry>
+            <StreamGeometry x:Key="IconChevronDownSmall">M 6,9 L 12,15 L 18,9</StreamGeometry>
             <StreamGeometry x:Key="IconBan">M 22,12 A 10,10 0 1 1 2,12 A 10,10 0 1 1 22,12 Z M 4.93,4.93 L 19.07,19.07</StreamGeometry>
             <StreamGeometry x:Key="IconAlertCircle">M 22,12 A 10,10 0 1 1 2,12 A 10,10 0 1 1 22,12 Z M 12,8 L 12,12 M 12,16 L 12,16.01</StreamGeometry>
             <StreamGeometry x:Key="IconClock">M 22,12 A 10,10 0 1 1 2,12 A 10,10 0 1 1 22,12 Z M 12,6 L 12,12 L 16,14</StreamGeometry>
@@ -1330,6 +1331,57 @@
         </Style>
         <Style Selector="DataGridCell /template/ Grid#FocusVisual">
             <Setter Property="Opacity" Value="0"/>
+        </Style>
+
+        <!-- Download falliti: riga e gruppo in rosso, si notano subito -->
+        <Style Selector="Border.episodeRow TextBlock.rowStatus">
+            <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}"/>
+        </Style>
+        <Style Selector="Border.episodeRow.failed">
+            <Setter Property="Background" Value="{DynamicResource AppDangerSoftBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppDangerBrush}"/>
+            <Setter Property="BorderThickness" Value="3,0,0,1"/>
+        </Style>
+        <Style Selector="Border.episodeRow.failed:pointerover">
+            <Setter Property="Background" Value="{DynamicResource AppDangerSoftHoverBrush}"/>
+        </Style>
+        <Style Selector="Border.episodeRow.failed TextBlock.rowStatus">
+            <Setter Property="Foreground" Value="{DynamicResource AppDangerBrush}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="Path.failIcon">
+            <Setter Property="Stroke" Value="{DynamicResource AppDangerBrush}"/>
+        </Style>
+        <Style Selector="Border.groupHeader">
+            <Setter Property="BorderThickness" Value="3,0,0,0"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Padding" Value="8,0,0,0"/>
+            <Setter Property="Margin" Value="-11,0,0,0"/>
+        </Style>
+        <Style Selector="Border.groupHeader.failed">
+            <Setter Property="BorderBrush" Value="{DynamicResource AppDangerBrush}"/>
+        </Style>
+        <Style Selector="Border.failBadge">
+            <Setter Property="Background" Value="{DynamicResource AppDangerBrush}"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="8,2"/>
+        </Style>
+        <Style Selector="Border.failBadge TextBlock">
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+        <Style Selector="Border.failBadge Path.icon">
+            <Setter Property="Stroke" Value="White"/>
+            <Setter Property="Width" Value="12"/>
+            <Setter Property="Height" Value="12"/>
+        </Style>
+        <!-- Voce di menu distruttiva ("Elimina tutto…") -->
+        <Style Selector="MenuItem.dangerItem">
+            <Setter Property="Foreground" Value="{DynamicResource AppDangerBrush}"/>
+        </Style>
+        <Style Selector="MenuItem.dangerItem Path.icon">
+            <Setter Property="Stroke" Value="{DynamicResource AppDangerBrush}"/>
         </Style>
     </Application.Styles>
 </Application>

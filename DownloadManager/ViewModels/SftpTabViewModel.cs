@@ -543,9 +543,9 @@ public partial class SftpTabViewModel : ViewModelBase
         if (uploading > 0) parts.Add($"{uploading} in corso");
         if (pending > 0) parts.Add($"{pending} in attesa");
         if (paused > 0) parts.Add($"{paused} in pausa");
-        if (completed > 0) parts.Add($"{completed} completati");
-        if (failed > 0) parts.Add($"{failed} falliti");
-        if (cancelled > 0) parts.Add($"{cancelled} annullati");
+        if (completed > 0) parts.Add($"{completed} {(completed == 1 ? "completato" : "completati")}");
+        if (failed > 0) parts.Add($"{failed} {(failed == 1 ? "fallito" : "falliti")}");
+        if (cancelled > 0) parts.Add($"{cancelled} {(cancelled == 1 ? "annullato" : "annullati")}");
 
         UploadQueueStats = string.Join(" · ", parts);
     }
@@ -567,9 +567,9 @@ public partial class SftpTabViewModel : ViewModelBase
         if (downloading > 0) parts.Add($"{downloading} in corso");
         if (pending > 0) parts.Add($"{pending} in attesa");
         if (paused > 0) parts.Add($"{paused} in pausa");
-        if (completed > 0) parts.Add($"{completed} completati");
-        if (failed > 0) parts.Add($"{failed} falliti");
-        if (cancelled > 0) parts.Add($"{cancelled} annullati");
+        if (completed > 0) parts.Add($"{completed} {(completed == 1 ? "completato" : "completati")}");
+        if (failed > 0) parts.Add($"{failed} {(failed == 1 ? "fallito" : "falliti")}");
+        if (cancelled > 0) parts.Add($"{cancelled} {(cancelled == 1 ? "annullato" : "annullati")}");
 
         DownloadQueueStats = string.Join(" · ", parts);
     }

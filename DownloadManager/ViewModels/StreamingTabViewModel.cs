@@ -61,14 +61,11 @@ public partial class StreamingTabViewModel : ViewModelBase
     private void ClearAll()
     {
         // Le operazioni in corso diventano "superate": i loro risultati verranno ignorati
-        _searchSeq++; _seasonsSeq++; _episodesSeq++; _qualitiesSeq++;
-        IsQualitiesLoading = false;
+        _searchSeq++;
         IsLoadingSearchResults = false;
-        IsLoadingEpisodes = false;
         SearchResults.Clear();
-        SelectedResult = null;   // svuota anche stagioni, episodi, qualità e tracce
-        Episodes.Clear();
-        Seasons.Clear();
+        SelectedResult = null;
+        ClearDetailContent();
         _emptySearchTerm = null;
         SearchQuery = string.Empty;
         NotifyPlaceholders();
@@ -450,11 +447,11 @@ public partial class StreamingTabViewModel : ViewModelBase
                 i.Status == DownloadStatus.Pending || i.Status == DownloadStatus.Paused));
             int failed = groups.Sum(g => g.Items.Count(i => i.Status == DownloadStatus.Failed));
 
-            var parts = new List<string> { $"{total} episodi" };
-            if (completed > 0) parts.Add($"{completed} completati");
+            var parts = new List<string> { $"{total} {(total == 1 ? "episodio" : "episodi")}" };
+            if (completed > 0) parts.Add($"{completed} {(completed == 1 ? "completato" : "completati")}");
             if (active > 0) parts.Add($"{active} in corso");
             if (pending > 0) parts.Add($"{pending} in attesa");
-            if (failed > 0) parts.Add($"{failed} falliti");
+            if (failed > 0) parts.Add($"{failed} {(failed == 1 ? "fallito" : "falliti")}");
 
             return $"{groups.Count} serie · {string.Join(" · ", parts)}";
         }
@@ -684,14 +681,25 @@ public partial class StreamingTabViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShowDetailPlaceholder));
         OnPropertyChanged(nameof(IsSelectedResultSeries));
         OnPropertyChanged(nameof(IsSelectedResultMovie));
+        ClearDetailContent();
+    }
 
+    /// <summary>
+    /// Svuota stagioni, episodi, qualità e tracce del titolo aperto. I caricamenti ancora in corso
+    /// diventano "superati": prima gli episodi del titolo precedente potevano arrivare dopo e
+    /// comparire nel dettaglio di quello nuovo.
+    /// </summary>
+    private void ClearDetailContent()
+    {
+        _seasonsSeq++; _episodesSeq++; _qualitiesSeq++;
+        IsLoadingEpisodes = false;
         Episodes.Clear();
         Seasons.Clear();
         SelectedSeason = null;
         AvailableQualities.Clear();
         SelectedQuality = null;
         ClearTracks();
-        IsQualitiesLoading = false;   // ← NUOVO (reset nel caso rimanesse appeso)
+        IsQualitiesLoading = false;
         OnPropertyChanged(nameof(HasSeasons)); OnPropertyChanged(nameof(HasItaAndSubSeasons));
         SelectedConversion = DefaultConversion;
         NotifyMovieCard();
@@ -773,6 +781,11 @@ public partial class StreamingTabViewModel : ViewModelBase
         SaveSearchToHistory(term.Trim());
 
         int seq = ++_searchSeq;
+        // Risultati e Dettaglio della ricerca precedente spariscono subito
+        _emptySearchTerm = null;
+        SearchResults.Clear();
+        SelectedResult = null;
+        ClearDetailContent();
         IsLoadingSearchResults = true;
         try
         {
@@ -882,7 +895,9 @@ public partial class StreamingTabViewModel : ViewModelBase
     {
         if (result == null) return;
 
-        SelectedResult = result;
+        // Il dettaglio precedente sparisce subito (anche rianalizzando lo stesso titolo)
+        if (ReferenceEquals(SelectedResult, result)) ClearDetailContent();
+        else SelectedResult = result;
         int seq = ++_seasonsSeq;
         IsLoadingEpisodes = true;
 

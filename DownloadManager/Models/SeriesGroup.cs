@@ -67,6 +67,7 @@ public partial class SeriesGroup : ObservableObject
     public int FailedCount { get { EnsureStats(); return _failed; } }
     public int CancelledCount { get { EnsureStats(); return _cancelled; } }
     public bool HasFailed => FailedCount > 0;
+    public string FailedBadge => FailedCount == 1 ? "1 fallito" : $"{FailedCount} {(FailedCount == 1 ? "fallito" : "falliti")}";
     public bool HasCancelled => CancelledCount > 0;
 
     public double OverallPercentage
@@ -124,8 +125,7 @@ public partial class SeriesGroup : ObservableObject
 
             if (PendingCount > 0) parts.Add($"{PendingCount} in attesa");
             if (PausedCount > 0) parts.Add($"{PausedCount} in pausa");
-            if (FailedCount > 0) parts.Add($"{FailedCount} falliti");
-            if (CancelledCount > 0) parts.Add($"{CancelledCount} annullati");
+            if (CancelledCount > 0) parts.Add($"{CancelledCount} {(CancelledCount == 1 ? "annullato" : "annullati")}");
 
             return $"{SeriesName} — {string.Join(", ", parts)}";
         }
@@ -165,6 +165,7 @@ public partial class SeriesGroup : ObservableObject
         OnPropertyChanged(nameof(OverallEtaText));
         OnPropertyChanged(nameof(Header));
         OnPropertyChanged(nameof(HasFailed));
+        OnPropertyChanged(nameof(FailedBadge));
         OnPropertyChanged(nameof(HasCancelled));
     }
 }

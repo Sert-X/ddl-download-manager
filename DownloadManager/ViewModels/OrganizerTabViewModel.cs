@@ -24,7 +24,7 @@ public partial class OrganizerTabViewModel : ViewModelBase
 
     // --- Organize ---
     [ObservableProperty] private string _organizeFolder = string.Empty;
-    [ObservableProperty] private string _organizePattern = "{Series}/{Series} - {Episode:D3}";
+    [ObservableProperty] private string _organizePattern = "{Series} - {Episode:D3}";
     [ObservableProperty] private int _organizeStartingEpisode = 1;
     [ObservableProperty] private ObservableCollection<ProposedOperation> _previewOperations = new();
     [ObservableProperty] private ObservableCollection<FileOperation> _operationHistory = new();
@@ -55,7 +55,7 @@ public partial class OrganizerTabViewModel : ViewModelBase
     [ObservableProperty] private string _splitSourceFolder = string.Empty;
     [ObservableProperty] private string _splitDestinationFolder = string.Empty;
     [ObservableProperty] private string _splitFilePattern = "{Series} - {Episode:D3}";
-    [ObservableProperty] private string _splitFolderPattern = "Puntate {Number}";
+    [ObservableProperty] private string _splitFolderPattern = "Episodi {Start}-{End}";
     [ObservableProperty] private bool _splitNumberingContinue = false;
     [ObservableProperty] private bool _splitUniformMode = true;
     [ObservableProperty] private int _splitUniformEpisodes = 50;
@@ -66,19 +66,65 @@ public partial class OrganizerTabViewModel : ViewModelBase
     public ObservableCollection<MergeSourceFolder> MergeSourceFolders { get; } = new();
     public ObservableCollection<SplitSegment> SplitSegments { get; } = new();
 
+    // Pattern proposti, diversi per modalità:
+    // - Singola cartella: i file restano nella loro cartella, cambia solo il nome (niente "/").
+    // - Unisci cartelle: si raccolgono in una destinazione, quindi ha senso anche la cartella della serie.
+    // - Dividi cartella: la sottocartella la decide "Nome sottocartella", il file ha solo il nome.
     public string[] OrganizePatterns { get; } = new[]
     {
-        "{Series} - {Episode:D3}", "{Series}/{Series} - {Episode:D3}",
-        "{Series}/S01/{Series} - {Episode:D3}", "{Series}/{Episode}",
-        "{Series}/{Episode:D2}", "{Series}/{Episode:D3}",
-        "{Series}/{Series} - {Episode:D3} - {Title}", "{OriginalFileName}"
+        "{Series} - {Episode:D3}", "{Series} - {Episode:D2}", "{Series}_Ep_{Episode:D3}",
+        "{Series} - Episodio {Episode:D2}", "{Series} S01E{Episode:D2}", "{Series} - {Episode:D3} - {Title}"
+    };
+
+    public string[] MergePatterns { get; } = new[]
+    {
+        "{Series}/{Series} - {Episode:D3}", "{Series}/{Series}_Ep_{Episode:D3}", "{Series}/{Series} S01E{Episode:D2}",
+        "{Series}/{Series} - {Episode:D3} - {Title}", "{Series} - {Episode:D3}", "{Series}_Ep_{Episode:D3}"
+    };
+
+    public string[] SplitFilePatterns { get; } = new[]
+    {
+        "{Series} - {Episode:D3}", "{Series} - {Episode:D2}", "{Series}_Ep_{Episode:D3}",
+        "{Series} - Episodio {Episode:D2}", "{Series} - {Episode:D3} - {Title}", "{OriginalFileName}"
     };
 
     public string[] SplitFolderPatterns { get; } = new[]
     {
-        "{Number}", "{Number:D2}", "{Number:D3}", "Puntate {Number}", "Parte {Number}",
-        "Puntate {Number} ({Start}-{End})", "Episodi {Start}-{End}", "{Number} - Episodi {Start}-{End}"
+        "Episodi {Start}-{End}", "Episodi {Start:D3}-{End:D3}", "Parte {Number}", "Parte {Number} ({Start}-{End})",
+        "Stagione {Number}", "{Series} - Parte {Number}", "{Series}/Parte {Number}", "{Series}/Stagione {Number:D2}",
+        "{Number:D2}"
     };
+
+    /// <summary>
+    /// Anteprima dei nomi delle prime sottocartelle (es. "Episodi 1-50 · Episodi 51-100"), con le
+    /// dimensioni scelte e la numerazione (reset o continua) come le farà "Anteprima split".
+    /// </summary>
+    public string SplitFolderPatternPreview
+    {
+        get
+        {
+            try
+            {
+                var sizes = SplitUniformMode
+                    ? new List<int> { SplitUniformEpisodes, SplitUniformEpisodes }
+                    : SplitSegments.Select(x => x.EpisodeCount).Where(x => x > 0).Take(2).ToList();
+                if (sizes.Count == 0) sizes.Add(50);
+                var pattern = string.IsNullOrWhiteSpace(SplitFolderPattern) ? "{Number}" : SplitFolderPattern;
+                var names = new List<string>();
+                int done = 0;
+                for (int i = 0; i < sizes.Count; i++)
+                {
+                    int start = SplitNumberingContinue ? done + 1 : 1;
+                    int end = SplitNumberingContinue ? done + sizes[i] : sizes[i];
+                    done += sizes[i];
+                    var name = Services.FileOrganizer.FileOrganizerService.BuildSplitFolderName(pattern, i + 1, start, end, "Frieren");
+                    names.Add(name.Replace('/', System.IO.Path.DirectorySeparatorChar));
+                }
+                return string.Join("  ·  ", names) + "  ·  …";
+            }
+            catch { return "(pattern non valido)"; }
+        }
+    }
 
     // ============================================================
     //  WRAPPER SharedState
@@ -279,8 +325,10 @@ public partial class OrganizerTabViewModel : ViewModelBase
     partial void OnOrganizePatternChanged(string value) => OnPropertyChanged(nameof(OrganizePatternPreview));
     partial void OnMergePatternChanged(string value) => OnPropertyChanged(nameof(MergePatternPreview));
     partial void OnSplitFilePatternChanged(string value) => OnPropertyChanged(nameof(SplitFilePatternPreview));
-    partial void OnSplitUniformModeChanged(bool value) => OnPropertyChanged(nameof(SplitSegmentsSummary));
-    partial void OnSplitUniformEpisodesChanged(int value) => OnPropertyChanged(nameof(SplitSegmentsSummary));
+    partial void OnSplitFolderPatternChanged(string value) => OnPropertyChanged(nameof(SplitFolderPatternPreview));
+    partial void OnSplitNumberingContinueChanged(bool value) => OnPropertyChanged(nameof(SplitFolderPatternPreview));
+    partial void OnSplitUniformModeChanged(bool value) { OnPropertyChanged(nameof(SplitSegmentsSummary)); OnPropertyChanged(nameof(SplitFolderPatternPreview)); }
+    partial void OnSplitUniformEpisodesChanged(int value) { OnPropertyChanged(nameof(SplitSegmentsSummary)); OnPropertyChanged(nameof(SplitFolderPatternPreview)); }
 
     // ============================================================
     //  ORGANIZE
@@ -323,8 +371,7 @@ public partial class OrganizerTabViewModel : ViewModelBase
             var ops = await _fileOrganizer.PreviewAsync(
                 OrganizeFolder, OrganizePattern, false, startingEpisode);
 
-            PreviewOperations.Clear();
-            foreach (var op in ops) PreviewOperations.Add(op);
+            PreviewOperations = new(ops);   // un solo aggiornamento della tabella, non uno per riga
 
             var conflicts = ops.Count(o => o.HasConflict);
             OrganizeStatusMessage = conflicts == 0
@@ -384,8 +431,7 @@ public partial class OrganizerTabViewModel : ViewModelBase
             var ops = await _fileOrganizer.PreviewRemoteFolderAsync(
                 OrganizeFolder, OrganizePattern, false, startingEpisode);
 
-            PreviewOperations.Clear();
-            foreach (var op in ops) PreviewOperations.Add(op);
+            PreviewOperations = new(ops);   // un solo aggiornamento della tabella, non uno per riga
 
             var conflicts = ops.Count(o => o.HasConflict);
             OrganizeStatusMessage = conflicts == 0
@@ -441,15 +487,15 @@ public partial class OrganizerTabViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void ClearPreviewOperations() { PreviewOperations.Clear(); OrganizeStatusMessage = "Proposte svuotate."; }
+    private void ClearPreviewOperations() { PreviewOperations = new(); OrganizeStatusMessage = "Proposte svuotate."; }
 
     [RelayCommand]
     private async Task ClearHistoryAsync()
     {
         try
         {
-            await _fileOrganizer.ClearHistoryAsync();
-            OperationHistory.Clear();
+            await Task.Run(() => _fileOrganizer.ClearHistoryAsync());   // database fuori dal thread dell'interfaccia
+            OperationHistory = new();
             OrganizeStatusMessage = "Cronologia svuotata.";
         }
         catch (Exception ex) { OrganizeStatusMessage = $"Errore: {ex.Message}"; }
@@ -462,8 +508,7 @@ public partial class OrganizerTabViewModel : ViewModelBase
             var history = await _fileOrganizer.GetHistoryAsync(200);
             await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
             {
-                OperationHistory.Clear();
-                foreach (var op in history) OperationHistory.Add(op);
+                OperationHistory = new(history);   // un solo aggiornamento della tabella, non uno per riga
             });
         }
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($">>> Errore cronologia: {ex.Message}"); }
@@ -580,8 +625,7 @@ public partial class OrganizerTabViewModel : ViewModelBase
             var ops = await _fileOrganizer.PreviewMergeAsync(
                 MergeSourceFolders.ToList(), MergeDestinationFolder, MergePattern, false, startingEpisode);
 
-            MergePreviewOperations.Clear();
-            foreach (var op in ops) MergePreviewOperations.Add(op);
+            MergePreviewOperations = new(ops);   // un solo aggiornamento della tabella, non uno per riga
 
             var conflicts = ops.Count(o => o.HasConflict);
             MergeStatusMessage = conflicts == 0
@@ -629,8 +673,7 @@ public partial class OrganizerTabViewModel : ViewModelBase
             var ops = await _fileOrganizer.PreviewRemoteMergeAsync(
                 MergeSourceFolders.ToList(), MergeDestinationFolder, MergePattern, false, startingEpisode);
 
-            MergePreviewOperations.Clear();
-            foreach (var op in ops) MergePreviewOperations.Add(op);
+            MergePreviewOperations = new(ops);   // un solo aggiornamento della tabella, non uno per riga
 
             var conflicts = ops.Count(o => o.HasConflict);
             MergeStatusMessage = conflicts == 0
@@ -663,7 +706,7 @@ public partial class OrganizerTabViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void ClearMergePreviewOperations() { MergePreviewOperations.Clear(); MergeStatusMessage = "Proposte svuotate."; }
+    private void ClearMergePreviewOperations() { MergePreviewOperations = new(); MergeStatusMessage = "Proposte svuotate."; }
 
     // ============================================================
     //  SPLIT
@@ -693,7 +736,7 @@ public partial class OrganizerTabViewModel : ViewModelBase
         seg.PropertyChanged += OnSplitSegmentPropertyChanged;
         SplitSegments.Add(seg);
         RenumberSegments();
-        OnPropertyChanged(nameof(SplitSegmentsSummary));
+        OnPropertyChanged(nameof(SplitSegmentsSummary)); OnPropertyChanged(nameof(SplitFolderPatternPreview));
     }
 
     [RelayCommand]
@@ -703,7 +746,7 @@ public partial class OrganizerTabViewModel : ViewModelBase
         segment.PropertyChanged -= OnSplitSegmentPropertyChanged;
         SplitSegments.Remove(segment);
         RenumberSegments();
-        OnPropertyChanged(nameof(SplitSegmentsSummary));
+        OnPropertyChanged(nameof(SplitSegmentsSummary)); OnPropertyChanged(nameof(SplitFolderPatternPreview));
     }
 
     [RelayCommand]
@@ -711,13 +754,13 @@ public partial class OrganizerTabViewModel : ViewModelBase
     {
         foreach (var seg in SplitSegments) seg.PropertyChanged -= OnSplitSegmentPropertyChanged;
         SplitSegments.Clear();
-        OnPropertyChanged(nameof(SplitSegmentsSummary));
+        OnPropertyChanged(nameof(SplitSegmentsSummary)); OnPropertyChanged(nameof(SplitFolderPatternPreview));
     }
 
     private void OnSplitSegmentPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(SplitSegment.EpisodeCount))
-            OnPropertyChanged(nameof(SplitSegmentsSummary));
+            OnPropertyChanged(nameof(SplitSegmentsSummary)); OnPropertyChanged(nameof(SplitFolderPatternPreview));
     }
 
     private void RenumberSegments()
@@ -772,8 +815,7 @@ public partial class OrganizerTabViewModel : ViewModelBase
                 SplitSourceFolder, SplitDestinationFolder, segmentSizes,
                 SplitFilePattern, SplitFolderPattern, mode);
 
-            SplitPreviewOperations.Clear();
-            foreach (var op in ops) SplitPreviewOperations.Add(op);
+            SplitPreviewOperations = new(ops);   // un solo aggiornamento della tabella, non uno per riga
 
             var conflicts = ops.Count(o => o.HasConflict);
             var folderCount = ops.Select(o => Path.GetDirectoryName(o.NewPath) ?? "").Distinct().Count();
@@ -855,8 +897,7 @@ public partial class OrganizerTabViewModel : ViewModelBase
                 SplitSourceFolder, SplitDestinationFolder, segmentSizes,
                 SplitFilePattern, SplitFolderPattern, mode);
 
-            SplitPreviewOperations.Clear();
-            foreach (var op in ops) SplitPreviewOperations.Add(op);
+            SplitPreviewOperations = new(ops);   // un solo aggiornamento della tabella, non uno per riga
 
             var conflicts = ops.Count(o => o.HasConflict);
             var folderCount = ops
@@ -892,5 +933,5 @@ public partial class OrganizerTabViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void ClearSplitPreviewOperations() { SplitPreviewOperations.Clear(); SplitStatusMessage = "Proposte svuotate."; }
+    private void ClearSplitPreviewOperations() { SplitPreviewOperations = new(); SplitStatusMessage = "Proposte svuotate."; }
 }

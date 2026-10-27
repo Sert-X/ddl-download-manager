@@ -34,6 +34,9 @@ public class DownloadQueueService
     /// partire i film rimasti in coda, e viceversa.
     /// </summary>
     private readonly HashSet<string> _runningCategories = new();
+
+    /// <summary>Download in corso fermati per far posto a uno forzato: tornano subito in coda.</summary>
+    private readonly HashSet<int> _preempted = new();
     private bool _isRunning = true;
 
     public DownloadQueueService(
@@ -339,12 +342,22 @@ public class DownloadQueueService
 
     public void ForceQueueItem(DownloadItem item)
     {
-        if (item.Status == DownloadStatus.Completed) return;
+        if (!EnqueueForced(item)) return;
+        MarkRunning(item.Category);
+        MakeRoomForPriority(item.Category);
+        QueueChanged?.Invoke();
+        TryDispatch();
+    }
+
+    /// <summary>Mette l'item in cima alla coda (dietro gli altri forzati). false = non serve.</summary>
+    private bool EnqueueForced(DownloadItem item)
+    {
+        if (item.Status == DownloadStatus.Completed) return false;
 
         lock (_queueLock)
         {
             if (_active.ContainsKey(item.Id))
-                return;
+                return false;
 
             _pending.RemoveAll(i => i.Id == item.Id);
             _pendingIds.Remove(item.Id);
@@ -361,22 +374,72 @@ public class DownloadQueueService
             _pending.Insert(insertAt, item);
             _pendingIds.Add(item.Id);
         }
-
-        MarkRunning(item.Category);
-
-        QueueChanged?.Invoke();
-        TryDispatch();
+        return true;
     }
 
     public void ForceQueueGroup(SeriesGroup group)
     {
+        var categories = new HashSet<string>();
         foreach (var item in group.Items.ToList())
         {
             if (item.Status == DownloadStatus.Completed) continue;
-            if (_active.ContainsKey(item.Id)) continue;
-            ForceQueueItem(item);
+            lock (_queueLock) if (_active.ContainsKey(item.Id)) continue;
+            if (EnqueueForced(item)) categories.Add(item.Category);
+        }
+        foreach (var c in categories)
+        {
+            MarkRunning(c);
+            MakeRoomForPriority(c);
+        }
+        QueueChanged?.Invoke();
+        TryDispatch();
+    }
+
+    /// <summary>
+    /// Se gli slot della categoria sono tutti occupati, ferma i download non forzati meno avanzati
+    /// (uno per ogni forzato in attesa) così i forzati partono subito. I download fermati tornano
+    /// in coda per primi dopo i forzati e riprendono da dove erano. Quelli già in conversione
+    /// (download finito) non vengono toccati.
+    /// </summary>
+    private void MakeRoomForPriority(string category)
+    {
+        var toCancel = new List<CancellationTokenSource>();
+        lock (_queueLock)
+        {
+            int max = _maxConcurrency.TryGetValue(category, out var m) ? m : DefaultMaxConcurrency;
+            int busy = 0;
+            foreach (var kv in _activeCategory)
+                if (kv.Value == category && !_preempted.Contains(kv.Key)) busy++;
+            int waiting = 0;
+            foreach (var p in _pending)
+                if (p.IsPriority && p.Category == category) waiting++;
+            int need = waiting - Math.Max(0, max - busy);
+            if (need <= 0) return;
+
+            var byId = AllItems.ToDictionary(i => i.Id);
+            var victims = _activeCategory
+                .Where(kv => kv.Value == category && !_preempted.Contains(kv.Key))
+                .Select(kv => byId.GetValueOrDefault(kv.Key))
+                .Where(i => i != null && !i.IsPriority && !IsFinishing(i))
+                .OrderBy(i => i!.TotalBytes > 0 ? (double)i.DownloadedBytes / i.TotalBytes : 0)
+                .Take(need)
+                .ToList();
+            foreach (var v in victims)
+            {
+                _preempted.Add(v!.Id);
+                if (_active.TryGetValue(v.Id, out var cts)) toCancel.Add(cts);
+                _logger.LogInformation("[QUEUE] {File} messo in pausa per far posto a un download forzato", v.FileName);
+            }
+        }
+        foreach (var cts in toCancel)
+        {
+            try { cts.Cancel(); } catch (ObjectDisposedException) { }
         }
     }
+
+    /// <summary>Download finito e in conversione/unione: fermarlo farebbe perdere il lavoro.</summary>
+    private static bool IsFinishing(DownloadItem i) =>
+        (i.TotalBytes > 0 && i.DownloadedBytes >= i.TotalBytes) || !string.IsNullOrEmpty(i.ErrorMessage);
 
     public void UnforceQueueItem(DownloadItem item)
     {
@@ -951,13 +1014,18 @@ public class DownloadQueueService
         }
         catch (OperationCanceledException)
         {
-            Dispatcher.UIThread.Post(() =>
+            bool preempted;
+            lock (_queueLock) preempted = _preempted.Contains(item.Id);
+            if (!preempted)
             {
-                if (item.PauseRequested)
-                    item.Status = DownloadStatus.Paused;
-                else
-                    item.Status = DownloadStatus.Cancelled;
-            });
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (item.PauseRequested)
+                        item.Status = DownloadStatus.Paused;
+                    else
+                        item.Status = DownloadStatus.Cancelled;
+                });
+            }
         }
         catch (Exception ex)
         {
@@ -976,6 +1044,7 @@ public class DownloadQueueService
                 item.IsPriority = false;
             });
 
+            bool requeue;
             lock (_queueLock)
             {
                 if (_active.TryGetValue(item.Id, out var currentCts) && currentCts == cts)
@@ -983,6 +1052,26 @@ public class DownloadQueueService
                     _active.Remove(item.Id);
                     _activeCategory.Remove(item.Id);
                 }
+                requeue = _preempted.Remove(item.Id);
+            }
+
+            if (requeue)
+            {
+                // Fermato per un download forzato: torna in coda subito dietro i forzati e
+                // riprende appena si libera uno slot.
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    if (item.Status is DownloadStatus.Cancelled or DownloadStatus.Completed or DownloadStatus.Paused) return;
+                    item.Status = DownloadStatus.Pending;
+                    item.SpeedBytesPerSecond = 0;
+                    lock (_queueLock)
+                    {
+                        if (_active.ContainsKey(item.Id) || !_pendingIds.Add(item.Id)) return;
+                        int at = 0;
+                        while (at < _pending.Count && _pending[at].IsPriority) at++;
+                        _pending.Insert(at, item);
+                    }
+                });
             }
 
             try { await Db(() => _repository.UpdateAsync(item)); }

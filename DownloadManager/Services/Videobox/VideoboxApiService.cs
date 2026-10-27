@@ -36,8 +36,11 @@ public class VideoboxApiService
         ConfigureAuth();
         var settings = _settingsService.Current;
         var url = $"{settings.IpsBaseUrl.TrimEnd('/')}/api/videobox/videos/{videoId}";
-        
-        var response = await _httpClient.GetAsync(url);
+
+        // Sempre la versione aggiornata (subito dopo "Applica" una copia in cache mostrerebbe i link vecchi)
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue { NoCache = true };
+        var response = await _httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
         
         return await response.Content.ReadFromJsonAsync<VideoboxDto>() ?? new VideoboxDto();

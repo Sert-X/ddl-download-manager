@@ -62,11 +62,31 @@ public partial class DownloadItem : ObservableObject
     public string FileName => Path.GetFileName(DestinationPath);
 
     /// <summary>Stato per la coda: a download finito mostra la fase in corso (es. "Conversione 37%").</summary>
-    public string StatusText => Status == DownloadStatus.Downloading && !string.IsNullOrEmpty(ErrorMessage)
-        ? ErrorMessage
-        : Status.ToString();
+    public string StatusText => Status switch
+    {
+        DownloadStatus.Downloading when !string.IsNullOrEmpty(ErrorMessage) => ErrorMessage,
+        DownloadStatus.Pending => IsPriority ? "In coda (forzato)" : "In coda",
+        DownloadStatus.Downloading => "In download",
+        DownloadStatus.Paused => "In pausa",
+        DownloadStatus.Completed => "Completato",
+        DownloadStatus.Failed => string.IsNullOrEmpty(ErrorMessage) ? "Errore" : "Errore: " + ErrorMessage,
+        DownloadStatus.Cancelled => "Annullato",
+        _ => Status.ToString()
+    };
 
-    partial void OnErrorMessageChanged(string value) => OnPropertyChanged(nameof(StatusText));
+    /// <summary>Download fallito: la riga si colora di rosso e mostra il motivo.</summary>
+    public bool IsFailed => Status == DownloadStatus.Failed;
+
+    /// <summary>Suggerimento sullo stato: per un errore, il messaggio completo e come riprovare.</summary>
+    public string StatusTip => IsFailed
+        ? $"Download fallito.\n{(string.IsNullOrEmpty(ErrorMessage) ? "Motivo sconosciuto" : ErrorMessage)}\n\nPremi «Riscarica» per riprovare."
+        : StatusText;
+
+    partial void OnErrorMessageChanged(string value)
+    {
+        OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(StatusTip));
+    }
 
     public double Percentage => TotalBytes > 0
         ? Math.Min(100, (double)DownloadedBytes / TotalBytes * 100)
@@ -138,10 +158,14 @@ public partial class DownloadItem : ObservableObject
         OnPropertyChanged(nameof(CanRetry));
         OnPropertyChanged(nameof(CanForce));
         OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(StatusTip));
+        OnPropertyChanged(nameof(IsFailed));
     }
 
     partial void OnIsPriorityChanged(bool value)
     {
         OnPropertyChanged(nameof(CanForce));
+        OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(StatusTip));
     }
 }

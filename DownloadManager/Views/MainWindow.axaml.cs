@@ -962,6 +962,21 @@ public partial class MainWindow : Window
         if (request != null) await Vm.Proxy.ImportAsync(request.Content, request.Providers);
     }
 
+    /// <summary>
+    /// "Elimina tutto…" del menu "Pulisci lista" di ogni coda: chiede conferma (il fuoco parte da
+    /// "Annulla") e solo allora esegue il comando legato in Tag. Il testo della domanda è nel
+    /// CommandParameter.
+    /// </summary>
+    private async void OnConfirmRemoveAllClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Control { Tag: System.Windows.Input.ICommand command } control) return;
+        var param = (control as MenuItem)?.CommandParameter ?? (control as Button)?.CommandParameter;
+        var prompt = param as string ?? "Togliere tutti gli elementi dalla lista?";
+        var title = control is MenuItem ? "Elimina tutto" : "Conferma";
+        var ok = await ConfirmDialog.ShowAsync(this, prompt, title, safeDefault: true);
+        if (ok && command.CanExecute(null)) command.Execute(null);
+    }
+
     private async void OnProxyDeleteCheckedClick(object? sender, RoutedEventArgs e)
     {
         if (Vm == null) return;

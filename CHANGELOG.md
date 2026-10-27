@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.4.5] — 2026-10-27
+
+### 🎬 Anime e Film/Serie Download
+- **"Forza priorità" funziona davvero**: il fulmine (su un episodio o su una serie) fa partire subito il download. Se gli slot sono tutti occupati, quello meno avanzato va in pausa e riparte appena possibile da dove era arrivato. Prima l'episodio andava solo in cima alla coda e, con gli slot pieni, sembrava non succedere nulla.
+- **Errori che saltano all'occhio**: l'episodio fallito ha la riga rossa con "Errore: motivo" (il messaggio completo passandoci sopra); la serie mostra il badge rosso "N falliti" anche chiusa. Stati della coda in italiano.
+- **Il Dettaglio si svuota subito** quando analizzi un altro titolo o fai una nuova ricerca. In Film/Serie gli episodi del titolo precedente potevano comparire nel dettaglio di quello nuovo: risolto.
+
+### 🧹 Code più sicure (Anime, Film/Serie, SFTP upload, download e copie tra server)
+- **Un solo pulsante "Pulisci lista ▾"**, separato dagli altri, al posto di Elimina tutti / Completati / Annullati / Failed affiancati: dentro ci sono "Rimuovi completati", "Rimuovi annullati", "Rimuovi falliti" e, in fondo e in rosso, "Elimina tutto…", che chiede sempre conferma ("Annulla" già selezionato, Invio non conferma).
+
+### 🎬 Videobox Corrector
+- **Dopo "Applica" la tabella non si svuota più**: se la risposta del forum non contiene ancora i link inviati si riprova, e in ultimo la tabella mostra i link appena inviati. Il post si rilegge sempre aggiornato, senza copie in cache.
+
+### 🗂 Organizza file
+- **Niente più rallentamenti con tante operazioni**: le tabelle si adattano alla finestra e disegnano solo le righe visibili (5000 proposte si svuotano in un attimo); la cronologia si cancella senza bloccare l'app.
+- **Dividi cartella**: la "/" nel nome della sottocartella crea più livelli (es. "{Series}/Parte {Number}" → Frieren\Parte 1). Nuovo segnaposto {Series} e **anteprima** dei nomi delle prime sottocartelle, con dimensioni e numerazione scelte.
+- **Pattern proposti sensati per ogni modalità**: Singola cartella solo il nome del file, Unisci cartelle anche la cartella della serie, Dividi cartella nomi per file e sottocartelle (Episodi {Start}-{End}, Parte {Number}, Stagione {Number}...).
+- "Svuota cronologia" chiede conferma, perché dopo non si può più annullare.
+
+### 🧹 Varie
+- Guide aggiornate: Anime, Film/Serie, Organizza file e SFTP.
+
 ## [1.4.4] — 2026-10-27
 
 ### 🎬 Anime e Film/Serie Download

@@ -235,12 +235,12 @@ public partial class DownloadTabViewModel : ViewModelBase
             int failed = groups.Sum(g => g.Items.Count(i => i.Status == DownloadStatus.Failed));
             int cancelled = groups.Sum(g => g.Items.Count(i => i.Status == DownloadStatus.Cancelled));
 
-            var parts = new List<string> { $"{totalEpisodes} episodi" };
-            if (completed > 0) parts.Add($"{completed} completati");
+            var parts = new List<string> { $"{totalEpisodes} {(totalEpisodes == 1 ? "episodio" : "episodi")}" };
+            if (completed > 0) parts.Add($"{completed} {(completed == 1 ? "completato" : "completati")}");
             if (downloading > 0) parts.Add($"{downloading} in corso");
             if (pending > 0) parts.Add($"{pending} in attesa");
-            if (failed > 0) parts.Add($"{failed} falliti");
-            if (cancelled > 0) parts.Add($"{cancelled} annullati");
+            if (failed > 0) parts.Add($"{failed} {(failed == 1 ? "fallito" : "falliti")}");
+            if (cancelled > 0) parts.Add($"{cancelled} {(cancelled == 1 ? "annullato" : "annullati")}");
 
             return $"{groups.Count} serie · {string.Join(" · ", parts)}";
         }
@@ -552,6 +552,10 @@ public partial class DownloadTabViewModel : ViewModelBase
         int seq = ++_searchSeq;
         var provider = SelectedProvider!;
 
+        // Risultati e Dettaglio della ricerca precedente spariscono subito
+        _emptySearchTerm = null;
+        SearchResults.Clear();
+        ClearDetail();
         IsLoadingSearchResults = true;
         try
         {
@@ -619,16 +623,22 @@ public partial class DownloadTabViewModel : ViewModelBase
     {
         // Le operazioni in corso diventano "superate": i loro risultati verranno ignorati
         _searchCts?.Cancel(); _searchSeq++;
-        _episodesCts?.Cancel(); _episodesSeq++;
         IsLoadingSearchResults = false;
-        IsLoadingEpisodes = false;
         SearchResults.Clear();
-        Episodes.Clear();
-        SelectedAnime = null;
+        ClearDetail();
         _emptySearchTerm = null;
         SearchQuery = string.Empty;
         NotifyPlaceholders();
         StatusMessage = "Cerca un anime per iniziare.";
+    }
+
+    /// <summary>Svuota subito il Dettaglio e ferma il caricamento degli episodi in corso.</summary>
+    private void ClearDetail()
+    {
+        _episodesCts?.Cancel(); _episodesSeq++;
+        IsLoadingEpisodes = false;
+        Episodes.Clear();
+        SelectedAnime = null;
     }
 
     /// <summary>Dettaglio vuoto: invito a scegliere un risultato (tabella e pulsanti nascosti).</summary>
@@ -723,6 +733,7 @@ public partial class DownloadTabViewModel : ViewModelBase
         IsLoadingEpisodes = true;
         try
         {
+            Episodes.Clear();   // il dettaglio precedente sparisce subito
             SelectedAnime = anime;
             StatusMessage = $"Caricamento episodi di '{anime.Name}'...";
 

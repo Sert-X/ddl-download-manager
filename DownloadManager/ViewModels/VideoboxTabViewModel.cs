@@ -1961,13 +1961,25 @@ public partial class VideoboxTabViewModel : ObservableObject
             await _apiService.UpdateVideoUrlsAsync(CurrentPostId, _currentServerId, title, catId, _currentPostAuthorId, finalUrls);
 
             // Il post appena modificato si aggiorna subito nella lista, e la tabella mostra i link
-            // come li ha salvati il forum (prima le righe applicate sparivano dalla tabella)
-            var updatedPost = await _apiService.GetVideoByIdAsync(CurrentPostId);
+            // come li ha salvati il forum. Se la risposta non li contiene (server del post appena
+            // creato, risposta non ancora aggiornata) si riprova una volta e, in ultimo, la tabella
+            // mostra i link appena inviati: non deve mai svuotarsi dopo "Applica".
+            var (updatedPost, savedServer) = await ReadSavedLinksAsync(finalUrls);
             ApplyFreshPostData(updatedPost, recolor: false);
-            CurrentPostTitle = updatedPost.title;
-            EditablePostTitle = updatedPost.title;
-            var savedServer = updatedPost.videos?.Values.FirstOrDefault(v => v.id.ToString() == _currentServerId);
-            FillMappingItems(savedServer?.online?.Values ?? Enumerable.Empty<VideoboxEpisodeDto>());
+            if (!string.IsNullOrEmpty(updatedPost.title))
+            {
+                CurrentPostTitle = updatedPost.title;
+                EditablePostTitle = updatedPost.title;
+            }
+            if (savedServer?.online is { Count: > 0 } online)
+            {
+                _currentServerId = savedServer.id.ToString();
+                FillMappingItems(online.Values);
+            }
+            else
+            {
+                FillMappingItems(finalUrls.Select((u, i) => new VideoboxEpisodeDto { vbo_id = i, vbo_url = u }));
+            }
             foreach (var m in MappingItems)
                 if (fileByUrl.TryGetValue(m.OldUrl, out var file)) m.SftpFileName = file;
 
@@ -1991,6 +2003,29 @@ public partial class VideoboxTabViewModel : ObservableObject
             StatusMessage = $"ERRORE: {ex.Message}"; 
         }
         finally { IsBusy = false; }
+    }
+
+    /// <summary>
+    /// Rilegge il post dopo "Applica" e trova il server con i link salvati: quello usato, poi
+    /// "Link Remoto", poi il primo con link. Se i link inviati non ci sono ancora, riprova una volta.
+    /// </summary>
+    private async Task<(VideoboxDto Post, VideoboxServerDto? Server)> ReadSavedLinksAsync(List<string> sent)
+    {
+        VideoboxDto post = new();
+        VideoboxServerDto? server = null;
+        for (int attempt = 0; attempt < 2; attempt++)
+        {
+            if (attempt > 0) await Task.Delay(1500);
+            post = await _apiService.GetVideoByIdAsync(CurrentPostId);
+            var servers = post.videos?.Values;
+            server = servers?.FirstOrDefault(v => v.id.ToString() == _currentServerId && v.online is { Count: > 0 })
+                     ?? servers?.FirstOrDefault(v => v.vbs_name != null && v.vbs_name.Contains("Link Remoto", StringComparison.OrdinalIgnoreCase) && v.online is { Count: > 0 })
+                     ?? servers?.FirstOrDefault(v => v.online is { Count: > 0 });
+            if (sent.Count == 0) break;
+            var saved = server?.online?.Values.Select(e => e.vbo_url).ToHashSet(StringComparer.Ordinal);
+            if (saved != null && sent.Any(saved.Contains)) break;
+        }
+        return (post, server);
     }
 
     /// <summary>

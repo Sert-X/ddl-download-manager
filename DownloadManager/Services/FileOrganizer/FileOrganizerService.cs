@@ -351,8 +351,10 @@ public class FileOrganizerService : IFileOrganizerService
             int rangeStart = mode == SplitNumberingMode.Reset ? 1 : globalCounter + 1;
             int rangeEnd = mode == SplitNumberingMode.Reset ? accumulated : globalCounter + accumulated;
 
-            var folderNameBuilt = BuildSplitFolderName(folderPattern, segNum, rangeStart, rangeEnd);
-            var subFolder = Path.Combine(destinationFolder, Sanitize(folderNameBuilt));
+            var segSeries = SeriesOrFolder(Path.GetFileNameWithoutExtension(files[segmentStart].FilePath), folderName);
+            var folderNameBuilt = BuildSplitFolderName(folderPattern, segNum, rangeStart, rangeEnd, segSeries);
+            // "/" crea più livelli di sottocartelle (es. "{Series}/Parte {Number}")
+            var subFolder = Path.Combine(destinationFolder, SanitizeRelative(folderNameBuilt, Path.DirectorySeparatorChar));
 
             int localCounter = 0;
 
@@ -715,8 +717,10 @@ public class FileOrganizerService : IFileOrganizerService
             int rangeStart = mode == SplitNumberingMode.Reset ? 1 : globalCounter + 1;
             int rangeEnd = mode == SplitNumberingMode.Reset ? accumulated : globalCounter + accumulated;
 
-            var folderNameBuilt = BuildSplitFolderName(folderPattern, segNum, rangeStart, rangeEnd);
-            var subFolder = destBase.TrimEnd('/') + "/" + Sanitize(folderNameBuilt);
+            var segSeries = SeriesOrFolder(Path.GetFileNameWithoutExtension(files[segmentStart].Entry.Name), folderName);
+            var folderNameBuilt = BuildSplitFolderName(folderPattern, segNum, rangeStart, rangeEnd, segSeries);
+            // "/" crea più livelli di sottocartelle (es. "{Series}/Parte {Number}")
+            var subFolder = destBase.TrimEnd('/') + "/" + SanitizeRelative(folderNameBuilt, '/');
 
             int localCounter = 0;
 
@@ -1094,9 +1098,20 @@ public class FileOrganizerService : IFileOrganizerService
         return path.Substring(0, idx);
     }
 
-    private static string BuildSplitFolderName(string pattern, int folderNumber, int rangeStart, int rangeEnd)
+    /// <summary>Nome della serie dal nome del file; se non si riconosce, il nome della cartella.</summary>
+    private static string SeriesOrFolder(string fileName, string folderName)
     {
-        var result = pattern;
+        var series = ExtractSeriesName(fileName);
+        return string.IsNullOrWhiteSpace(series) ? folderName : series;
+    }
+
+    /// <summary>
+    /// Nome della sottocartella di "Dividi cartella". Segnaposto: {Number} (numero della
+    /// cartella), {Start}/{End} (primo e ultimo episodio), {Series} (nome della serie).
+    /// </summary>
+    public static string BuildSplitFolderName(string pattern, int folderNumber, int rangeStart, int rangeEnd, string series = "")
+    {
+        var result = pattern.Replace("{Series}", series, StringComparison.OrdinalIgnoreCase);
         result = SplitFolderNumberRegex.Replace(result, m =>
         {
             var format = m.Groups[1].Success ? m.Groups[1].Value : "D0";
