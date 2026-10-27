@@ -125,7 +125,8 @@ public class SftpUploadQueueService : SftpQueueServiceBase<SftpUploadJob>
 
         try
         {
-            result = await Task.Run(() => session.PutFiles(job.LocalPath, job.RemotePath, false, transferOptions), ct);
+            // Thread dedicato: il trasferimento lo tiene occupato fino alla fine del file
+            result = await BlockingWork.Run(() => session.PutFiles(job.LocalPath, job.RemotePath, false, transferOptions), ct);
         }
         catch (Exception) when (ct.IsCancellationRequested)
         {

@@ -113,13 +113,17 @@ public partial class MainWindow : Window
 
         // Log: segue le voci nuove solo se l'utente è già in fondo (non lo strappa
         // via mentre sta leggendo righe più vecchie).
+        // Una sola richiesta di scorrimento per gruppo di righe (prima una per riga) e solo a log aperto.
+        bool scrollPending = false;
         viewModel.FilteredLogs.CollectionChanged += (_, e) =>
         {
             if (e.Action != System.Collections.Specialized.NotifyCollectionChangedAction.Add) return;
             var sv = LogScrollViewer;
+            if (scrollPending || !sv.IsVisible) return;
             bool atBottom = sv.Offset.Y >= sv.Extent.Height - sv.Viewport.Height - 40;
-            if (atBottom)
-                Avalonia.Threading.Dispatcher.UIThread.Post(sv.ScrollToEnd, Avalonia.Threading.DispatcherPriority.Background);
+            if (!atBottom) return;
+            scrollPending = true;
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => { scrollPending = false; sv.ScrollToEnd(); }, Avalonia.Threading.DispatcherPriority.Background);
         };
 
         LocalFilesGrid.AddHandler(

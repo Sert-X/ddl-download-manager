@@ -50,7 +50,8 @@ public class SftpRelayQueueService : SftpQueueServiceBase<SftpRelayJob>
 
         try
         {
-            await Task.Run(() =>
+            // Thread dedicato: la copia lo tiene occupato fino alla fine del file
+            await BlockingWork.Run(() =>
             {
                 using var input = source.GetFile(job.SourcePath, options);
                 using var counted = new ProgressStream(input, (bytes, speed) =>

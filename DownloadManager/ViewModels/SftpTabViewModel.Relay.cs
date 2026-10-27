@@ -132,7 +132,7 @@ public partial class SftpTabViewModel
     {
         _relayQueue = relayQueue;
         _relayQueue.MaxConcurrency = SftpMaxRelayConcurrency;
-        _relayQueue.QueueChanged += () => Dispatcher.UIThread.Post(UpdateSftpBadges);
+        _relayQueue.QueueChanged += ScheduleQueueRecalc;
         _relayQueue.JobCompleted += OnRelayJobCompleted;
         // File arrivato con un upload: si aggiornano i pannelli (destra e sinistra) che mostrano
         // quella cartella di quel server

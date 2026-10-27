@@ -93,17 +93,33 @@ public partial class VideoboxSource : ObservableObject
     /// </summary>
     public string? UrlKey(string url)
     {
+        var path = LinkPath(url);
+        return path == null ? null : KeyFromLinkPath(path, NormalizedPublicPath);
+    }
+
+    /// <summary>Percorso di un link decodificato e normalizzato (senza "/" ai lati). null se non è un link.</summary>
+    public static string? LinkPath(string url)
+    {
         string path;
         try { path = Uri.UnescapeDataString(new Uri(url).AbsolutePath); }
         catch { return null; }
+        return Normalize(path).Trim('/');
+    }
 
-        path = Normalize(path).Trim('/');
-        var pub = Normalize(PublicPath).Trim('/');
-        if (pub.Length > 0)
+    /// <summary>Percorso pubblico normalizzato (senza "/" ai lati).</summary>
+    public string NormalizedPublicPath => Normalize(PublicPath).Trim('/');
+
+    /// <summary>
+    /// Chiave di un link a partire dal suo percorso già letto (<see cref="LinkPath"/>): così un
+    /// link si analizza una volta sola anche se va confrontato con più sorgenti.
+    /// </summary>
+    public static string KeyFromLinkPath(string path, string publicPath)
+    {
+        if (publicPath.Length > 0)
         {
-            // Come prima: il percorso pubblico, se c'è nel link, si toglie
-            if (path.Equals(pub, StringComparison.OrdinalIgnoreCase)) return "";
-            if (path.StartsWith(pub + "/", StringComparison.OrdinalIgnoreCase)) path = path.Substring(pub.Length + 1);
+            // Il percorso pubblico, se c'è nel link, si toglie
+            if (path.Equals(publicPath, StringComparison.OrdinalIgnoreCase)) return "";
+            if (path.StartsWith(publicPath + "/", StringComparison.OrdinalIgnoreCase)) path = path.Substring(publicPath.Length + 1);
         }
         return path.ToLowerInvariant();
     }

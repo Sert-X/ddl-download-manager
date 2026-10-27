@@ -7,45 +7,42 @@ public static class LinkValidator
 {
     public static bool IsValidDomain(string url, IEnumerable<string> validDomains)
     {
-        if (string.IsNullOrWhiteSpace(url)) return false;
+        var host = HostOf(url);
+        if (string.IsNullOrEmpty(host)) return false;
+        foreach (var domain in validDomains)
+        {
+            var clean = CleanDomain(domain);
+            if (clean.Length > 0 && host.Equals(clean, StringComparison.OrdinalIgnoreCase)) return true;
+        }
+        return false;
+    }
 
-        string host = string.Empty;
+    /// <summary>Host del link ("" se non si riesce a leggerlo).</summary>
+    public static string HostOf(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return string.Empty;
         try
         {
             // Aggiunge https:// se manca, per far funzionare Uri
             if (!url.StartsWith("http", StringComparison.OrdinalIgnoreCase))
                 url = "https://" + url;
-
-            var uri = new Uri(url, UriKind.Absolute);
-            host = uri.Host;
+            return new Uri(url, UriKind.Absolute).Host;
         }
         catch
         {
             // Fallback manuale se l'URI è malformato
             var parts = url.Split('/', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length > 0) host = parts[0];
+            return parts.Length > 0 ? parts[0] : string.Empty;
         }
+    }
 
-        if (string.IsNullOrEmpty(host)) return false;
-
-        foreach (var domain in validDomains)
-        {
-            if (string.IsNullOrWhiteSpace(domain)) continue;
-
-            // Pulizia profonda del dominio per il confronto
-            string cleanDomain = domain.Trim().ToLowerInvariant();
-            cleanDomain = cleanDomain.Replace("https://", "").Replace("http://", "").TrimEnd('/');
-
-            // Estrae solo la parte host del dominio pulito
-            var parts = cleanDomain.Split('/', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length > 0) cleanDomain = parts[0];
-
-            if (host.Equals(cleanDomain, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
+    /// <summary>Dominio impostato ripulito per il confronto (solo l'host, minuscolo). "" se vuoto.</summary>
+    public static string CleanDomain(string? domain)
+    {
+        if (string.IsNullOrWhiteSpace(domain)) return string.Empty;
+        string clean = domain.Trim().ToLowerInvariant();
+        clean = clean.Replace("https://", "").Replace("http://", "").TrimEnd('/');
+        var parts = clean.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length > 0 ? parts[0] : clean;
     }
 }

@@ -330,6 +330,7 @@ public partial class DownloadTabViewModel : ViewModelBase
 
         SearchResults.CollectionChanged += (_, _) =>
         {
+            NotifyPlaceholders();
             OnPropertyChanged(nameof(SearchResultsCountText));
         };
 
@@ -460,6 +461,7 @@ public partial class DownloadTabViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(SelectedAnimeName));
         OnPropertyChanged(nameof(HasSelectedAnime));
+        OnPropertyChanged(nameof(ShowDetailPlaceholder));
         UpdateAnimeDetail();
     }
 
@@ -520,6 +522,7 @@ public partial class DownloadTabViewModel : ViewModelBase
     partial void OnIsLoadingEpisodesChanged(bool value)
     {
         OnPropertyChanged(nameof(CanInteractWithEpisodes));
+        OnPropertyChanged(nameof(ShowDetailPlaceholder));
         OnPropertyChanged(nameof(AnimeDetailHint));
         if (!value) UpdateAnimeDetail();   // conteggi definitivi a caricamento finito
     }
@@ -556,12 +559,14 @@ public partial class DownloadTabViewModel : ViewModelBase
             var results = await RunWithRecoveryAsync(provider, () => provider.SearchAsync(term, cts.Token), cts.Token);
             if (seq != _searchSeq) return;   // nel frattempo è partita un'altra ricerca
 
+            _emptySearchTerm = results.Count == 0 ? term.Trim() : null;
             SearchResults.Clear();
             foreach (var result in results)
             {
                 SearchResults.Add(result);
                 _ = LoadPosterAsync(result);
             }
+            NotifyPlaceholders();
 
             StatusMessage = $"Trovati {results.Count} risultati per '{term}'.";
         }
@@ -579,6 +584,55 @@ public partial class DownloadTabViewModel : ViewModelBase
             if (seq == _searchSeq) IsLoadingSearchResults = false;
         }
     }
+
+
+    // ============================================================
+    //  RIQUADRI VUOTI E "PULISCI"
+    // ============================================================
+
+    /// <summary>Ultima ricerca senza risultati (per dire "nessun risultato per ..."). null = nessuna.</summary>
+    private string? _emptySearchTerm;
+
+    public bool ShowResultsPlaceholder => SearchResults.Count == 0 && !IsLoadingSearchResults;
+    public string ResultsPlaceholderTitle => _emptySearchTerm != null ? "Nessun risultato" : "Cerca un anime";
+    public string ResultsPlaceholderText => _emptySearchTerm != null
+        ? $"Nessun anime trovato per «{_emptySearchTerm}». Prova con un titolo diverso (anche in inglese o giapponese) oppure con un altro sito dal menu a sinistra della ricerca."
+        : "Scrivi il titolo qui sopra e premi Cerca (o Invio): i risultati compaiono qui con la locandina. Doppio clic su un risultato, o «Analizza», per vederne gli episodi.";
+
+    private void NotifyPlaceholders()
+    {
+        OnPropertyChanged(nameof(ShowResultsPlaceholder));
+        OnPropertyChanged(nameof(ResultsPlaceholderTitle));
+        OnPropertyChanged(nameof(ResultsPlaceholderText));
+        OnPropertyChanged(nameof(ShowDetailPlaceholder));
+    }
+
+    partial void OnIsLoadingSearchResultsChanged(bool value) => NotifyPlaceholders();
+
+    /// <summary>
+    /// Torna come all'apertura dell'app: risultati, dettaglio e campo di ricerca vuoti. Ricerche
+    /// e caricamenti in corso vengono fermati (i loro risultati non ricompaiono); i download in
+    /// coda e quelli in corso continuano.
+    /// </summary>
+    [RelayCommand]
+    private void ClearAll()
+    {
+        // Le operazioni in corso diventano "superate": i loro risultati verranno ignorati
+        _searchCts?.Cancel(); _searchSeq++;
+        _episodesCts?.Cancel(); _episodesSeq++;
+        IsLoadingSearchResults = false;
+        IsLoadingEpisodes = false;
+        SearchResults.Clear();
+        Episodes.Clear();
+        SelectedAnime = null;
+        _emptySearchTerm = null;
+        SearchQuery = string.Empty;
+        NotifyPlaceholders();
+        StatusMessage = "Cerca un anime per iniziare.";
+    }
+
+    /// <summary>Dettaglio vuoto: invito a scegliere un risultato (tabella e pulsanti nascosti).</summary>
+    public bool ShowDetailPlaceholder => !HasSelectedAnime && !IsLoadingEpisodes;
 
     private CancellationTokenSource? _searchCts;
     private int _searchSeq;

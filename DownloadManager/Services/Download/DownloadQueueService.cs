@@ -48,6 +48,14 @@ public class DownloadQueueService
 
     public ObservableCollection<DownloadItem> AllItems { get; } = new();
 
+    /// <summary>
+    /// Salvataggi sul DB sempre fuori dal thread dell'interfaccia: SQLite lavora in modo
+    /// sincrono anche nei metodi "async", quindi accodando una serie (500 episodi = ~75 ms, molto
+    /// di più col disco occupato dai download) l'interfaccia restava ferma per tutto il tempo.
+    /// </summary>
+    private static Task Db(Func<Task> work) => Task.Run(work);
+    private static Task<T> Db<T>(Func<Task<T>> work) => Task.Run(work);
+
     /// <summary>Download simultanei per una categoria (ognuna ha i propri slot).</summary>
     public int GetMaxConcurrency(string category)
     {
@@ -109,7 +117,7 @@ public class DownloadQueueService
         try { DownloadManager.Helpers.OrphanProcessCleaner.KillOrphans(_logger); }
         catch (Exception ex) { _logger.LogWarning(ex, "[QUEUE] Pulizia processi orfani fallita"); }
 
-        var unfinished = await _repository.GetUnfinishedAsync();
+        var unfinished = await Db(() => _repository.GetUnfinishedAsync());
         _logger.LogInformation("Ripristino {Count} download non completati (in pausa)", unfinished.Count);
 
         CleanupStaleTempFolders(unfinished.Select(i => i.Id).ToHashSet());
@@ -196,7 +204,7 @@ public class DownloadQueueService
     public async Task EnqueueAsync(DownloadItem item)
     {
         if (item.Id == 0)
-            await _repository.InsertAsync(item);
+            await Db(() => _repository.InsertAsync(item));
 
         await AddToListAsync(item);
 
@@ -231,7 +239,7 @@ public class DownloadQueueService
         }
 
         if (toInsert.Count > 0)
-            await _repository.InsertManyAsync(toInsert);
+            await Db(() => _repository.InsertManyAsync(toInsert));
 
         // 2. Prepara gli item (già creati da chiamante, quindi modifiche in-memory)
         foreach (var item in items)
@@ -500,7 +508,7 @@ public class DownloadQueueService
 
         if (item.Id > 0)
         {
-            try { await _repository.DeleteAsync(item.Id); }
+            try { await Db(() => _repository.DeleteAsync(item.Id)); }
             catch (Exception ex) { _logger.LogWarning(ex, "[QUEUE] Eliminazione dal database fallita (Id {Id})", item.Id); }
         }
 
@@ -588,7 +596,7 @@ public class DownloadQueueService
             item.IsPriority = false;
         });
 
-        try { await _repository.ClearChunksAsync(item.Id); }
+        try { await Db(() => _repository.ClearChunksAsync(item.Id)); }
         catch (Exception ex) { _logger.LogWarning(ex, "[QUEUE] Pulizia chunk fallita (Id {Id})", item.Id); }
 
         // Aspetta che il tentativo precedente sia davvero chiuso (yt-dlp può metterci
@@ -824,7 +832,7 @@ public class DownloadQueueService
     private async Task DeleteFromDatabaseAsync(IEnumerable<DownloadItem> items)
     {
         var ids = items.Where(i => i.Id > 0).Select(i => i.Id).ToList();
-        try { await _repository.DeleteManyAsync(ids); }
+        try { await Db(() => _repository.DeleteManyAsync(ids)); }
         catch (Exception ex) { _logger.LogWarning(ex, "[QUEUE] Eliminazione di {Count} download dal database fallita", ids.Count); }
     }
 
@@ -977,7 +985,7 @@ public class DownloadQueueService
                 }
             }
 
-            try { await _repository.UpdateAsync(item); }
+            try { await Db(() => _repository.UpdateAsync(item)); }
             catch (Exception ex) { _logger.LogWarning(ex, "[QUEUE] Salvataggio stato fallito (Id {Id})", item.Id); }
 
             QueueChanged?.Invoke();

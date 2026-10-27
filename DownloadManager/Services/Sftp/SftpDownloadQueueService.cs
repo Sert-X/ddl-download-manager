@@ -47,7 +47,8 @@ public class SftpDownloadQueueService : SftpQueueServiceBase<SftpDownloadJob>
 
         try
         {
-            await Task.Run(() =>
+            // Thread dedicato: il trasferimento lo tiene occupato fino alla fine del file
+            await BlockingWork.Run(() =>
                 session.GetFileToDirectory(job.RemotePath, localDir, false, transferOptions), ct);
         }
         catch (Exception) when (ct.IsCancellationRequested)

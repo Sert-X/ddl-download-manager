@@ -233,6 +233,7 @@
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 2. Dettaglio:</Run> fai doppio clic su un risultato, o passaci sopra e premi "Analizza": gli episodi compaiono nel riquadro Dettaglio a destra.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 3. Selezione:</Run> spunta gli episodi (o usa Seleziona tutti / Deseleziona / Inverti) e premi "Scarica selezionati". Gli episodi già in coda vengono saltati.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 4. Coda:</Run> i download sono raggruppati per serie: espandi un gruppo per vedere ogni episodio, usa i pulsanti del gruppo per avviarlo, metterlo in pausa o annullarlo.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Pulisci:</Run> svuota risultati, Dettaglio e campo di ricerca, come all'apertura dell'app. I download in coda e in corso continuano. La cronologia delle ricerche resta (per svuotarla c'è il cestino).<LineBreak/>
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Nome dei file</Run><LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Pattern:</Run> segnaposto disponibili: {Series} (serie), {Episode} o {Episode:D3} (numero con zeri, es. 001), {Title} (titolo episodio), {OriginalFileName} (nome originale). L'anteprima a destra mostra il risultato.<LineBreak/>
@@ -250,7 +251,7 @@
                         </Border>
 
                         <Border Classes="cardElevated" Margin="0,0,0,12">
-                            <Grid ColumnDefinitions="Auto, *, Auto, Auto">
+                            <Grid ColumnDefinitions="Auto, *, Auto, Auto, Auto">
                                 <ComboBox Grid.Column="0" ItemsSource="{Binding AvailableProviders}" SelectedItem="{Binding SelectedProvider, Mode=TwoWay}" MinWidth="140" MinHeight="40" Margin="0,0,8,0" VerticalAlignment="Center" ToolTip.Tip="Scegli da quale sito estrarre gli episodi">
                                     <ComboBox.ItemTemplate>
                                         <DataTemplate x:DataType="services:IAnimeProvider">
@@ -265,7 +266,13 @@
                                         <TextBlock Text="Cerca"/>
                                     </StackPanel>
                                 </Button>
-                                <Button Grid.Column="3" Classes="iconCircle" ToolTip.Tip="Svuota cronologia" Click="OnClearSearchHistoryClick">
+                                <Button Grid.Column="3" Command="{Binding ClearAllCommand}" Height="40" Margin="0,0,8,0" ToolTip.Tip="Svuota risultati e dettaglio, come all'apertura dell'app. I download in coda e in corso continuano.">
+                                    <StackPanel Classes="bi" HorizontalAlignment="Center">
+                                        <Path Classes="icon" Data="{StaticResource IconUndo}"/>
+                                        <TextBlock Text="Pulisci"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Column="4" Classes="iconCircle" ToolTip.Tip="Svuota cronologia" Click="OnClearSearchHistoryClick">
                                     <Path Classes="icon" Data="{StaticResource IconTrash}"/>
                                 </Button>
                             </Grid>
@@ -319,6 +326,7 @@
                                             <TextBlock Text="Ricerca in corso..." FontSize="11" FontStyle="Italic" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Grid>
+                                    <Panel>
                                     <ListBox Classes="posterGrid" ItemsSource="{Binding SearchResults}" DoubleTapped="OnSearchResultDoubleTapped" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                         <ListBox.ItemsPanel>
                                             <ItemsPanelTemplate>
@@ -355,6 +363,16 @@
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>
                                     </ListBox>
+                                    <Border HorizontalAlignment="Center" VerticalAlignment="Top" MaxWidth="380" Margin="16,90,16,16" IsHitTestVisible="False" IsVisible="{Binding ShowResultsPlaceholder}">
+                                            <StackPanel Spacing="10" HorizontalAlignment="Center">
+                                                <Border Width="72" Height="72" CornerRadius="36" Background="{DynamicResource AppSurface2Brush}" HorizontalAlignment="Center">
+                                                    <Path Classes="icon accent" Data="{StaticResource IconSearch}" Width="30" Height="30" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <TextBlock Text="{Binding ResultsPlaceholderTitle}" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"/>
+                                                <TextBlock Text="{Binding ResultsPlaceholderText}" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" TextAlignment="Center" TextWrapping="Wrap" LineHeight="18"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </Panel>
                                 </DockPanel>
                             </Border>
 
@@ -398,7 +416,7 @@
                                             </StackPanel>
                                         </Grid>
                                     </Border>
-                                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="6" Margin="0,0,0,8">
+                                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="6" Margin="0,0,0,8" IsVisible="{Binding HasSelectedAnime}">
                                         <Button ToolTip.Tip="Accoda tutti gli episodi spuntati (quelli già in coda vengono saltati)" Classes="success" Command="{Binding DownloadSelectedEpisodesCommand}" IsEnabled="{Binding CanInteractWithEpisodes}">
                                             <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconDownload}"/><TextBlock Text="Scarica selezionati"/></StackPanel>
                                         </Button>
@@ -407,7 +425,8 @@
                                         <Button ToolTip.Tip="Inverte la selezione degli episodi" Content="Inverti" Click="OnInvertEpisodeSelectionClick" IsEnabled="{Binding CanInteractWithEpisodes}"/>
                                     </StackPanel>
 
-                                    <DataGrid Name="EpisodesGrid" ItemsSource="{Binding Episodes}" AutoGenerateColumns="False" SelectionMode="Extended" IsReadOnly="False" SelectionChanged="OnEpisodesSelectionChanged" DoubleTapped="OnEpisodeDoubleTapped" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False">
+                                    <Panel>
+                                    <DataGrid Name="EpisodesGrid" IsVisible="{Binding HasSelectedAnime}" ItemsSource="{Binding Episodes}" AutoGenerateColumns="False" SelectionMode="Extended" IsReadOnly="False" SelectionChanged="OnEpisodesSelectionChanged" DoubleTapped="OnEpisodeDoubleTapped" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False">
                                         <DataGrid.Columns>
                                             <DataGridTemplateColumn Header="" Width="40">
                                                 <DataGridTemplateColumn.CellTemplate>
@@ -420,6 +439,21 @@
                                             <DataGridTextColumn Header="Titolo" Binding="{Binding Title}" Width="*"/>
                                         </DataGrid.Columns>
                                     </DataGrid>
+                                    <Border HorizontalAlignment="Center" VerticalAlignment="Top" MaxWidth="380" Margin="16,90,16,16" IsHitTestVisible="False" IsVisible="{Binding ShowDetailPlaceholder}">
+                                            <StackPanel Spacing="10" HorizontalAlignment="Center">
+                                                <Border Width="72" Height="72" CornerRadius="36" Background="{DynamicResource AppSurface2Brush}" HorizontalAlignment="Center">
+                                                    <Path Classes="icon accent" Data="{StaticResource IconTv}" Width="30" Height="30" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <TextBlock Text="Nessun anime aperto" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"/>
+                                                <TextBlock Text="Fai doppio clic su un risultato, o passaci sopra e premi «Analizza»: qui compaiono gli episodi da spuntare e scaricare." FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" TextAlignment="Center" TextWrapping="Wrap" LineHeight="18"/>
+                                                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,6,0,0">
+                                                    <Border Classes="moviePill accent"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconSearch}"/><TextBlock Text="1 · Cerca"/></StackPanel></Border>
+                                                    <Border Classes="moviePill"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconList}"/><TextBlock Text="2 · Analizza"/></StackPanel></Border>
+                                                    <Border Classes="moviePill"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconDownload}"/><TextBlock Text="3 · Scarica"/></StackPanel></Border>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
+                                    </Panel>
                                 </DockPanel>
                             </Border>
                         </Grid>
@@ -588,6 +622,7 @@
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 2. Cerca:</Run> scrivi il titolo e premi Cerca o Invio.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 3. Dettaglio:</Run> fai doppio clic su un risultato, o passaci sopra e premi "Analizza": a destra compaiono locandina, informazioni e stagioni con gli episodi (serie) oppure il pulsante "Scarica film".<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 4. Scarica:</Run> "Scarica selezionati" per gli episodi spuntati, "Scarica stagione" per la stagione aperta, "Scarica tutta la serie" per tutte le stagioni.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Pulisci:</Run> svuota risultati, Dettaglio e campo di ricerca, come all'apertura dell'app. I download in coda e in corso continuano. La cronologia delle ricerche resta (per svuotarla c'è il cestino).<LineBreak/>
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">StreamingCommunity</Run><LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Account:</Run> senza account i download arrivano a 720p; con un account Premium (tab Account) si sblocca il 1080p.<LineBreak/>
@@ -620,7 +655,7 @@
                         </Border>
 
                         <Border Classes="cardElevated" Margin="0,0,0,12">
-                            <Grid ColumnDefinitions="Auto, *, Auto, Auto" RowDefinitions="Auto">
+                            <Grid ColumnDefinitions="Auto, *, Auto, Auto, Auto" RowDefinitions="Auto">
                                 <ComboBox Grid.Column="0" ItemsSource="{Binding AvailableProviders}" SelectedItem="{Binding SelectedProvider, Mode=TwoWay}" MinWidth="170" Margin="0,0,8,0" MinHeight="40" ToolTip.Tip="Scegli il provider: StreamingCommunity (HLS) o CB01 (Maxstream)"/>
                                 <ComboBox Grid.Column="1" Name="StreamingSearchComboBox" IsEditable="True" ItemsSource="{Binding SearchHistory}" PlaceholderText="Cerca un film o una serie TV..." KeyDown="OnStreamingSearchKeyDown" HorizontalAlignment="Stretch" Margin="0,0,8,0" MinHeight="40"/>
                                 <Button ToolTip.Tip="Cerca film o serie TV (o premi Invio nel campo di ricerca)" Grid.Column="2" Classes="accent" Click="OnStreamingSearchButtonClick" MinWidth="110" Height="40" Margin="0,0,8,0">
@@ -629,7 +664,13 @@
                                         <TextBlock Text="Cerca"/>
                                     </StackPanel>
                                 </Button>
-                                <Button Grid.Column="3" Classes="iconCircle" ToolTip.Tip="Svuota cronologia" Click="OnStreamingClearSearchHistoryClick">
+                                <Button Grid.Column="3" Command="{Binding ClearAllCommand}" Height="40" Margin="0,0,8,0" ToolTip.Tip="Svuota risultati e dettaglio, come all'apertura dell'app. I download in coda e in corso continuano.">
+                                    <StackPanel Classes="bi" HorizontalAlignment="Center">
+                                        <Path Classes="icon" Data="{StaticResource IconUndo}"/>
+                                        <TextBlock Text="Pulisci"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Column="4" Classes="iconCircle" ToolTip.Tip="Svuota cronologia" Click="OnStreamingClearSearchHistoryClick">
                                     <Path Classes="icon" Data="{StaticResource IconTrash}"/>
                                 </Button>
                             </Grid>
@@ -718,6 +759,7 @@
                                             <TextBlock Text="Ricerca..." FontSize="11" FontStyle="Italic" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Grid>
+                                    <Panel>
                                     <ListBox Name="StreamingSearchResultsGrid" Classes="posterGrid" ItemsSource="{Binding SearchResults}" SelectedItem="{Binding SelectedResult, Mode=TwoWay}" DoubleTapped="OnStreamingSearchResultDoubleTapped" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                         <ListBox.ItemsPanel>
                                             <ItemsPanelTemplate>
@@ -754,6 +796,16 @@
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>
                                     </ListBox>
+                                    <Border HorizontalAlignment="Center" VerticalAlignment="Top" MaxWidth="380" Margin="16,90,16,16" IsHitTestVisible="False" IsVisible="{Binding ShowResultsPlaceholder}">
+                                            <StackPanel Spacing="10" HorizontalAlignment="Center">
+                                                <Border Width="72" Height="72" CornerRadius="36" Background="{DynamicResource AppSurface2Brush}" HorizontalAlignment="Center">
+                                                    <Path Classes="icon accent" Data="{StaticResource IconSearch}" Width="30" Height="30" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <TextBlock Text="{Binding ResultsPlaceholderTitle}" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"/>
+                                                <TextBlock Text="{Binding ResultsPlaceholderText}" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" TextAlignment="Center" TextWrapping="Wrap" LineHeight="18"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </Panel>
                                 </DockPanel>
                             </Border>
 
@@ -1022,7 +1074,20 @@
                                         </DataGrid.Columns>
                                     </DataGrid>
 
-                                    <TextBlock Text="Fai doppio clic su un risultato, o passaci sopra e premi «Analizza»." FontStyle="Italic" Foreground="{DynamicResource AppTextMutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !HasSelectedResult}"/>
+                                    <Border HorizontalAlignment="Center" VerticalAlignment="Top" MaxWidth="380" Margin="16,90,16,16" IsHitTestVisible="False" IsVisible="{Binding ShowDetailPlaceholder}">
+                                            <StackPanel Spacing="10" HorizontalAlignment="Center">
+                                                <Border Width="72" Height="72" CornerRadius="36" Background="{DynamicResource AppSurface2Brush}" HorizontalAlignment="Center">
+                                                    <Path Classes="icon accent" Data="{StaticResource IconTv}" Width="30" Height="30" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <TextBlock Text="Nessun titolo aperto" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"/>
+                                                <TextBlock Text="Fai doppio clic su un risultato, o passaci sopra e premi «Analizza»: qui compaiono stagioni, episodi e qualità (per un film, direttamente il pulsante per scaricarlo)." FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" TextAlignment="Center" TextWrapping="Wrap" LineHeight="18"/>
+                                                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,6,0,0">
+                                                    <Border Classes="moviePill accent"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconSearch}"/><TextBlock Text="1 · Cerca"/></StackPanel></Border>
+                                                    <Border Classes="moviePill"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconList}"/><TextBlock Text="2 · Analizza"/></StackPanel></Border>
+                                                    <Border Classes="moviePill"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconDownload}"/><TextBlock Text="3 · Scarica"/></StackPanel></Border>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
                                     </Panel>
                                 </DockPanel>
                             </Border>

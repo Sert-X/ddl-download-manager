@@ -28,6 +28,22 @@ public partial class SftpNode : ObservableObject
     /// <summary>Stato mostrato in UI (può essere Mismatch).</summary>
     [ObservableProperty] private NodeStatus status = NodeStatus.None;
 
+    // Chiave di confronto del nodo (percorso relativo alla sorgente, minuscolo): si calcola una
+    // volta e si riusa a ogni ricolorazione finché sorgente e cartella radice non cambiano.
+    private string? _keyCache;
+    private string? _keyStamp;
+
+    public string KeyFor(DownloadManager.Models.VideoboxSource source)
+    {
+        var stamp = source.Id + "|" + source.RootPath;
+        if (_keyCache == null || _keyStamp != stamp)
+        {
+            _keyCache = source.NodeKey(FullPath);
+            _keyStamp = stamp;
+        }
+        return _keyCache;
+    }
+
     /// <summary>Azzera ricorsivamente tutti gli stati.</summary>
     public void Reset()
     {
@@ -51,8 +67,13 @@ public partial class SftpNode : ObservableObject
 
         foreach (var child in Children) child.RefreshStatus();
 
-        bool hasValid = Children.Any(c => c.BaseStatus is NodeStatus.Valid or NodeStatus.Mixed);
-        bool hasInvalid = Children.Any(c => c.BaseStatus is NodeStatus.Invalid or NodeStatus.Mixed);
+        bool hasValid = false, hasInvalid = false;
+        foreach (var c in Children)
+        {
+            if (c.BaseStatus is NodeStatus.Valid or NodeStatus.Mixed) hasValid = true;
+            if (c.BaseStatus is NodeStatus.Invalid or NodeStatus.Mixed) hasInvalid = true;
+            if (hasValid && hasInvalid) break;
+        }
 
         BaseStatus = (hasValid, hasInvalid) switch
         {

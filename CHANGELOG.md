@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.4.4] — 2026-10-27
+
+### 🎬 Anime e Film/Serie Download
+- **Pulsante "Pulisci"** accanto a "Cerca": svuota risultati, Dettaglio e campo di ricerca, come all'apertura dell'app. Ricerche e caricamenti in corso vengono fermati; i download in coda e in corso continuano.
+- **Riquadri vuoti più chiari**: al posto dei pannelli vuoti, "Risultati ricerca" spiega come cercare (o dice "Nessun risultato per …" con un suggerimento) e "Dettaglio" mostra i tre passi Cerca · Analizza · Scarica.
+- **Dettaglio Anime come in Film/Serie**: tabella degli episodi e pulsanti compaiono solo dopo aver aperto un anime, invece di restare visibili e non cliccabili.
+
+### ⚡ Fluidità con tanti trasferimenti
+- **Videobox Corrector**: la ricolorazione di albero e post dopo ogni upload completato passa da 300-500 ms a circa 40 ms (stessi colori di prima).
+- **Molti upload/download/copie insieme**: ogni trasferimento SFTP ha un thread tutto suo, così letture delle cartelle, ricerche e salvataggi non restano più in coda per secondi.
+- **Coda download**: le scritture sul database non bloccano più l'interfaccia.
+- **Log**: i messaggi vengono aggiunti a gruppi (ogni 250 ms) e lo scorrimento automatico avviene solo con il log aperto.
+- **SFTP**: i contatori delle code si aggiornano a gruppi invece che a ogni singolo cambiamento.
+
+### 🧹 Varie
+- Guide di Anime e Film/Serie aggiornate con "Pulisci".
+
 ## [1.4.3] — 2026-10-27
 
 ### 📡 SFTP: più server insieme

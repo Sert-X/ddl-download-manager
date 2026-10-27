@@ -1521,47 +1521,139 @@ public partial class VideoboxTabViewModel : ObservableObject
         return nodes;
     }
 
+    /// <summary>
+    /// Analisi dei link di un post: validità, host e percorso di ogni link. Si rifà solo quando
+    /// cambiano i link del post o i domini validi (prima si rianalizzava ogni link più volte a
+    /// ogni ricolorazione: con ~30.000 link e un albero grande l'interfaccia si fermava per
+    /// 300-500 ms dopo ogni upload completato).
+    /// </summary>
+    private sealed class PostLinks
+    {
+        public List<string> Links = null!;
+        public string DomainsStamp = "";
+        public bool[] Valid = Array.Empty<bool>();
+        public string[] Host = Array.Empty<string>();
+        public string?[] Path = Array.Empty<string?>();
+        public int ValidCount;
+        /// <summary>Chiavi dei link per percorso pubblico della sorgente (calcolate una volta).</summary>
+        public readonly Dictionary<string, string?[]> KeysByPublicPath = new(StringComparer.Ordinal);
+
+        /// <summary>Cartella comune ai link del post per una sorgente ("" = nessuna), calcolata una volta.</summary>
+        public readonly Dictionary<string, string> CommonDirBySource = new(StringComparer.Ordinal);
+
+        public string?[] KeysFor(string publicPath)
+        {
+            if (!KeysByPublicPath.TryGetValue(publicPath, out var keys))
+            {
+                keys = new string?[Path.Length];
+                for (int i = 0; i < Path.Length; i++)
+                    if (Valid[i] && Path[i] != null) keys[i] = VideoboxSource.KeyFromLinkPath(Path[i]!, publicPath);
+                KeysByPublicPath[publicPath] = keys;
+            }
+            return keys;
+        }
+    }
+
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<VideoboxPostItem, PostLinks> _postLinks = new();
+
+    private PostLinks AnalyzeLinks(VideoboxPostItem post, HashSet<string> validHosts, string domainsStamp)
+    {
+        if (_postLinks.TryGetValue(post, out var info) && ReferenceEquals(info.Links, post.Links) && info.DomainsStamp == domainsStamp)
+            return info;
+
+        int n = post.Links.Count;
+        info = new PostLinks
+        {
+            Links = post.Links, DomainsStamp = domainsStamp,
+            Valid = new bool[n], Host = new string[n], Path = new string?[n]
+        };
+        for (int i = 0; i < n; i++)
+        {
+            var url = post.Links[i];
+            var host = LinkValidator.HostOf(url);
+            info.Valid[i] = host.Length > 0 && validHosts.Contains(host);
+            info.Host[i] = host.ToLowerInvariant();
+            if (info.Valid[i])
+            {
+                info.ValidCount++;
+                info.Path[i] = VideoboxSource.LinkPath(url);
+            }
+        }
+        _postLinks.AddOrUpdate(post, info);
+        return info;
+    }
+
     private void UpdateSftpTreeColors(bool repaginate = true)
     {
         var domains = _settingsService.Current.AllValidStorageDomains.ToList();
+        var domainsStamp = string.Join("|", domains);
+        var validHosts = domains.Select(LinkValidator.CleanDomain).Where(d => d.Length > 0).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var treeSources = SftpRootNodes.Where(r => r.Source != null).Select(r => r.Source!).Distinct().ToList();
 
-        _validKeysBySource.Clear();
-        foreach (var src in treeSources) _validKeysBySource[src.Id] = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Domini e percorsi pubblici delle sorgenti: calcolati una volta per giro
+        var configuredHosts = Sources.Select(x => x.DomainHost).Where(h => h.Length > 0).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // Cambiano i domini delle sorgenti: le cartelle comuni ricordate non valgono più
+        var hostsStamp = string.Join("|", configuredHosts.OrderBy(h => h, StringComparer.Ordinal)) + "#" + string.Join("|", treeSources.Select(x => x.Id + "=" + sourceHostOf(x)));
+        static string sourceHostOf(VideoboxSource x) => x.DomainHost;
+        var sourceHost = treeSources.ToDictionary(x => x, x => x.DomainHost);
+        var sourcePub = treeSources.ToDictionary(x => x, x => x.NormalizedPublicPath);
+        var sourcesByHost = new Dictionary<string, List<VideoboxSource>>(StringComparer.OrdinalIgnoreCase);
+        List<VideoboxSource> SourcesForHost(string host)
+        {
+            // Come SourcesForUrl: con una sorgente dello stesso dominio contano solo quelle
+            if (host.Length == 0 || !configuredHosts.Contains(host)) return treeSources;
+            if (!sourcesByHost.TryGetValue(host, out var list))
+                sourcesByHost[host] = list = treeSources.Where(x => string.Equals(sourceHost[x], host, StringComparison.OrdinalIgnoreCase)).ToList();
+            return list;
+        }
 
+        _validKeysBySource.Clear();
+        // Chiavi già tutte minuscole (link e nodi): confronto esatto, più veloce
+        foreach (var src in treeSources) _validKeysBySource[src.Id] = new HashSet<string>(StringComparer.Ordinal);
+
+        // Chiavi dei link validi di ogni post, per sorgente (servono anche a trovare la sua cartella)
+        var keysByPost = new Dictionary<VideoboxPostItem, Dictionary<VideoboxSource, List<string>>>();
         foreach (var post in _allPosts)
         {
-            int validCount = post.Links.Count(u => LinkValidator.IsValidDomain(u, domains));
-            post.ValidLinkCount = validCount;
-            post.BaseStatus = GetBasePostStatus(post.Links, validCount);
+            var info = AnalyzeLinks(post, validHosts, domainsStamp);
+            post.ValidLinkCount = info.ValidCount;
+            post.BaseStatus = GetBasePostStatus(post.Links, info.ValidCount);
             post.Status = post.BaseStatus;
+            if (treeSources.Count == 0) continue;
 
-            // Ogni link valido si confronta con le sorgenti caricate del suo dominio
-            foreach (var url in post.Links)
+            Dictionary<VideoboxSource, List<string>>? perSource = null;
+            for (int i = 0; i < info.Valid.Length; i++)
             {
-                if (!LinkValidator.IsValidDomain(url, domains)) continue;
-                foreach (var src in SourcesForUrl(url, treeSources))
+                if (!info.Valid[i] || info.Path[i] == null) continue;
+                foreach (var src in SourcesForHost(info.Host[i]))
                 {
-                    var key = src.UrlKey(url);
-                    if (!string.IsNullOrEmpty(key)) _validKeysBySource[src.Id].Add(key);
+                    var key = info.KeysFor(sourcePub[src])[i];
+                    if (string.IsNullOrEmpty(key)) continue;
+                    _validKeysBySource[src.Id].Add(key);
+                    perSource ??= new Dictionary<VideoboxSource, List<string>>();
+                    if (!perSource.TryGetValue(src, out var keys)) perSource[src] = keys = new List<string>();
+                    keys.Add(key);
                 }
             }
+            if (perSource != null) keysByPost[post] = perSource;
         }
 
         if (SftpRootNodes.Count > 0)
         {
-            foreach (var node in SftpRootNodes) node.Reset();
+            // Niente azzeramento preventivo: ogni nodo riceve il suo colore una volta sola e cambia
+            // (avvisando l'albero) solo se il colore cambia davvero.
             foreach (var node in SftpRootNodes) ColorNodeRecursive(node);
             foreach (var node in SftpRootNodes) node.RefreshStatus();
 
-            var foldersByKey = new Dictionary<string, SftpNode>(StringComparer.OrdinalIgnoreCase);
+            var foldersByKey = new Dictionary<string, SftpNode>(StringComparer.Ordinal);
             IndexFolders(SftpRootNodes, foldersByKey);
 
             foreach (var post in _allPosts)
             {
                 if (post.Status is not (PostStatus.Valid or PostStatus.Mixed)) continue;
+                if (!keysByPost.TryGetValue(post, out var perSource)) continue;
 
-                var folder = FindFolderForPost(post, foldersByKey);
+                var folder = FindFolderForPost(post, perSource, treeSources, foldersByKey, hostsStamp);
                 if (folder == null || !folder.IsDirectory) continue;
 
                 // Post giallo (alcuni link fuori dai domini impostati): anche la sua cartella,
@@ -1573,7 +1665,7 @@ public partial class VideoboxTabViewModel : ObservableObject
                     continue;
                 }
 
-                int totalFilesInFolder = GetAllFiles(folder).Count;
+                int totalFilesInFolder = CountFiles(folder);
                 if (totalFilesInFolder > 0 && post.ValidLinkCount != totalFilesInFolder)
                 {
                     post.Status = PostStatus.Mismatch;
@@ -1590,28 +1682,12 @@ public partial class VideoboxTabViewModel : ObservableObject
         else UpdateStatusCounts();
     }
 
-    /// <summary>
-    /// Sorgenti a cui può appartenere un link. Se tra le sorgenti configurate c'è quella con lo
-    /// stesso dominio del link, contano solo quelle: due sorgenti con lo stesso percorso
-    /// pubblico su server diversi (es. "Anime" su DDL 1 e su DDL 2) non si confondono più.
-    /// Prima un post con i file su DDL 2 veniva confrontato con la cartella di DDL 1 (23 file
-    /// invece di 24) e restava viola. Se nessuna sorgente ha quel dominio (domini secondari)
-    /// valgono tutte, come prima.
-    /// </summary>
-    private IEnumerable<VideoboxSource> SourcesForUrl(string url, IReadOnlyCollection<VideoboxSource> candidates)
+    private static int CountFiles(SftpNode node)
     {
-        var host = VideoboxSource.HostOf(url);
-        if (host.Length > 0 && Sources.Any(s => s.DomainHost == host))
-            return candidates.Where(s => s.DomainHost == host);
-        return candidates;
-    }
-
-    private List<SftpNode> GetAllFiles(SftpNode node)
-    {
-        var files = new List<SftpNode>();
-        if (!node.IsDirectory) { files.Add(node); return files; }
-        foreach (var child in node.Children) files.AddRange(GetAllFiles(child));
-        return files;
+        if (!node.IsDirectory) return 1;
+        int n = 0;
+        foreach (var child in node.Children) n += CountFiles(child);
+        return n;
     }
 
     private void ColorNodeRecursive(SftpNode node)
@@ -1623,7 +1699,7 @@ public partial class VideoboxTabViewModel : ObservableObject
         }
 
         var source = node.Source;
-        bool valid = source != null && _validKeysBySource.TryGetValue(source.Id, out var keys) && keys.Contains(source.NodeKey(node.FullPath));
+        bool valid = source != null && _validKeysBySource.TryGetValue(source.Id, out var keys) && keys.Contains(node.KeyFor(source));
         node.BaseStatus = valid ? NodeStatus.Valid : NodeStatus.Invalid;
     }
 
@@ -1634,7 +1710,7 @@ public partial class VideoboxTabViewModel : ObservableObject
             if (!node.IsDirectory) continue;
             if (node.Source != null && !node.IsSourceRoot)
             {
-                string key = node.Source.NodeKey(node.FullPath);
+                string key = node.KeyFor(node.Source);
                 if (!string.IsNullOrEmpty(key)) map[$"{node.Source.Id}|{key}"] = node;
             }
             IndexFolders(node.Children, map);
@@ -1643,43 +1719,45 @@ public partial class VideoboxTabViewModel : ObservableObject
 
     /// <summary>
     /// Cartella che contiene i file del post: la cartella comune ai suoi link validi,
-    /// cercata in ogni sorgente caricata (la prima che la contiene).
+    /// cercata in ogni sorgente caricata (la prima che la contiene). Le chiavi dei link
+    /// arrivano già calcolate dalla ricolorazione.
     /// </summary>
-    private SftpNode? FindFolderForPost(VideoboxPostItem post, Dictionary<string, SftpNode> foldersByKey)
+    private SftpNode? FindFolderForPost(VideoboxPostItem post, Dictionary<VideoboxSource, List<string>> keysBySource,
+                                        List<VideoboxSource> treeSources, Dictionary<string, SftpNode> foldersByKey, string hostsStamp)
     {
-        var domains = _settingsService.Current.AllValidStorageDomains.ToList();
-        var validLinks = post.Links.Where(u => LinkValidator.IsValidDomain(u, domains)).ToList();
-        if (validLinks.Count == 0) return null;
-
-        var treeSources = SftpRootNodes.Where(r => r.Source != null).Select(r => r.Source!).Distinct().ToList();
+        _postLinks.TryGetValue(post, out var info);
         foreach (var src in treeSources)
         {
-            var dirs = new List<string[]>();
-            foreach (var url in validLinks)
+            if (!keysBySource.TryGetValue(src, out var keys)) continue;
+            var stamp = src.Id + "|" + src.NormalizedPublicPath + "|" + hostsStamp;
+            if (info == null || !info.CommonDirBySource.TryGetValue(stamp, out var dir))
             {
-                if (!SourcesForUrl(url, treeSources).Contains(src)) continue;
-                var key = src.UrlKey(url);
-                if (string.IsNullOrEmpty(key)) continue;
-                int idx = key.LastIndexOf('/');
-                if (idx <= 0) continue;
-                dirs.Add(key.Substring(0, idx).Split('/', StringSplitOptions.RemoveEmptyEntries));
+                dir = CommonDir(keys);
+                info?.CommonDirBySource.TryAdd(stamp, dir);
             }
-            if (dirs.Count == 0) continue;
-
-            var common = dirs[0];
-            int len = common.Length;
-            foreach (var d in dirs.Skip(1))
-            {
-                int i = 0;
-                while (i < len && i < d.Length && string.Equals(common[i], d[i], StringComparison.OrdinalIgnoreCase)) i++;
-                len = i;
-            }
-            if (len == 0) continue;
-
-            if (foldersByKey.TryGetValue($"{src.Id}|{string.Join("/", common.Take(len))}", out var folder))
+            if (dir.Length == 0) continue;
+            if (foldersByKey.TryGetValue($"{src.Id}|{dir}", out var folder))
                 return folder;
         }
         return null;
+    }
+
+    /// <summary>Cartella comune ai file dei link (le chiavi sono percorsi "cartella/file").</summary>
+    private static string CommonDir(List<string> keys)
+    {
+        string[]? common = null;
+        int len = 0;
+        foreach (var key in keys)
+        {
+            int idx = key.LastIndexOf('/');
+            if (idx <= 0) continue;
+            var d = key.Substring(0, idx).Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (common == null) { common = d; len = d.Length; continue; }
+            int i = 0;
+            while (i < len && i < d.Length && string.Equals(common[i], d[i], StringComparison.OrdinalIgnoreCase)) i++;
+            len = i;
+        }
+        return common == null || len == 0 ? "" : string.Join("/", common.Take(len));
     }
 
     partial void OnSelectedSftpNodeChanged(SftpNode? value)

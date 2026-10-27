@@ -230,9 +230,10 @@ public partial class SftpTabViewModel : ViewModelBase
             try { await SftpRefreshLocalInternalAsync(silent: true); } catch { }
         };
 
-        _sftpUploadQueue.QueueChanged += OnUploadQueueChanged;
-        _sftpUploadQueue.QueueChanged += OnUploadCompletedRecalc;
-        _sftpDownloadQueue.QueueChanged += UpdateSftpBadges;
+        // Gli eventi delle code arrivano dai thread dei trasferimenti: contatori e pallini si
+        // ricalcolano sul thread dell'interfaccia, al massimo una volta ogni 200 ms
+        _sftpUploadQueue.QueueChanged += ScheduleQueueRecalc;
+        _sftpDownloadQueue.QueueChanged += ScheduleQueueRecalc;
 
         _sftpUploadQueue.MaxConcurrency = SftpMaxUploadConcurrency;
         _sftpDownloadQueue.MaxConcurrency = SftpMaxDownloadConcurrency;
@@ -633,9 +634,23 @@ public partial class SftpTabViewModel : ViewModelBase
         });
     }
 
-    private void OnUploadQueueChanged()
+    private int _queueRecalcScheduled;
+
+    /// <summary>
+    /// Ricalcolo raggruppato dopo un cambio nelle code (upload, download, copie). Prima partiva
+    /// a ogni evento e dal thread del trasferimento, rileggendo tutta la coda mentre l'interfaccia
+    /// la modificava: lavoro ripetuto con decine di trasferimenti e rischio di errori sporadici.
+    /// </summary>
+    private void ScheduleQueueRecalc()
     {
-        UpdateSftpBadges();
+        if (Interlocked.Exchange(ref _queueRecalcScheduled, 1) == 1) return;
+        Dispatcher.UIThread.Post(async () =>
+        {
+            await Task.Delay(200);
+            Volatile.Write(ref _queueRecalcScheduled, 0);
+            UpdateSftpBadges();
+            OnUploadCompletedRecalc();
+        });
     }
 
     [RelayCommand]

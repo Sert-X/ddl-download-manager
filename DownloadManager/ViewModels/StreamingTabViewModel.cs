@@ -29,6 +29,56 @@ public partial class StreamingTabViewModel : ViewModelBase
     private CancellationTokenSource? _batchCts;
     private int _searchSeq, _seasonsSeq, _episodesSeq, _qualitiesSeq;
 
+    // ============================================================
+    //  RIQUADRI VUOTI E "PULISCI"
+    // ============================================================
+
+    /// <summary>Ultima ricerca senza risultati (per dire "nessun risultato per ..."). null = nessuna.</summary>
+    private string? _emptySearchTerm;
+
+    public bool ShowResultsPlaceholder => SearchResults.Count == 0 && !IsLoadingSearchResults;
+    public string ResultsPlaceholderTitle => _emptySearchTerm != null ? "Nessun risultato" : "Cerca un film o una serie";
+    public string ResultsPlaceholderText => _emptySearchTerm != null
+        ? $"Nessun film o serie trovato per «{_emptySearchTerm}». Prova con un titolo diverso (anche in inglese o giapponese) oppure con un altro sito dal menu a sinistra della ricerca."
+        : "Scrivi il titolo qui sopra e premi Cerca (o Invio): i risultati compaiono qui con la locandina. Doppio clic su un risultato, o «Analizza», per vederne stagioni, episodi e qualità.";
+
+    private void NotifyPlaceholders()
+    {
+        OnPropertyChanged(nameof(ShowResultsPlaceholder));
+        OnPropertyChanged(nameof(ResultsPlaceholderTitle));
+        OnPropertyChanged(nameof(ResultsPlaceholderText));
+        OnPropertyChanged(nameof(ShowDetailPlaceholder));
+    }
+
+    partial void OnIsLoadingSearchResultsChanged(bool value) => NotifyPlaceholders();
+
+    /// <summary>
+    /// Torna come all'apertura dell'app: risultati, dettaglio e campo di ricerca vuoti. Ricerche
+    /// e caricamenti in corso vengono fermati (i loro risultati non ricompaiono); i download in
+    /// coda e quelli in corso continuano.
+    /// </summary>
+    [RelayCommand]
+    private void ClearAll()
+    {
+        // Le operazioni in corso diventano "superate": i loro risultati verranno ignorati
+        _searchSeq++; _seasonsSeq++; _episodesSeq++; _qualitiesSeq++;
+        IsQualitiesLoading = false;
+        IsLoadingSearchResults = false;
+        IsLoadingEpisodes = false;
+        SearchResults.Clear();
+        SelectedResult = null;   // svuota anche stagioni, episodi, qualità e tracce
+        Episodes.Clear();
+        Seasons.Clear();
+        _emptySearchTerm = null;
+        SearchQuery = string.Empty;
+        NotifyPlaceholders();
+        StatusMessage = "Cerca un film o una serie TV per iniziare.";
+    }
+
+    /// <summary>Dettaglio vuoto: invito a scegliere un risultato.</summary>
+    public bool ShowDetailPlaceholder => !HasSelectedResult && !IsLoadingEpisodes;
+
+
     private const string CategoryName = "streaming";
 
     // ============================================================
@@ -452,7 +502,10 @@ public partial class StreamingTabViewModel : ViewModelBase
         _queueService.SetMaxConcurrency(CategoryName, MaxConcurrency);
 
         SearchResults.CollectionChanged += (_, _) =>
+        {
+            NotifyPlaceholders();
             OnPropertyChanged(nameof(SearchResultsCountText));
+        };
 
         Episodes.CollectionChanged += (_, e) =>
         {
@@ -628,6 +681,7 @@ public partial class StreamingTabViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(SelectedResultName));
         OnPropertyChanged(nameof(HasSelectedResult));
+        OnPropertyChanged(nameof(ShowDetailPlaceholder));
         OnPropertyChanged(nameof(IsSelectedResultSeries));
         OnPropertyChanged(nameof(IsSelectedResultMovie));
 
@@ -732,12 +786,14 @@ public partial class StreamingTabViewModel : ViewModelBase
 
             if (seq != _searchSeq) return;
 
+            _emptySearchTerm = results.Count == 0 ? term.Trim() : null;
             SearchResults.Clear();
             foreach (var r in results)
             {
                 SearchResults.Add(r);
                 _ = LoadPosterAsync(r);
             }
+            NotifyPlaceholders();
 
             StatusMessage = $"Trovati {results.Count} risultati per '{term}'.";
         }
@@ -807,6 +863,7 @@ public partial class StreamingTabViewModel : ViewModelBase
     partial void OnIsLoadingEpisodesChanged(bool value)
     {
         OnPropertyChanged(nameof(CanInteractWithEpisodes));
+        OnPropertyChanged(nameof(ShowDetailPlaceholder));
         OnPropertyChanged(nameof(MovieReadyHint));
         if (!value) UpdateMoviePreview();   // conteggi definitivi a caricamento finito
         OnPropertyChanged(nameof(SeriesDetailHint));
@@ -1020,7 +1077,7 @@ public partial class StreamingTabViewModel : ViewModelBase
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "[STREAMING-TAB] Errore caricamento qualità");
-            StatusMessage = $"⚠ Errore analisi qualità: {ex.Message}";
+            if (seq == _qualitiesSeq) StatusMessage = $"⚠ Errore analisi qualità: {ex.Message}";
         }
         finally
         {

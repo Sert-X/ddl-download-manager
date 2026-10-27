@@ -386,6 +386,7 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         try
         {
+            _logService.Flush();   // anche le righe appena arrivate
             var text = string.Join(Environment.NewLine, FilteredLogs.Select(FormatLogLine));
 
             await DownloadManager.Helpers.ClipboardHelper.SetTextAsync(text);
@@ -429,7 +430,8 @@ public partial class MainWindowViewModel : ViewModelBase
             if (file is null) return;
 
             var path = file.Path.LocalPath;
-            await File.WriteAllLinesAsync(path, Logs.Select(FormatLogLine));
+            _logService.Flush();
+            await File.WriteAllLinesAsync(path, Logs.Select(FormatLogLine).ToList());
             LogStatus("Generale", $"Log esportato in {path}");
         }
         catch (Exception ex)
