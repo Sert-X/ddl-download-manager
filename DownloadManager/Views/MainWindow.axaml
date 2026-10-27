@@ -1491,7 +1491,7 @@
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Flusso consigliato</Run><LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 1. Anteprima:</Run> calcola le operazioni senza toccare nulla; la colonna Conflitto segnala nomi già esistenti o duplicati.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 2. Applica:</Run> esegue le operazioni. Se ci sono conflitti l'app si ferma e non applica niente.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 2. Applica:</Run> esegue le operazioni. Se ci sono conflitti l'app si ferma e non applica niente. Le rinomine "a catena" non sono conflitti: se elimini un episodio e rinumeri (il 3 diventa 2, il 4 diventa 3...) o due file si scambiano il nome, l'app li sposta prima su nomi temporanei e poi su quelli finali; anche Undo li rimette a posto allo stesso modo.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 3. Undo:</Run> annulla l'ultimo gruppo di operazioni applicate. La cronologia in basso elenca tutto ciò che è stato fatto.<LineBreak/>
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Segnaposto del pattern</Run><LineBreak/>

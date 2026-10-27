@@ -82,6 +82,7 @@ public partial class EpisodeMappingItem : ObservableObject
     }
     partial void OnNewUrlChanged(string? value)
     {
+        if (!string.IsNullOrEmpty(value)) SavedOnForum = null;
         OnPropertyChanged(nameof(NewName));
         OnPropertyChanged(nameof(NewWhere));
         OnPropertyChanged(nameof(HasNew));
@@ -90,6 +91,7 @@ public partial class EpisodeMappingItem : ObservableObject
     partial void OnSftpFileNameChanged(string? value) => OnPropertyChanged(nameof(NewName));
     partial void OnIsSelectedForUpdateChanged(bool value)
     {
+        SavedOnForum = null;
         OnPropertyChanged(nameof(UnchangedText));
         OnPropertyChanged(nameof(ShowNew));
     }
@@ -279,13 +281,25 @@ public partial class VideoboxTabViewModel : ObservableObject
     // comprese): quello che dice è esattamente quello che farà "Applica".
     private int RowsRemoved => MappingItems.Count(m => !m.IsSelectedForUpdate && m.HasOld);
     private int RowsAdded => MappingItems.Count(m => m.IsSelectedForUpdate && m.HasNew && !m.HasOld);
-    private int RowsKept => MappingItems.Count(m => m.IsSelectedForUpdate && !m.HasNew && m.HasOld);
+    private int RowsKept => MappingItems.Count(m => m.IsSelectedForUpdate && !m.HasNew && m.HasOld && m.SavedOnForum == null);
+    // Dopo "Applica": righe confermate dal forum e righe inviate ma non tornate
+    private int RowsSaved => MappingItems.Count(m => m.SavedOnForum == true);
+    private int RowsNotConfirmed => MappingItems.Count(m => m.SavedOnForum == false);
+    private bool IsAfterApply => MappingItems.Any(m => m.SavedOnForum != null);
 
     public string MappingSummaryText
     {
         get
         {
             if (MappingItems.Count == 0) return "";
+            if (IsAfterApply)
+            {
+                // Tabella appena ricaricata dal forum: si dice cosa è stato salvato, non cosa farà "Applica"
+                int saved = RowsSaved, missing = RowsNotConfirmed;
+                return missing == 0
+                    ? $"Applicato: {saved} {(saved == 1 ? "link salvato" : "link salvati")} sul forum"
+                    : $"{saved} {(saved == 1 ? "link salvato" : "link salvati")} sul forum · {missing} {(missing == 1 ? "non confermato" : "non confermati")}";
+            }
             if (SftpFileCount == 0) return "Nessun file abbinato: clicca una cartella nell'albero e premi Mappa";
             var parts = new List<string> { $"{SftpFileCount} {(SftpFileCount == 1 ? "file abbinato" : "file abbinati")}" };
             int removed = RowsRemoved, added = RowsAdded, kept = RowsKept;
@@ -296,9 +310,11 @@ public partial class VideoboxTabViewModel : ObservableObject
         }
     }
     /// <summary>Tutto abbinato, niente tolto o aggiunto (verde); altrimenti da guardare (arancione).</summary>
-    public bool MappingSummaryOk => SftpFileCount > 0 && RowsRemoved == 0 && RowsAdded == 0 && RowsKept == 0;
-    public bool MappingSummaryWarn => SftpFileCount > 0 && !MappingSummaryOk;
-    public bool MappingSummaryInfo => MappingItems.Count > 0 && SftpFileCount == 0;
+    public bool MappingSummaryOk => IsAfterApply
+        ? RowsNotConfirmed == 0
+        : SftpFileCount > 0 && RowsRemoved == 0 && RowsAdded == 0 && RowsKept == 0;
+    public bool MappingSummaryWarn => IsAfterApply ? RowsNotConfirmed > 0 : SftpFileCount > 0 && !MappingSummaryOk;
+    public bool MappingSummaryInfo => !IsAfterApply && MappingItems.Count > 0 && SftpFileCount == 0;
     /// <summary>Post aperto ma tabella vuota: si mostra cosa fare.</summary>
     public bool ShowMappingHint => SelectedPost != null && MappingItems.Count == 0;
 
@@ -326,7 +342,7 @@ public partial class VideoboxTabViewModel : ObservableObject
     private void OnMappingItemPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(EpisodeMappingItem.OldUrl) or nameof(EpisodeMappingItem.NewUrl)
-            or nameof(EpisodeMappingItem.SftpFileName) or nameof(EpisodeMappingItem.IsSelectedForUpdate))
+            or nameof(EpisodeMappingItem.SftpFileName) or nameof(EpisodeMappingItem.IsSelectedForUpdate) or nameof(EpisodeMappingItem.SavedOnForum))
             UpdateMappingCounts();
     }
     [ObservableProperty] private string statusMessage = "Pronto.";

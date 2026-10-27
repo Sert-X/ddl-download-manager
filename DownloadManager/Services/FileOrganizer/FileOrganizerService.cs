@@ -168,6 +168,7 @@ public class FileOrganizerService : IFileOrganizerService
             }
         }
 
+        ResolveRenameChains(result);
         return result;
     }
 
@@ -276,6 +277,7 @@ public class FileOrganizerService : IFileOrganizerService
             }
         }
 
+        ResolveRenameChains(result);
         return result;
     }
 
@@ -415,6 +417,7 @@ public class FileOrganizerService : IFileOrganizerService
             if (mode == SplitNumberingMode.Reset) globalCounter += accumulated;
         }
 
+        ResolveRenameChains(result);
         return result;
     }
 
@@ -522,6 +525,7 @@ public class FileOrganizerService : IFileOrganizerService
             }
         }
 
+        ResolveRenameChains(result);
         return result;
     }
 
@@ -639,6 +643,7 @@ public class FileOrganizerService : IFileOrganizerService
             }
         }
 
+        ResolveRenameChains(result);
         return result;
     }
 
@@ -777,6 +782,7 @@ public class FileOrganizerService : IFileOrganizerService
             if (mode == SplitNumberingMode.Reset) globalCounter += accumulated;
         }
 
+        ResolveRenameChains(result);
         return result;
     }
 
@@ -826,6 +832,57 @@ public class FileOrganizerService : IFileOrganizerService
     }
 
     // ============================================================
+    //  CATENE DI RINOMINE (es. Ep_03 → Ep_02, Ep_04 → Ep_03, ...)
+    // ============================================================
+
+    private const string ExistsReason = "File di destinazione già esistente";
+
+    /// <summary>
+    /// Una destinazione "già esistente" non è un conflitto se quel file è a sua volta rinominato
+    /// nello stesso gruppo (es. dopo aver eliminato l'episodio 2, il 3 diventa 2, il 4 diventa 3...).
+    /// Si ripete finché cambia qualcosa: un file libera il suo nome solo se la sua rinomina va.
+    /// Due file verso lo stesso nome restano un conflitto.
+    /// </summary>
+    private static void ResolveRenameChains(List<ProposedOperation> ops)
+    {
+        var cmp = StringComparer.OrdinalIgnoreCase;
+        // stessa destinazione per più file: conflitto vero
+        foreach (var g in ops.Where(o => !o.HasConflict).GroupBy(o => o.NewPath, cmp).Where(g => g.Count() > 1))
+            foreach (var o in g.Skip(1)) { o.HasConflict = true; o.ConflictReason = "Destinazione duplicata nel batch"; }
+
+        // Si parte supponendo che vadano tutte le rinomine bloccate solo da "già esistente" (così
+        // funzionano anche gli scambi A ↔ B), poi si tolgono quelle la cui destinazione resta
+        // davvero occupata: un file che non si sposta, o che è bloccato per un altro motivo.
+        var candidates = ops.Where(o => !o.IsDuplicate && (!o.HasConflict || o.ConflictReason == ExistsReason)).ToHashSet();
+        bool changed = true;
+        while (changed)
+        {
+            changed = false;
+            var moving = candidates.Select(o => o.OriginalPath).ToHashSet(cmp);
+            foreach (var o in candidates.ToList())
+            {
+                if (o.HasConflict && !moving.Contains(o.NewPath)) { candidates.Remove(o); changed = true; }
+            }
+        }
+        foreach (var o in candidates.Where(o => o.HasConflict))
+        {
+            // stessa destinazione di un'altra rinomina che va: resta un conflitto
+            if (ops.Any(x => !ReferenceEquals(x, o) && candidates.Contains(x) && cmp.Equals(x.NewPath, o.NewPath))) continue;
+            o.HasConflict = false;
+            o.ConflictReason = string.Empty;
+        }
+    }
+
+    /// <summary>Nome temporaneo nella stessa cartella del file, per le rinomine in due passaggi.</summary>
+    private static string TempName(string path, char sep, string batchId, int i)
+    {
+        var idx = path.LastIndexOfAny(new[] { '/', '\\' });
+        var dir = idx >= 0 ? path[..idx] : "";
+        var name = $".ddlorg-{batchId[..8]}-{i}.tmp";
+        return dir.Length > 0 ? dir + sep + name : name;
+    }
+
+    // ============================================================
     //  APPLY — LOCALE
     // ============================================================
 
@@ -834,6 +891,23 @@ public class FileOrganizerService : IFileOrganizerService
         var applied = 0;
         var batchId = Guid.NewGuid().ToString("N");
         var log = new List<FileOperation>();
+
+        // Catena di rinomine (una destinazione è il file di un'altra rinomina, o due file si
+        // scambiano il nome): prima tutti su un nome temporaneo, poi ognuno sul nome finale.
+        var todo = operations.Where(o => !o.IsDuplicate && !o.HasConflict).ToList();
+        var sources = todo.Select(o => o.OriginalPath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var staged = new Dictionary<ProposedOperation, string>();
+        if (todo.Any(o => sources.Contains(o.NewPath)))
+        {
+            int i = 0;
+            foreach (var op in todo)
+            {
+                if (!File.Exists(op.OriginalPath)) continue;
+                var tmp = TempName(op.OriginalPath, Path.DirectorySeparatorChar, batchId, i++);
+                try { File.Move(op.OriginalPath, tmp); staged[op] = tmp; }
+                catch (Exception ex) { _logger.LogError(ex, "Rinomina temporanea fallita: {File}", op.OriginalPath); }
+            }
+        }
 
         try
         {
@@ -863,9 +937,16 @@ public class FileOrganizerService : IFileOrganizerService
                             });
                     }
 
-                    if (File.Exists(op.OriginalPath))
+                    var from = staged.TryGetValue(op, out var tmpPath) ? tmpPath : op.OriginalPath;
+                    if (File.Exists(from))
                     {
-                        File.Move(op.OriginalPath, op.NewPath);
+                        try { File.Move(from, op.NewPath); }
+                        catch when (from != op.OriginalPath)
+                        {
+                            // Non è andata: il file torna al suo nome di prima
+                            try { File.Move(from, op.OriginalPath); } catch { }
+                            throw;
+                        }
                         log.Add(new FileOperation
                         {
                             Type = op.Type,
@@ -907,6 +988,21 @@ public class FileOrganizerService : IFileOrganizerService
         var log = new List<FileOperation>();
         var createdDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // Catena di rinomine: come in locale, prima tutti su un nome temporaneo
+        var todo = operations.Where(o => !o.IsDuplicate && !o.HasConflict).ToList();
+        var sources = todo.Select(o => o.OriginalPath).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var staged = new Dictionary<ProposedOperation, string>();
+        if (todo.Any(o => sources.Contains(o.NewPath)))
+        {
+            int i = 0;
+            foreach (var op in todo)
+            {
+                var tmp = TempName(op.OriginalPath, '/', batchId, i++);
+                try { await Remote.RenameAsync(op.OriginalPath, tmp, ct); staged[op] = tmp; }
+                catch (Exception ex) { _logger.LogError(ex, "Rinomina temporanea remota fallita: {File}", op.OriginalPath); }
+            }
+        }
+
         try
         {
             foreach (var op in operations)
@@ -930,7 +1026,13 @@ public class FileOrganizerService : IFileOrganizerService
                         }
                     }
 
-                    await Remote.RenameAsync(op.OriginalPath, op.NewPath, ct);
+                    var from = staged.TryGetValue(op, out var tmpPath) ? tmpPath : op.OriginalPath;
+                    try { await Remote.RenameAsync(from, op.NewPath, ct); }
+                    catch when (from != op.OriginalPath)
+                    {
+                        try { await Remote.RenameAsync(from, op.OriginalPath, ct); } catch { }
+                        throw;
+                    }
 
                     log.Add(new FileOperation
                     {
@@ -973,32 +1075,53 @@ public class FileOrganizerService : IFileOrganizerService
 
         int undone = 0;
 
-        foreach (var op in lastBatch)
+        // Prima tutti i file su un nome temporaneo: rimettendo a posto una catena (Ep_02 → Ep_03,
+        // Ep_03 → Ep_04...) il nome originale di un file è ancora occupato da un altro. Prima
+        // questi file venivano saltati in silenzio e segnati comunque come annullati.
+        var files = lastBatch.Where(o => o.Type is FileOperationType.Move or FileOperationType.Rename).ToList();
+        var staged = new Dictionary<FileOperation, string>();
+        var batchTag = Guid.NewGuid().ToString("N");
+        int k = 0;
+        foreach (var op in files)
+        {
+            if (!File.Exists(op.NewPath)) continue;
+            var tmp = TempName(op.NewPath, Path.DirectorySeparatorChar, batchTag, k++);
+            try { File.Move(op.NewPath, tmp); staged[op] = tmp; }
+            catch (Exception ex) { _logger.LogError(ex, "Undo: rinomina temporanea fallita {File}", op.NewPath); }
+        }
+        foreach (var op in files)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (!staged.TryGetValue(op, out var tmp)) continue;   // file non più al suo posto: resta da annullare
+            try
+            {
+                var origDir = Path.GetDirectoryName(op.OriginalPath);
+                if (!string.IsNullOrEmpty(origDir) && !Directory.Exists(origDir)) Directory.CreateDirectory(origDir);
+                if (File.Exists(op.OriginalPath))
+                {
+                    File.Move(tmp, op.NewPath);   // il nome di prima è occupato da un file estraneo: non si tocca niente
+                    _logger.LogWarning("Undo saltato: {File} esiste già", op.OriginalPath);
+                    continue;
+                }
+                File.Move(tmp, op.OriginalPath);
+                await _repository.MarkUndoneAsync(op.Id);
+                undone++;
+            }
+            catch (Exception ex)
+            {
+                try { if (File.Exists(tmp)) File.Move(tmp, op.NewPath); } catch { }
+                _logger.LogError(ex, "Errore undo per operazione {Id}", op.Id);
+            }
+        }
+
+        // Poi le cartelle create dal gruppo, dalla più interna, se sono rimaste vuote
+        foreach (var op in lastBatch.Where(o => o.Type == FileOperationType.CreateDir).OrderByDescending(o => o.NewPath.Length))
         {
             ct.ThrowIfCancellationRequested();
             try
             {
-                switch (op.Type)
-                {
-                    case FileOperationType.Move:
-                    case FileOperationType.Rename:
-                        if (File.Exists(op.NewPath))
-                        {
-                            var origDir = Path.GetDirectoryName(op.OriginalPath);
-                            if (!string.IsNullOrEmpty(origDir) && !Directory.Exists(origDir))
-                                Directory.CreateDirectory(origDir);
-                            if (!File.Exists(op.OriginalPath))
-                                File.Move(op.NewPath, op.OriginalPath);
-                        }
-                        break;
-
-                    case FileOperationType.CreateDir:
-                        if (Directory.Exists(op.NewPath) &&
-                            Directory.GetFileSystemEntries(op.NewPath).Length == 0)
-                            Directory.Delete(op.NewPath);
-                        break;
-                }
-
+                if (Directory.Exists(op.NewPath) && Directory.GetFileSystemEntries(op.NewPath).Length == 0)
+                    Directory.Delete(op.NewPath);
                 await _repository.MarkUndoneAsync(op.Id);
                 undone++;
             }
@@ -1029,20 +1152,32 @@ public class FileOrganizerService : IFileOrganizerService
 
         int undone = 0;
 
+        // Due passaggi, come in locale: una catena si rimette a posto senza nomi occupati
+        var files = lastBatch.Where(o => o.Type is FileOperationType.Move or FileOperationType.Rename).ToList();
+        var staged = new Dictionary<FileOperation, string>();
+        var batchTag = Guid.NewGuid().ToString("N");
+        int k = 0;
+        foreach (var op in files)
+        {
+            var tmp = TempName(op.NewPath, '/', batchTag, k++);
+            try { await Remote.RenameAsync(op.NewPath, tmp, ct); staged[op] = tmp; }
+            catch (Exception ex) { _logger.LogError(ex, "Undo remoto: rinomina temporanea fallita {File}", op.NewPath); }
+        }
+
         foreach (var op in lastBatch)
         {
             ct.ThrowIfCancellationRequested();
             try
             {
-                switch (op.Type)
+                if (op.Type is FileOperationType.Move or FileOperationType.Rename)
                 {
-                    case FileOperationType.Move:
-                    case FileOperationType.Rename:
-                        await Remote.RenameAsync(op.NewPath, op.OriginalPath, ct);
-                        break;
-
-                    case FileOperationType.CreateDir:
-                        break;
+                    if (!staged.TryGetValue(op, out var tmp)) continue;
+                    try { await Remote.RenameAsync(tmp, op.OriginalPath, ct); }
+                    catch
+                    {
+                        try { await Remote.RenameAsync(tmp, op.NewPath, ct); } catch { }
+                        throw;
+                    }
                 }
 
                 await _repository.MarkUndoneAsync(op.Id);

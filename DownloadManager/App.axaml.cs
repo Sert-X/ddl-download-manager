@@ -431,6 +431,8 @@ public partial class App : Application
     //  SHUTDOWN
     // ============================================================
 
+    private static EventWaitHandle? _closingSignal;
+
     private static void OnShutdownRequested(object? sender, ShutdownRequestedEventArgs e)
     {
         try
@@ -438,27 +440,26 @@ public partial class App : Application
             if (Application.Current?.ApplicationLifetime
                 is IClassicDesktopStyleApplicationLifetime desktop)
             {
-                if (desktop.MainWindow?.DataContext is MainWindowViewModel vm)
-                {
-                    try { vm.Sftp.Dispose(); } catch { }
-                }
+                // "Mi sto chiudendo": se l'utente riapre subito l'app, la nuova istanza aspetta
+                // che questa finisca invece di dire "già aperto"
+                try { _closingSignal ??= new EventWaitHandle(false, EventResetMode.ManualReset, Program.ClosingSignalName); } catch { }
 
                 var queue = Services!.GetRequiredService<DownloadQueueService>();
                 queue.CancelAll("anime");
                 queue.CancelAll("streaming");
 
-                // Connessioni dedicate di Videobox Corrector
-                try { Services!.GetRequiredService<VideoboxSftpPool>().Dispose(); } catch { }
-
-                var sftpService = Services!.GetRequiredService<ISftpService>();
-                var t1 = sftpService.DisconnectAsync();
-                Task.WaitAny(t1, Task.Delay(3000));
-
-                var anime = Services!.GetRequiredService<IAnimeWorldService>();
-                var t2 = anime.DisposeAsync();
-                Task.WaitAny(t2, Task.Delay(3000));
-
-                try { Services!.GetRequiredService<MaxstreamService>().DisposeAsync().AsTask().Wait(3000); } catch { }
+                // Connessioni e browser si chiudono tutti insieme, con 3 secondi in tutto
+                // (prima uno dopo l'altro, fino a 3 secondi ciascuno: la chiusura durava fino a ~10 s)
+                var vm = desktop.MainWindow?.DataContext as MainWindowViewModel;
+                var jobs = new List<Task>
+                {
+                    Task.Run(() => { try { vm?.Sftp.Dispose(); } catch { } }),
+                    Task.Run(() => { try { Services!.GetRequiredService<VideoboxSftpPool>().Dispose(); } catch { } }),
+                    Task.Run(async () => { try { await Services!.GetRequiredService<ISftpService>().DisconnectAsync(); } catch { } }),
+                    Task.Run(async () => { try { await Services!.GetRequiredService<IAnimeWorldService>().DisposeAsync(); } catch { } }),
+                    Task.Run(async () => { try { await Services!.GetRequiredService<MaxstreamService>().DisposeAsync(); } catch { } }),
+                };
+                Task.WaitAll(jobs.ToArray(), TimeSpan.FromSeconds(3));
             }
         }
         catch { }

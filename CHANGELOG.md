@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.4.7] — 2026-10-27
+
+### 🗂 Organizza file
+- **Rinomine "a catena"**: dopo aver eliminato un episodio e rinumerato gli altri (il 3 diventa 2, il 4 diventa 3...) l'anteprima non segna più "file di destinazione già esistente". "Applica" sposta prima tutti i file su nomi temporanei e poi su quelli finali, così funzionano anche gli scambi di nome tra due file. Vale in locale e sul server, in tutte le modalità.
+- **Undo affidabile**: rimette a posto anche le catene di rinomine; prima in questi casi alcuni file venivano saltati in silenzio e segnati comunque come annullati.
+
+### 🎬 Videobox Corrector
+- **Riepilogo giusto dopo "Applica"**: "Applicato: 45 link salvati sul forum" in verde (o quanti non sono stati confermati, in arancione) al posto dell'avviso "45 restano com'erano", che sembrava un problema.
+
+### ⚙️ App
+- **Chiusura più rapida**: connessioni e browser si chiudono tutti insieme, in 3 secondi al massimo (prima uno alla volta, fino a ~10 s).
+- **Riaprire subito dopo la chiusura** non dà più "è già in esecuzione": la nuova finestra aspetta che la vecchia finisca di chiudersi e poi si apre.
+- **Aggiornamento dal pulsante "Controlla aggiornamenti"** senza la finestra di sistema "Installazione dell'aggiornamento in corso", come già succedeva aggiornando all'avvio. (L'aggiornamento lo installa la versione già presente: dalla 1.4.7 in poi.)
+
 ## [1.4.6] — 2026-10-27
 
 ### 🔔 Notifiche e barra di stato

@@ -21,8 +21,8 @@ sealed class Program
 
         // 3) Una sola istanza: due finestre aperte condividono database e cartelle
         //    temporanee e scaricano gli stessi episodi in parallelo, rovinando i file.
-        using var singleInstance = new Mutex(true, @"Local\DDLDownloadManager.SingleInstance", out bool isFirstInstance);
-        if (!isFirstInstance)
+        using var singleInstance = new Mutex(true, SingleInstanceName, out bool isFirstInstance);
+        if (!isFirstInstance && !WaitForClosingInstance(singleInstance))
         {
             MessageBoxW(IntPtr.Zero,
                 "DDL Download Manager è già aperto.\n\nUsa la finestra già aperta (controlla anche la barra delle applicazioni).",
@@ -38,6 +38,31 @@ sealed class Program
         ThreadPool.SetMinThreads(Math.Max(minWorker, 64), Math.Max(minIo, 64));
 
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+
+        // L'app è chiusa: la prossima istanza può partire subito, anche se qualche thread di
+        // lavoro sta ancora finendo
+        try { singleInstance.ReleaseMutex(); } catch { }
+    }
+
+    private const string SingleInstanceName = @"Local\DDLDownloadManager.SingleInstance";
+
+    /// <summary>Segnale "mi sto chiudendo": lo crea l'istanza in chiusura (vedi App.OnShutdownRequested).</summary>
+    public const string ClosingSignalName = @"Local\DDLDownloadManager.Closing";
+
+    /// <summary>
+    /// Un'altra istanza è aperta. Se si sta chiudendo (riapertura subito dopo la chiusura) si
+    /// aspetta che finisca, al massimo 20 secondi, invece di dire "già aperto".
+    /// </summary>
+    private static bool WaitForClosingInstance(Mutex mutex)
+    {
+        try
+        {
+            if (!EventWaitHandle.TryOpenExisting(ClosingSignalName, out var closing)) return false;
+            closing.Dispose();
+            return mutex.WaitOne(TimeSpan.FromSeconds(20));
+        }
+        catch (AbandonedMutexException) { return true; }   // l'altra istanza è terminata senza rilasciarlo
+        catch { return false; }
     }
 
     [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]

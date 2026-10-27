@@ -506,14 +506,22 @@ public partial class MainWindowViewModel : ViewModelBase
                     });
             });
 
+            // Come il controllo automatico all'avvio: silent = niente finestra di sistema di Velopack
+            // ("Installazione dell'aggiornamento in corso"). L'avanzamento lo mostra il nostro dialog e,
+            // al riavvio, la schermata delle novità. (Questo pulsante installava senza "silent".)
             switch (choice)
             {
                 case UpdateChoice.InstallNow:
-                    mgr.ApplyUpdatesAndRestart(update);
+                    mgr.WaitExitThenApplyUpdates(update.TargetFullRelease, silent: true, restart: true);
+                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+                            desktop.Shutdown();
+                    });
                     break;
 
                 case UpdateChoice.InstallLater:
-                    mgr.WaitExitThenApplyUpdates(update);
+                    mgr.WaitExitThenApplyUpdates(update.TargetFullRelease, silent: true, restart: false);
                     break;
             }
         }
