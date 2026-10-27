@@ -1606,6 +1606,8 @@ public partial class SftpTabViewModel : ViewModelBase
     [RelayCommand] private void SftpQueueClearCompleted() { _sftpUploadQueue.ClearCompleted(); SftpStatusMessage = "Completati rimossi."; }
     [RelayCommand] private void SftpQueueClearCancelled() { _sftpUploadQueue.ClearCancelled(); SftpStatusMessage = "Annullati rimossi."; }
     [RelayCommand] private void SftpQueueClearFailed() { _sftpUploadQueue.ClearFailed(); SftpStatusMessage = "Failed rimossi."; }
+    [RelayCommand] private void SftpQueueRemoveAll() { _sftpUploadQueue.RemoveAll(); SftpStatusMessage = "Coda upload svuotata."; }
+    [RelayCommand] private void SftpDownloadQueueRemoveAll() { _sftpDownloadQueue.RemoveAll(); SftpStatusMessage = "Coda download svuotata."; }
 
     public void PauseSftpJobPublic(SftpUploadJob job) => _sftpUploadQueue.PauseJob(job);
     public void ResumeSftpJobPublic(SftpUploadJob job) => _sftpUploadQueue.ResumeJob(job);

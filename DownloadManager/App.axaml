@@ -839,6 +839,14 @@
         </Style>
 
         <!-- CARD / BORDER -->
+        <!-- Righe degli episodi in download (Anime, Film/Serie): evidenziate al passaggio del mouse -->
+        <Style Selector="Border.episodeRow">
+            <Setter Property="Background" Value="{DynamicResource DownloadGroupRowBrush}"/>
+        </Style>
+        <Style Selector="Border.episodeRow:pointerover">
+            <Setter Property="Background" Value="{DynamicResource AppHoverBrush}"/>
+        </Style>
+
         <Style Selector="Border.card">
             <Setter Property="Background" Value="{DynamicResource AppSurfaceBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>

@@ -177,6 +177,7 @@ public partial class MainWindow : Window
     private T? ResolveItem<T>(object? sender) where T : class
     {
         if (sender is MenuItem { DataContext: T direct }) return direct;
+        if (sender is Button { DataContext: T row }) return row;   // pulsanti nella riga
         if (_contextItem is T clicked) return clicked;
         return _contextGrid?.SelectedItem as T;
     }

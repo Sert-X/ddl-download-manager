@@ -132,7 +132,7 @@ public class AnimeSaturnService : IAnimeSaturnService
                 query, cached.Results.Count);
             // Clone per evitare mutazioni dall'UI
             return cached.Results
-                .Select(r => new AnimeSearchResult { Name = r.Name, Link = r.Link, PosterUrl = r.PosterUrl })
+                .Select(r => r.Clone())
                 .ToList();
         }
 
@@ -178,7 +178,14 @@ public class AnimeSaturnService : IAnimeSaturnService
                     posterUrl.Contains("placeholder", StringComparison.OrdinalIgnoreCase))
                     posterUrl = null;
 
-                results.Add(new AnimeSearchResult { Name = name, Link = cleanHref, PosterUrl = posterUrl });
+                // Sotto il titolo il sito scrive "06 Agosto 2022 · 12 ep" ("?? ep" se in corso)
+                var sub = row.Length > 3 ? row[3] : null;
+                results.Add(new AnimeSearchResult
+                {
+                    Name = name, Link = cleanHref, PosterUrl = posterUrl,
+                    Year = AnimeSearchResult.ParseYear(sub),
+                    Episodes = AnimeSearchResult.ParseEpisodes(sub)
+                });
             }
 
             _logger.LogInformation("[SATURN] Ricerca completata: {Count} risultati da {Pages} pagine", results.Count, pages.Count);
@@ -227,9 +234,11 @@ public class AnimeSaturnService : IAnimeSaturnService
                 const t = a.querySelector('h3.ac__title');
                 const box = a.closest('.col-6') || a.closest('.card') || a.parentElement;
                 const img = a.querySelector('img') || (box ? box.querySelector('img') : null);
+                const sub = a.querySelector('.ac__sub');
                 return [a.getAttribute('href') || '',
                         t ? (t.innerText || t.textContent || '').trim() : '',
-                        img ? (img.getAttribute('data-src') || img.getAttribute('src') || '') : ''];
+                        img ? (img.getAttribute('data-src') || img.getAttribute('src') || '') : '',
+                        sub ? (sub.textContent || '').replace(/\s+/g, ' ').trim() : ''];
             })");
 
             int last = 1;

@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.4.2] — 2026-10-27
+
+### 🗂 Videobox Corrector
+- **Post senza link**: ora si possono mappare. Selezioni una cartella o un file e premi "Mappa": viene creata una riga per ogni file, sul server "Link Remoto". Prima la tabella teneva i link del post aperto in precedenza e "Mappa" si rifiutava.
+- **Rinomina del post**: il titolo in alto si può modificare. "Rinomina" cambia solo il titolo e lascia i link come sono sul forum; anche "Applica" invia il titolo modificato.
+- **Conteggi nell'anteprima**: vecchi link, nuovi link e file SFTP sopra la tabella. Dopo "Applica" compare il riepilogo dell'invio, con quanti link il forum ha salvato davvero.
+- **Pallino viola sbagliato**: due sorgenti con lo stesso percorso pubblico su server diversi (es. "Anime" su DDL 1 e DDL 2) si confondevano. Un post con i file su DDL 2 veniva confrontato con la cartella di DDL 1 e restava viola anche dopo la mappatura. Ora ogni link si confronta con la sorgente del suo stesso dominio.
+- **"Mappatura in corso" restava sullo schermo** anche a mappatura finita: ora compare "Mappatura completata" con il numero di file abbinati, oppure un avviso se file e link non sono lo stesso numero.
+- **Guida aggiornata** con le novità e il significato del pallino grigio.
+
+### 📡 SFTP
+- **Pulsanti su ogni riga** delle code Upload, Download e Server ↔ Server, come in Anime e Film/Serie: Riprendi, Pausa, Annulla, Riprova e Rimuovi. In alto c'è anche "Elimina tutti".
+- **"Sposta in..."**: le cartelle sono in ordine numerico (1, 2, 3 … 10, 11), non più 1, 10, 11, 2.
+
+### 🎌 Anime Download
+- **AnimeSaturn**: sotto ogni risultato compaiono l'anno di uscita e il numero di episodi (es. "2018 · 24 ep", "in corso" per le serie in uscita).
+- **Episodi in download**: la riga sotto il mouse si evidenzia (Anime e Film/Serie).
+
+### 🎨 Interfaccia
+- **Finestra troppo bassa**: le tabelle non salgono più sopra i pulsanti. Nelle tab SFTP e Videobox la pagina scorre e le tabelle restano utilizzabili; con la finestra alta riempiono lo spazio come prima.
+- **Guide rapide** con un'altezza massima uguale per tutte: il testo lungo scorre al loro interno e non toglie spazio alla pagina.
+- **Dimensione minima della finestra** portata a 1200 × 700, perché nessuna parte resti nascosta.
+
 ## [1.4.1] — 2026-10-26
 
 ### 🗂 Videobox Corrector

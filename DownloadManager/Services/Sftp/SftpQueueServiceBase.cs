@@ -236,6 +236,17 @@ public abstract class SftpQueueServiceBase<TJob> where TJob : TransferJobBase
         QueueChanged?.Invoke();
     }
 
+    /// <summary>Ferma tutto e svuota la lista (i file già trasferiti restano dove sono).</summary>
+    public void RemoveAll()
+    {
+        CancelAll();
+        Dispatcher.UIThread.Post(() =>
+        {
+            AllJobs.Clear();
+            QueueChanged?.Invoke();
+        });
+    }
+
     public void ClearCompleted()
     {
         var toRemove = AllJobs.Where(j => j.Status == SftpJobStatus.Completed).ToList();

@@ -502,6 +502,7 @@ public partial class SftpTabViewModel
     [RelayCommand] private void RelayQueueClearCompleted() => _relayQueue.ClearCompleted();
     [RelayCommand] private void RelayQueueClearCancelled() => _relayQueue.ClearCancelled();
     [RelayCommand] private void RelayQueueClearFailed() => _relayQueue.ClearFailed();
+    [RelayCommand] private void RelayQueueRemoveAll() => _relayQueue.RemoveAll();
 
     public void PauseRelayJob(SftpRelayJob job) => _relayQueue.PauseJob(job);
     public void ResumeRelayJob(SftpRelayJob job) => _relayQueue.ResumeJob(job);

@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using DownloadManager.Helpers;
 using DownloadManager.Models;
 using DownloadManager.Services.Sftp;
 
@@ -51,7 +52,9 @@ public partial class RemoteFolderPickerDialog : Window
             var entries = await _sftp.ListDirectoryAsync(_currentPath);
 
             _folders.Clear();
-            foreach (var e in entries.Where(x => x.IsDirectory))
+            // Ordine naturale: 1, 2, 3 ... 10, 11 (prima era 1, 10, 11, 2, 3)
+            foreach (var e in entries.Where(x => x.IsDirectory && x.Name is not ("." or ".."))
+                                     .OrderBy(x => x.Name, new NaturalSortComparer()))
                 _folders.Add(e);
 
             ShowStatus(_folders.Count == 0 ? "Nessuna sottocartella.\nPremi Seleziona per usare questa cartella." : null);

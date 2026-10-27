@@ -91,5 +91,20 @@ public abstract partial class TransferJobBase : ObservableObject
         OnPropertyChanged(nameof(EtaText));
     }
 
-    partial void OnStatusChanged(SftpJobStatus value) => NotifyProgressDependents();
+    // Pulsanti della riga (come nelle code Anime e Film/Serie)
+    public bool IsActive => Status is SftpJobStatus.Uploading or SftpJobStatus.Downloading or SftpJobStatus.Transferring;
+    public bool CanResume => Status == SftpJobStatus.Paused;
+    public bool CanPause => Status == SftpJobStatus.Pending || IsActive;
+    public bool CanCancel => Status is not (SftpJobStatus.Completed or SftpJobStatus.Cancelled);
+    public bool CanRetry => Status is SftpJobStatus.Failed or SftpJobStatus.Cancelled;
+
+    partial void OnStatusChanged(SftpJobStatus value)
+    {
+        NotifyProgressDependents();
+        OnPropertyChanged(nameof(IsActive));
+        OnPropertyChanged(nameof(CanResume));
+        OnPropertyChanged(nameof(CanPause));
+        OnPropertyChanged(nameof(CanCancel));
+        OnPropertyChanged(nameof(CanRetry));
+    }
 }

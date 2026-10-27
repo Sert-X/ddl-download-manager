@@ -108,6 +108,22 @@ public partial class VideoboxSource : ObservableObject
         return path.ToLowerInvariant();
     }
 
+    /// <summary>Host del dominio della sorgente (es. "data2ddl.ichigolink.top"), "" se non impostato.</summary>
+    public string DomainHost
+    {
+        get
+        {
+            var d = Domain.Trim();
+            if (d.Length == 0) return "";
+            if (!d.Contains("://")) d = "https://" + d;
+            return Uri.TryCreate(d, UriKind.Absolute, out var u) ? u.Host.ToLowerInvariant() : "";
+        }
+    }
+
+    /// <summary>Host di un link ("" se non è un indirizzo valido).</summary>
+    public static string HostOf(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var u) ? u.Host.ToLowerInvariant() : "";
+
     /// <summary>Chiave di confronto di un file/cartella della sorgente.</summary>
     public string NodeKey(string fullPath) => RelativePath(fullPath).ToLowerInvariant();
 

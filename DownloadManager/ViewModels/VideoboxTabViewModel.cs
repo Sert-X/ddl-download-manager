@@ -105,6 +105,8 @@ public partial class VideoboxTabViewModel : ObservableObject
 
     private int _currentPostAuthorId = 0;
     private string _currentServerId = "5";
+    /// <summary>Server "Link Remoto" visto nei post: si usa per i post che non hanno ancora link.</summary>
+    private string _remoteServerId = "5";
     private int _currentPostOriginalCategoryId = 0;
 
     // Aggiornamento automatico dell'albero SFTP
@@ -177,6 +179,47 @@ public partial class VideoboxTabViewModel : ObservableObject
     [ObservableProperty] private EpisodeMappingItem? selectedMappingItem;
     [ObservableProperty] private int currentPostId;
     [ObservableProperty] private string currentPostTitle = "Nessun post caricato";
+    /// <summary>Titolo nella casella modificabile: "Rinomina" o "Applica" lo inviano al forum.</summary>
+    [ObservableProperty] private string editablePostTitle = string.Empty;
+    public bool IsTitleChanged =>
+        CurrentPostId != 0 && !string.IsNullOrWhiteSpace(EditablePostTitle) && EditablePostTitle.Trim() != CurrentPostTitle;
+    partial void OnEditablePostTitleChanged(string value) => OnPropertyChanged(nameof(IsTitleChanged));
+    partial void OnCurrentPostTitleChanged(string? oldValue, string newValue)
+    {
+        // Titolo cambiato sul sito: la casella lo segue, se non lo si stava modificando
+        if (EditablePostTitle == oldValue) EditablePostTitle = newValue;
+        OnPropertyChanged(nameof(IsTitleChanged));
+    }
+
+    // Conteggi della tabella di anteprima
+    [ObservableProperty] private int oldLinkCount;
+    [ObservableProperty] private int newLinkCount;
+    [ObservableProperty] private int sftpFileCount;
+    /// <summary>Riepilogo dell'ultimo "Applica" sul post aperto ("" = nessuno).</summary>
+    [ObservableProperty] private string lastApplySummary = string.Empty;
+    public bool HasLastApplySummary => LastApplySummary.Length > 0;
+    partial void OnLastApplySummaryChanged(string value) => OnPropertyChanged(nameof(HasLastApplySummary));
+
+    private void UpdateMappingCounts()
+    {
+        OldLinkCount = MappingItems.Count(m => !string.IsNullOrEmpty(m.OldUrl));
+        NewLinkCount = MappingItems.Count(m => m.IsSelectedForUpdate && !string.IsNullOrEmpty(m.NewUrl));
+        SftpFileCount = MappingItems.Count(m => !string.IsNullOrEmpty(m.SftpFileName));
+    }
+
+    private void OnMappingItemsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems != null) foreach (EpisodeMappingItem m in e.OldItems) m.PropertyChanged -= OnMappingItemPropertyChanged;
+        if (e.NewItems != null) foreach (EpisodeMappingItem m in e.NewItems) m.PropertyChanged += OnMappingItemPropertyChanged;
+        UpdateMappingCounts();
+    }
+
+    private void OnMappingItemPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(EpisodeMappingItem.OldUrl) or nameof(EpisodeMappingItem.NewUrl)
+            or nameof(EpisodeMappingItem.SftpFileName) or nameof(EpisodeMappingItem.IsSelectedForUpdate))
+            UpdateMappingCounts();
+    }
     [ObservableProperty] private string statusMessage = "Pronto.";
     [ObservableProperty] private bool isBusy;
 
@@ -226,6 +269,7 @@ public partial class VideoboxTabViewModel : ObservableObject
         _sftpService = sftpService;
         _settingsService = settingsService;
         _pool = pool;
+        MappingItems.CollectionChanged += OnMappingItemsChanged;
 
         // Modifiche fatte dall'app (tab SFTP, organizer, upload) → refresh immediato (con debounce).
         // Si aggiorna solo la cartella toccata, non tutto l'albero.
@@ -725,13 +769,25 @@ public partial class VideoboxTabViewModel : ObservableObject
             ApplyFreshPostData(postData);
             CurrentPostId = postData.id;
             CurrentPostTitle = postData.title;
+            EditablePostTitle = postData.title;
+            LastApplySummary = string.Empty;
             _currentPostAuthorId = postData.author?.id ?? 0;
             _currentPostOriginalCategoryId = ParseCategoryId(postData.category);
 
             var servers = postData.videos?.Values;
-            var remoteServer = servers?.FirstOrDefault(v => v.vbs_name != null && v.vbs_name.Contains("Link Remoto", StringComparison.OrdinalIgnoreCase)) ?? servers?.FirstOrDefault(v => v.online != null && v.online.Count > 0);
-            
-            if (remoteServer?.online == null || remoteServer.online.Count == 0) { StatusMessage = "Nessun link trovato."; return; }
+            var namedRemote = servers?.FirstOrDefault(v => v.vbs_name != null && v.vbs_name.Contains("Link Remoto", StringComparison.OrdinalIgnoreCase));
+            var remoteServer = namedRemote ?? servers?.FirstOrDefault(v => v.online != null && v.online.Count > 0);
+            if (namedRemote != null) _remoteServerId = namedRemote.id.ToString();
+
+            if (remoteServer?.online == null || remoteServer.online.Count == 0)
+            {
+                // Post senza link: la mappatura resta possibile, i link vanno sul server "Link Remoto"
+                // (quello del post se c'è, altrimenti quello visto negli altri post)
+                _currentServerId = namedRemote?.id.ToString() ?? _remoteServerId;
+                MappingItems.Clear();
+                StatusMessage = "Il post non ha link: seleziona una cartella o un file nell'albero e premi Mappa.";
+                return;
+            }
             _currentServerId = remoteServer.id.ToString();
 
             FillMappingItems(remoteServer.online.Values);
@@ -1367,11 +1423,11 @@ public partial class VideoboxTabViewModel : ObservableObject
             post.BaseStatus = GetBasePostStatus(post.Links, validCount);
             post.Status = post.BaseStatus;
 
-            // Ogni link valido si confronta con TUTTE le sorgenti caricate
+            // Ogni link valido si confronta con le sorgenti caricate del suo dominio
             foreach (var url in post.Links)
             {
                 if (!LinkValidator.IsValidDomain(url, domains)) continue;
-                foreach (var src in treeSources)
+                foreach (var src in SourcesForUrl(url, treeSources))
                 {
                     var key = src.UrlKey(url);
                     if (!string.IsNullOrEmpty(key)) _validKeysBySource[src.Id].Add(key);
@@ -1421,6 +1477,22 @@ public partial class VideoboxTabViewModel : ObservableObject
         else UpdateStatusCounts();
     }
 
+    /// <summary>
+    /// Sorgenti a cui può appartenere un link. Se tra le sorgenti configurate c'è quella con lo
+    /// stesso dominio del link, contano solo quelle: due sorgenti con lo stesso percorso
+    /// pubblico su server diversi (es. "Anime" su DDL 1 e su DDL 2) non si confondono più.
+    /// Prima un post con i file su DDL 2 veniva confrontato con la cartella di DDL 1 (23 file
+    /// invece di 24) e restava viola. Se nessuna sorgente ha quel dominio (domini secondari)
+    /// valgono tutte, come prima.
+    /// </summary>
+    private IEnumerable<VideoboxSource> SourcesForUrl(string url, IReadOnlyCollection<VideoboxSource> candidates)
+    {
+        var host = VideoboxSource.HostOf(url);
+        if (host.Length > 0 && Sources.Any(s => s.DomainHost == host))
+            return candidates.Where(s => s.DomainHost == host);
+        return candidates;
+    }
+
     private List<SftpNode> GetAllFiles(SftpNode node)
     {
         var files = new List<SftpNode>();
@@ -1466,11 +1538,13 @@ public partial class VideoboxTabViewModel : ObservableObject
         var validLinks = post.Links.Where(u => LinkValidator.IsValidDomain(u, domains)).ToList();
         if (validLinks.Count == 0) return null;
 
-        foreach (var src in SftpRootNodes.Where(r => r.Source != null).Select(r => r.Source!).Distinct())
+        var treeSources = SftpRootNodes.Where(r => r.Source != null).Select(r => r.Source!).Distinct().ToList();
+        foreach (var src in treeSources)
         {
             var dirs = new List<string[]>();
             foreach (var url in validLinks)
             {
+                if (!SourcesForUrl(url, treeSources).Contains(src)) continue;
                 var key = src.UrlKey(url);
                 if (string.IsNullOrEmpty(key)) continue;
                 int idx = key.LastIndexOf('/');
@@ -1513,8 +1587,8 @@ public partial class VideoboxTabViewModel : ObservableObject
             MapSingleFile(fileNode);
             return;
         }
-        if (MappingItems.Count == 0) { StatusMessage = "Il post non ha link da mappare."; return; }
-
+        // Post senza link: si crea una riga per ogni file della cartella (vedi sotto)
+        string? warning = null;
         try
         {
             IsBusy = true; StatusMessage = $"Mappatura in corso: {SftpPathInput}...";
@@ -1527,23 +1601,23 @@ public partial class VideoboxTabViewModel : ObservableObject
 
             if (videoFiles.Count == 0) { StatusMessage = "Nessun file trovato nella cartella."; return; }
 
-            if (videoFiles.Count > MappingItems.Count)
+            int oldRows = MappingItems.Count;
+            if (videoFiles.Count > oldRows)
             {
                 while (MappingItems.Count < videoFiles.Count)
-                {
                     MappingItems.Add(new EpisodeMappingItem { EpisodeId = 0, OldUrl = "" });
-                }
-                StatusMessage = $"⚠ Aggiunti {videoFiles.Count - MappingItems.Count} link per i file extra.";
+                if (oldRows > 0)
+                    warning = $"Attenzione: {Plural(videoFiles.Count - oldRows, "link aggiunto", "link aggiunti")} per i file in più ({videoFiles.Count} file, {oldRows} link nel post).";
             }
-            else if (videoFiles.Count < MappingItems.Count)
+            else if (videoFiles.Count < oldRows)
             {
-                for (int i = videoFiles.Count; i < MappingItems.Count; i++)
+                for (int i = videoFiles.Count; i < oldRows; i++)
                 {
                     MappingItems[i].SftpFileName = null;
                     MappingItems[i].NewUrl = null;
-                    MappingItems[i].IsSelectedForUpdate = false; 
+                    MappingItems[i].IsSelectedForUpdate = false;
                 }
-                StatusMessage = $"⚠ {MappingItems.Count - videoFiles.Count} link in eccesso verranno rimossi se applichi.";
+                warning = $"Attenzione: {Plural(oldRows - videoFiles.Count, "link in eccesso verrà rimosso", "link in eccesso verranno rimossi")} se applichi ({videoFiles.Count} file, {oldRows} link nel post).";
             }
 
             for (int i = 0; i < videoFiles.Count; i++)
@@ -1554,8 +1628,9 @@ public partial class VideoboxTabViewModel : ObservableObject
                 MappingItems[i].IsSelectedForUpdate = true;
                 MappingItems[i].EvaluateStatus(_settingsService.Current.AllValidStorageDomains);
             }
-            
-            if (string.IsNullOrEmpty(StatusMessage)) StatusMessage = "Mappatura completata.";
+
+            // Prima il messaggio "Mappatura in corso" restava anche a mappatura finita
+            StatusMessage = warning ?? $"Mappatura completata: {Plural(videoFiles.Count, "file abbinato", "file abbinati")}.";
         }
         catch (Exception ex) { StatusMessage = $"Errore: {ex.Message}"; }
         finally { IsBusy = false; }
@@ -1634,21 +1709,33 @@ public partial class VideoboxTabViewModel : ObservableObject
             if (finalUrls.Count > MaxLinksPerRequest)
                 StatusMessage = $"Invio di {finalUrls.Count} link: il forum potrebbe accettarne solo ~{MaxLinksPerRequest} (limite max_input_vars di PHP)...";
 
-            await _apiService.UpdateVideoUrlsAsync(CurrentPostId, _currentServerId, CurrentPostTitle, catId, _currentPostAuthorId, finalUrls);
+            // Conteggi dell'anteprima prima dell'invio (la tabella poi si ricarica dal forum)
+            int oldBefore = OldLinkCount, newBefore = NewLinkCount, filesBefore = SftpFileCount;
+            // File SFTP abbinati a ogni link, per ritrovarli nella tabella ricaricata
+            var fileByUrl = MappingItems
+                .Where(m => m.IsSelectedForUpdate && !string.IsNullOrEmpty(m.NewUrl) && !string.IsNullOrEmpty(m.SftpFileName))
+                .GroupBy(m => m.NewUrl!).ToDictionary(g => g.Key, g => g.First().SftpFileName!);
+
+            var title = string.IsNullOrWhiteSpace(EditablePostTitle) ? CurrentPostTitle : EditablePostTitle.Trim();
+            await _apiService.UpdateVideoUrlsAsync(CurrentPostId, _currentServerId, title, catId, _currentPostAuthorId, finalUrls);
 
             // Il post appena modificato si aggiorna subito nella lista, e la tabella mostra i link
             // come li ha salvati il forum (prima le righe applicate sparivano dalla tabella)
             var updatedPost = await _apiService.GetVideoByIdAsync(CurrentPostId);
             ApplyFreshPostData(updatedPost, recolor: false);
+            CurrentPostTitle = updatedPost.title;
+            EditablePostTitle = updatedPost.title;
             var savedServer = updatedPost.videos?.Values.FirstOrDefault(v => v.id.ToString() == _currentServerId);
-            if (savedServer?.online != null) FillMappingItems(savedServer.online.Values);
+            FillMappingItems(savedServer?.online?.Values ?? Enumerable.Empty<VideoboxEpisodeDto>());
+            foreach (var m in MappingItems)
+                if (fileByUrl.TryGetValue(m.OldUrl, out var file)) m.SftpFileName = file;
 
             UpdateSftpTreeColors();
 
             // Quanti link ha davvero salvato il forum
-            int saved = updatedPost.videos != null && updatedPost.videos.TryGetValue(_currentServerId, out var server)
-                ? server.online?.Count ?? 0
-                : updatedPost.videos?.Values.FirstOrDefault(v => v.id.ToString() == _currentServerId)?.online?.Count ?? -1;
+            int saved = savedServer?.online?.Count ?? (updatedPost.videos == null ? -1 : 0);
+            LastApplySummary = $"Ultimo Applica ({DateTime.Now:HH:mm}): vecchi link {oldBefore} · nuovi link {newBefore} · " +
+                               $"file SFTP {filesBefore} · salvati sul forum {(saved >= 0 ? saved : finalUrls.Count)}";
             if (saved >= 0 && saved < finalUrls.Count)
             {
                 StatusMessage = $"ATTENZIONE: il forum ha salvato solo {saved} link su {finalUrls.Count}. " +
@@ -1656,12 +1743,49 @@ public partial class VideoboxTabViewModel : ObservableObject
                                 "va alzato nel php.ini del forum (es. max_input_vars = 10000) e poi riapplicato.";
                 return;
             }
-            StatusMessage = "Aggiornamento completato con successo!";
+            StatusMessage = $"Aggiornamento completato: {Plural(finalUrls.Count, "link salvato", "link salvati")} sul forum.";
         }
         catch (Exception ex) 
         { 
             StatusMessage = $"ERRORE: {ex.Message}"; 
         }
+        finally { IsBusy = false; }
+    }
+
+    /// <summary>
+    /// Cambia solo il titolo del post: i link si rileggono dal forum e si rimandano uguali,
+    /// la mappatura in tabella non viene inviata e la categoria resta quella del post.
+    /// </summary>
+    [RelayCommand]
+    public async Task RenamePostAsync()
+    {
+        var title = EditablePostTitle?.Trim() ?? "";
+        if (CurrentPostId == 0) { StatusMessage = "Seleziona prima un post."; return; }
+        if (title.Length == 0) { StatusMessage = "Il titolo non può essere vuoto."; return; }
+        if (title == CurrentPostTitle) { StatusMessage = "Il titolo è già questo."; return; }
+        try
+        {
+            IsBusy = true; StatusMessage = "Rinomina del post...";
+            var post = await _apiService.GetVideoByIdAsync(CurrentPostId);
+            var server = post.videos?.Values.FirstOrDefault(v => v.id.ToString() == _currentServerId);
+            var links = server?.online?.Values.OrderBy(e => e.vbo_id).Select(e => e.vbo_url).ToList() ?? new List<string>();
+            if (links.Count > MaxLinksPerRequest)
+            {
+                StatusMessage = $"Rinomina non eseguita: il post ha {links.Count} link e il forum potrebbe salvarne solo ~{MaxLinksPerRequest} (limite max_input_vars di PHP).";
+                return;
+            }
+            int catId = _currentPostOriginalCategoryId > 0 ? _currentPostOriginalCategoryId : SelectedCategory?.Id ?? 0;
+
+            await _apiService.UpdateVideoUrlsAsync(CurrentPostId, _currentServerId, title, catId, _currentPostAuthorId, links);
+
+            var updated = await _apiService.GetVideoByIdAsync(CurrentPostId);
+            ApplyFreshPostData(updated, recolor: false);
+            var old = CurrentPostTitle;
+            CurrentPostTitle = updated.title;
+            EditablePostTitle = updated.title;
+            StatusMessage = $"Post rinominato: \"{old}\" → \"{updated.title}\".";
+        }
+        catch (Exception ex) { StatusMessage = $"ERRORE nella rinomina: {ex.Message}"; }
         finally { IsBusy = false; }
     }
 

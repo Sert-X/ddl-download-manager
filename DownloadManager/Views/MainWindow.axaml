@@ -11,7 +11,7 @@
         x:DataType="vm:MainWindowViewModel"
         Title="DDL Download Manager"
         Width="1400" Height="860"
-        MinWidth="1150" MinHeight="600">
+        MinWidth="1200" MinHeight="700">
 
     <Grid RowDefinitions="Auto, *, Auto, Auto, Auto" Margin="0">
 
@@ -225,7 +225,8 @@
                                         <Path Grid.Column="1" Classes="chevron"/>
                                     </Grid>
                                 </ToggleButton>
-                                <Border IsVisible="{Binding #ToggleGuideAnime.IsChecked}" Background="Transparent" Margin="16,0,16,16" Padding="12">
+                                <Border IsVisible="{Binding #ToggleGuideAnime.IsChecked}" Background="Transparent" Margin="16,0,16,16" Padding="12,12,4,12">
+                                    <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
                                     <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}">
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Come si usa</Run><LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 1. Cerca:</Run> scegli il provider (AnimeWorld o AnimeSaturn), scrivi il titolo e premi Cerca o Invio. Le ricerche recenti restano nel menu a tendina.<LineBreak/>
@@ -243,6 +244,7 @@
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Download simultanei:</Run> il cursore della coda regola quanti episodi scaricare insieme.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Problemi:</Run> se un provider non risponde controlla la tab Domini (indirizzo aggiornato) e la tab Proxy. Gli errori compaiono anche nel Log globale, che si può filtrare per sezione.
                                     </TextBlock>
+                                    </ScrollViewer>
                                 </Border>
                             </StackPanel>
                         </Border>
@@ -344,7 +346,11 @@
                                                             <Path Classes="icon" Data="{StaticResource IconGlobe}" Width="14" Height="14"/>
                                                         </Button>
                                                     </Panel>
-                                                    <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" TextAlignment="Center"/>
+                                                    <StackPanel Spacing="2">
+                                                        <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis" TextAlignment="Center"/>
+                                                        <TextBlock Text="{Binding InfoText}" IsVisible="{Binding HasInfo}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" TextAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                                   ToolTip.Tip="Anno di uscita e numero di episodi (solo AnimeSaturn)"/>
+                                                    </StackPanel>
                                                 </StackPanel>
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>
@@ -501,7 +507,7 @@
                                                         </ItemsControl.Styles>
                                                         <ItemsControl.ItemTemplate>
                                                             <DataTemplate DataType="models:DownloadItem">
-                                                                <Border Padding="10,7" Background="{DynamicResource DownloadGroupRowBrush}" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="0,0,0,1">
+                                                                <Border Classes="episodeRow" Padding="10,7" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="0,0,0,1">
                                                                     <Border.ContextMenu>
                                                                         <ContextMenu>
                                                                             <MenuItem Header="Avvia / Riprendi" Click="OnResumeDownloadClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconPlay}"/></MenuItem.Icon></MenuItem>
@@ -574,7 +580,8 @@
                                         <Path Grid.Column="1" Classes="chevron"/>
                                     </Grid>
                                 </ToggleButton>
-                                <Border IsVisible="{Binding #ToggleGuideStreaming.IsChecked}" Background="Transparent" Margin="16,0,16,16" Padding="12">
+                                <Border IsVisible="{Binding #ToggleGuideStreaming.IsChecked}" Background="Transparent" Margin="16,0,16,16" Padding="12,12,4,12">
+                                    <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
                                     <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}">
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Come si usa</Run><LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 1. Provider:</Run> scegli StreamingCommunity o CB01 (Maxstream) dal menu a sinistra della ricerca.<LineBreak/>
@@ -607,6 +614,7 @@
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Sito non raggiungibile:</Run> controlla nella tab Domini che l'indirizzo del provider sia aggiornato.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Problemi:</Run> filtra il Log globale sulla sezione "Streaming" per vedere i dettagli di ogni estrazione e conversione.
                                     </TextBlock>
+                                    </ScrollViewer>
                                 </Border>
                             </StackPanel>
                         </Border>
@@ -1105,7 +1113,7 @@
                                                         </ItemsControl.Styles>
                                                         <ItemsControl.ItemTemplate>
                                                             <DataTemplate DataType="models:DownloadItem">
-                                                                <Border Padding="10,7" Background="{DynamicResource DownloadGroupRowBrush}" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="0,0,0,1">
+                                                                <Border Classes="episodeRow" Padding="10,7" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="0,0,0,1">
                                                                     <Grid ColumnDefinitions="24, 2*, 50, 110, 2*, 160, 90, 90, Auto">
                                                                         <Path Grid.Column="0" Classes="icon warn" Width="13" Height="13" HorizontalAlignment="Left" Data="{StaticResource IconBolt}" IsVisible="{Binding IsPriority}"/>
                                                                         <TextBlock Grid.Column="1" Text="{Binding FileName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" FontWeight="Medium"/>
@@ -1161,7 +1169,8 @@
                                             <Path Grid.Column="1" Classes="chevron"/>
                                         </Grid>
                                     </ToggleButton>
-                                    <Border IsVisible="{Binding #ToggleGuideAccount.IsChecked}" Background="Transparent" Margin="16,0,16,16" Padding="12">
+                                    <Border IsVisible="{Binding #ToggleGuideAccount.IsChecked}" Background="Transparent" Margin="16,0,16,16" Padding="12,12,4,12">
+                                        <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
                                         <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}">
                                             <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">A cosa servono</Run><LineBreak/>
                                             <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• StreamingCommunity:</Run> con un account Premium i download arrivano a 1080p. Senza login funzionano comunque, in qualità standard (720p).<LineBreak/>
@@ -1178,6 +1187,7 @@
                                             <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• FlareSolverr:</Run> facoltativo. Serve solo se Cloudflare blocca la connessione diretta a Maxstream (IP da datacenter o VPN); con la connessione di casa non serve.<LineBreak/>
                                             <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Problemi:</Run> se un login fallisce, controlla nella tab Domini che il dominio del sito sia raggiungibile.
                                         </TextBlock>
+                                        </ScrollViewer>
                                     </Border>
                                 </StackPanel>
                             </Border>
@@ -1323,7 +1333,8 @@
                                         <Path Grid.Column="1" Classes="chevron"/>
                                     </Grid>
                                 </ToggleButton>
-                                <Border IsVisible="{Binding #ToggleGuideOrganizer.IsChecked}" Background="Transparent" Margin="16,0,16,16" Padding="12">
+                                <Border IsVisible="{Binding #ToggleGuideOrganizer.IsChecked}" Background="Transparent" Margin="16,0,16,16" Padding="12,12,4,12">
+                                    <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
                                     <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}">
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">A cosa serve</Run><LineBreak/>
                                         Rinomina, unisce e divide cartelle di episodi in blocco, sia sul PC (Locale) sia sul server (Remoto, serve la connessione SFTP). Ogni operazione si vede prima in anteprima e si può annullare.<LineBreak/>
@@ -1341,6 +1352,7 @@
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Segnaposto del pattern</Run><LineBreak/>
                                         {Series} nome della serie · {Episode} o {Episode:D3} numero episodio · {Title} titolo · {Number} numero della sottocartella (Dividi). Una "/" nel pattern crea una sottocartella.
                                     </TextBlock>
+                                    </ScrollViewer>
                                 </Border>
                             </StackPanel>
                         </Border>
@@ -1661,7 +1673,11 @@
                     </Panel>
                 </Panel>
                 <Panel IsVisible="{Binding #MainTabs.SelectedIndex, Converter={x:Static vm:IndexEqualsConverter.Default}, ConverterParameter=4}">
-                    <DockPanel Margin="0,10,0,0" DataContext="{Binding Sftp}">
+                    <!-- La pagina riempie la finestra; se è troppo bassa scorre (le tabelle restano utilizzabili) -->
+                    <Panel DataContext="{Binding Sftp}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" h:StickyBanner.Overlay="{Binding #SftpStickyBanner}">
+                    <h:FillViewportPanel>
+                    <DockPanel Margin="0,10,0,0">
                         <!-- STATUS (in alto, sopra le guide) -->
                         <ContentControl DockPanel.Dock="Top" Theme="{StaticResource StatusBannerTheme}" Content="{Binding SftpStatusMessage}"/>
 
@@ -1677,7 +1693,8 @@
                                         <Path Grid.Column="1" Classes="chevron"/>
                                     </Grid>
                                 </ToggleButton>
-                                <Border IsVisible="{Binding #ToggleGuideSftp.IsChecked}" Background="Transparent" Margin="16,0,16,16" Padding="12">
+                                <Border IsVisible="{Binding #ToggleGuideSftp.IsChecked}" Background="Transparent" Margin="16,0,16,16" Padding="12,12,4,12">
+                                    <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
                                     <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}">
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Connessione</Run><LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Profili:</Run> crea un profilo con host, porta, utente e password (o chiave privata), premi Test per provarlo e poi Connetti. I profili sono salvati e la password è cifrata.<LineBreak/>
@@ -1701,6 +1718,7 @@
                                         <LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Problemi:</Run> se la connessione cade, l'indicatore torna rosso: riconnettiti. I dettagli sono nel Log globale, sezione "SFTP".
                                     </TextBlock>
+                                    </ScrollViewer>
                                 </Border>
                             </StackPanel>
                         </Border>
@@ -1880,7 +1898,8 @@
                                                         </Grid>
                                                         <TextBlock Grid.Row="1" Text="{Binding Server2Stats}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,6,0,0" HorizontalAlignment="Left"/>
                                                     </Grid>
-                                                    <DataGrid Name="Server2FilesGrid" MinHeight="200" ItemsSource="{Binding Server2Entries}" ScrollViewer.HorizontalScrollBarVisibility="Auto" SelectedItem="{Binding SelectedServer2Entry, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" SelectionChanged="OnServer2SelectionChanged" DoubleTapped="OnServer2DoubleTapped" KeyDown="OnServer2GridKeyDown" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False">
+                                                    <h:FillSlot>
+                                                    <DataGrid Name="Server2FilesGrid" MinHeight="0" ItemsSource="{Binding Server2Entries}" ScrollViewer.HorizontalScrollBarVisibility="Auto" SelectedItem="{Binding SelectedServer2Entry, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" SelectionChanged="OnServer2SelectionChanged" DoubleTapped="OnServer2DoubleTapped" KeyDown="OnServer2GridKeyDown" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False">
                                                         <DataGrid.Styles>
                                                             <Style Selector="DataGridRow" x:DataType="models:SftpRemoteEntry">
                                                                 <Setter Property="Classes.zeroByte" Value="{Binding HasZeroByteIssue}"/>
@@ -1915,6 +1934,7 @@
                                                             <DataGridTextColumn Header="Ultima modifica" Binding="{Binding Modified, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" Width="Auto" MinWidth="120"/>
                                                         </DataGrid.Columns>
                                                     </DataGrid>
+                                                    </h:FillSlot>
                                                 </DockPanel>
 
                                                 <!-- ===== FILE LOCALI ===== -->
@@ -1937,7 +1957,8 @@
                                                     </Grid>
                                                     <TextBlock Grid.Row="1" Text="{Binding LocalBrowserStats}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,6,0,0" HorizontalAlignment="Left"/>
                                                 </Grid>
-                                                <DataGrid Name="LocalFilesGrid" MinHeight="200" ItemsSource="{Binding SftpLocalEntries}" ScrollViewer.HorizontalScrollBarVisibility="Auto" SelectedItem="{Binding SftpSelectedLocalEntry, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" SelectionChanged="OnLocalFilesSelectionChanged" DoubleTapped="OnSftpLocalEntryDoubleTapped" KeyDown="OnLocalGridKeyDown" DragDrop.AllowDrop="True" DragDrop.DragOver="OnLocalGridDragOver" DragDrop.Drop="OnLocalGridDrop" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False">
+                                                <h:FillSlot>
+                                                <DataGrid Name="LocalFilesGrid" MinHeight="0" ItemsSource="{Binding SftpLocalEntries}" ScrollViewer.HorizontalScrollBarVisibility="Auto" SelectedItem="{Binding SftpSelectedLocalEntry, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" SelectionChanged="OnLocalFilesSelectionChanged" DoubleTapped="OnSftpLocalEntryDoubleTapped" KeyDown="OnLocalGridKeyDown" DragDrop.AllowDrop="True" DragDrop.DragOver="OnLocalGridDragOver" DragDrop.Drop="OnLocalGridDrop" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False">
                                                     <!-- Un solo menu per tutta la tabella (prima uno per riga, ricreato a ogni riga
                                                          riciclata durante lo scorrimento: era la causa dei blocchi scorrendo veloce) -->
                                                     <DataGrid.ContextMenu>
@@ -1967,6 +1988,7 @@
                                                         <DataGridTextColumn Header="Ultima modifica" Binding="{Binding Modified, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" Width="Auto" MinWidth="120"/>
                                                     </DataGrid.Columns>
                                                 </DataGrid>
+                                                </h:FillSlot>
                                                 </DockPanel>
                                             </DockPanel>
                                         </Border>
@@ -2030,7 +2052,8 @@
                                                     </StackPanel>
                                                 </Border>
 
-                                                <DataGrid Name="RemoteFilesGrid" MinHeight="200" ItemsSource="{Binding SftpRemoteEntries}" ScrollViewer.HorizontalScrollBarVisibility="Auto" SelectedItem="{Binding SftpSelectedRemoteEntry, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" SelectionChanged="OnRemoteFilesSelectionChanged" DoubleTapped="OnSftpEntryDoubleTapped" KeyDown="OnRemoteGridKeyDown" DragDrop.AllowDrop="True" DragDrop.DragOver="OnRemoteGridDragOver" DragDrop.Drop="OnRemoteGridDrop" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False">
+                                                <h:FillSlot>
+                                                <DataGrid Name="RemoteFilesGrid" MinHeight="0" ItemsSource="{Binding SftpRemoteEntries}" ScrollViewer.HorizontalScrollBarVisibility="Auto" SelectedItem="{Binding SftpSelectedRemoteEntry, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" SelectionChanged="OnRemoteFilesSelectionChanged" DoubleTapped="OnSftpEntryDoubleTapped" KeyDown="OnRemoteGridKeyDown" DragDrop.AllowDrop="True" DragDrop.DragOver="OnRemoteGridDragOver" DragDrop.Drop="OnRemoteGridDrop" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False">
                                                     <DataGrid.Styles>
                                                         <Style Selector="DataGridRow" x:DataType="models:SftpRemoteEntry">
                                                             <Setter Property="Classes.zeroByte" Value="{Binding HasZeroByteIssue}"/>
@@ -2065,6 +2088,7 @@
                                                         <DataGridTextColumn Header="Ultima modifica" Binding="{Binding Modified, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" Width="Auto" MinWidth="120"/>
                                                     </DataGrid.Columns>
                                                 </DataGrid>
+                                                </h:FillSlot>
                                             </DockPanel>
                                         </Border>
                                     </Grid>
@@ -2093,6 +2117,7 @@
                                                     <Button ToolTip.Tip="Avvia tutti gli upload in attesa o in pausa" Classes="success" Command="{Binding SftpQueueStartAllCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconPlay}"/><TextBlock Text="Avvia tutti"/></StackPanel></Button>
                                                     <Button ToolTip.Tip="Mette in pausa tutti gli upload in corso" Classes="warning" Command="{Binding SftpQueuePauseAllCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconPause}"/><TextBlock Text="Pausa tutti"/></StackPanel></Button>
                                                     <Button ToolTip.Tip="Annulla tutti gli upload non ancora completati" Classes="danger" Command="{Binding SftpQueueCancelAllCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconClose}"/><TextBlock Text="Annulla tutti"/></StackPanel></Button>
+                                                    <Button ToolTip.Tip="Ferma e rimuove dalla lista TUTTI gli upload (i file già caricati restano sul server)" Command="{Binding SftpQueueRemoveAllCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTrash}"/><TextBlock Text="Elimina tutti"/></StackPanel></Button>
                                                     <Button ToolTip.Tip="Rimuove dalla lista gli upload completati" Command="{Binding SftpQueueClearCompletedCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCheckCircle}"/><TextBlock Text="Completati"/></StackPanel></Button>
                                                     <Button ToolTip.Tip="Rimuove dalla lista gli upload annullati" Command="{Binding SftpQueueClearCancelledCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconBan}"/><TextBlock Text="Annullati"/></StackPanel></Button>
                                                     <Button ToolTip.Tip="Rimuove dalla lista gli upload falliti" Command="{Binding SftpQueueClearFailedCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconAlertCircle}"/><TextBlock Text="Failed"/></StackPanel></Button>
@@ -2100,7 +2125,8 @@
                                             </StackPanel>
                                         </Border>
                                         <Border Classes="cardElevated">
-                                            <DataGrid MinHeight="200" ItemsSource="{Binding SftpUploadJobs}" AutoGenerateColumns="False" IsReadOnly="True" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False">
+                                            <h:FillSlot>
+                                            <DataGrid MinHeight="0" ItemsSource="{Binding SftpUploadJobs}" AutoGenerateColumns="False" IsReadOnly="True" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False">
                                                 <DataGrid.ContextMenu>
                                                     <ContextMenu>
                                                         <MenuItem Header="Avvia / Riprendi" Click="OnSftpJobResumeClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconPlay}"/></MenuItem.Icon></MenuItem>
@@ -2128,8 +2154,22 @@
                                                     <DataGridTextColumn Header="Dimensione" Binding="{Binding SizeText}" Width="150"/>
                                                     <DataGridTextColumn Header="Velocità" Binding="{Binding SpeedText}" Width="100"/>
                                                     <DataGridTextColumn Header="ETA" Binding="{Binding EtaText}" Width="100"/>
+                                                    <DataGridTemplateColumn Header="Azioni" Width="Auto">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <StackPanel Orientation="Horizontal" Spacing="4" Margin="4,2" VerticalAlignment="Center">
+                                                                    <Button Classes="iconCircle success" Width="26" Height="26" ToolTip.Tip="Riprendi" IsVisible="{Binding CanResume}" Click="OnSftpJobResumeClick"><Path Classes="icon" Width="12" Height="12" Data="{StaticResource IconPlay}"/></Button>
+                                                                    <Button Classes="iconCircle warning" Width="26" Height="26" ToolTip.Tip="Pausa" IsVisible="{Binding CanPause}" Click="OnSftpJobPauseClick"><Path Classes="icon" Width="12" Height="12" Data="{StaticResource IconPause}"/></Button>
+                                                                    <Button Classes="iconCircle danger" Width="26" Height="26" ToolTip.Tip="Annulla" IsVisible="{Binding CanCancel}" Click="OnSftpJobCancelClick"><Path Classes="icon" Width="12" Height="12" Data="{StaticResource IconClose}"/></Button>
+                                                                    <Button Classes="iconCircle" Width="26" Height="26" ToolTip.Tip="Riprova (upload da capo)" IsVisible="{Binding CanRetry}" Click="OnSftpJobResumeClick"><Path Classes="icon" Width="12" Height="12" Data="{StaticResource IconRefresh}"/></Button>
+                                                                    <Button Classes="iconCircle danger" Width="26" Height="26" ToolTip.Tip="Rimuovi dalla lista" Click="OnSftpJobRemoveClick"><Path Classes="icon" Width="12" Height="12" Data="{StaticResource IconTrash}"/></Button>
+                                                                </StackPanel>
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                    </DataGridTemplateColumn>
                                                 </DataGrid.Columns>
                                             </DataGrid>
+                                            </h:FillSlot>
                                         </Border>
                                     </DockPanel>
                                 </Panel>
@@ -2152,6 +2192,7 @@
                                                     <Button ToolTip.Tip="Avvia tutti i download SFTP in attesa o in pausa" Classes="success" Command="{Binding SftpDownloadQueueStartAllCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconPlay}"/><TextBlock Text="Avvia tutti"/></StackPanel></Button>
                                                     <Button ToolTip.Tip="Mette in pausa tutti i download SFTP in corso" Classes="warning" Command="{Binding SftpDownloadQueuePauseAllCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconPause}"/><TextBlock Text="Pausa tutti"/></StackPanel></Button>
                                                     <Button ToolTip.Tip="Annulla tutti i download SFTP non ancora completati" Classes="danger" Command="{Binding SftpDownloadQueueCancelAllCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconClose}"/><TextBlock Text="Annulla tutti"/></StackPanel></Button>
+                                                    <Button ToolTip.Tip="Ferma e rimuove dalla lista TUTTI i download SFTP (i file già scaricati restano su disco)" Command="{Binding SftpDownloadQueueRemoveAllCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTrash}"/><TextBlock Text="Elimina tutti"/></StackPanel></Button>
                                                     <Button ToolTip.Tip="Rimuove dalla lista i download SFTP completati" Command="{Binding SftpDownloadQueueClearCompletedCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCheckCircle}"/><TextBlock Text="Completati"/></StackPanel></Button>
                                                     <Button ToolTip.Tip="Rimuove dalla lista i download SFTP annullati" Command="{Binding SftpDownloadQueueClearCancelledCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconBan}"/><TextBlock Text="Annullati"/></StackPanel></Button>
                                                     <Button ToolTip.Tip="Rimuove dalla lista i download SFTP falliti" Command="{Binding SftpDownloadQueueClearFailedCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconAlertCircle}"/><TextBlock Text="Failed"/></StackPanel></Button>
@@ -2159,7 +2200,8 @@
                                             </StackPanel>
                                         </Border>
                                         <Border Classes="cardElevated">
-                                            <DataGrid MinHeight="200" ItemsSource="{Binding SftpDownloadJobs}" AutoGenerateColumns="False" IsReadOnly="True" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False">
+                                            <h:FillSlot>
+                                            <DataGrid MinHeight="0" ItemsSource="{Binding SftpDownloadJobs}" AutoGenerateColumns="False" IsReadOnly="True" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False">
                                                 <DataGrid.ContextMenu>
                                                     <ContextMenu>
                                                         <MenuItem Header="Avvia / Riprendi" Click="OnSftpDownloadJobResumeClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconPlay}"/></MenuItem.Icon></MenuItem>
@@ -2187,8 +2229,22 @@
                                                     <DataGridTextColumn Header="Dimensione" Binding="{Binding SizeText}" Width="150"/>
                                                     <DataGridTextColumn Header="Velocità" Binding="{Binding SpeedText}" Width="100"/>
                                                     <DataGridTextColumn Header="ETA" Binding="{Binding EtaText}" Width="100"/>
+                                                    <DataGridTemplateColumn Header="Azioni" Width="Auto">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <StackPanel Orientation="Horizontal" Spacing="4" Margin="4,2" VerticalAlignment="Center">
+                                                                    <Button Classes="iconCircle success" Width="26" Height="26" ToolTip.Tip="Riprendi" IsVisible="{Binding CanResume}" Click="OnSftpDownloadJobResumeClick"><Path Classes="icon" Width="12" Height="12" Data="{StaticResource IconPlay}"/></Button>
+                                                                    <Button Classes="iconCircle warning" Width="26" Height="26" ToolTip.Tip="Pausa" IsVisible="{Binding CanPause}" Click="OnSftpDownloadJobPauseClick"><Path Classes="icon" Width="12" Height="12" Data="{StaticResource IconPause}"/></Button>
+                                                                    <Button Classes="iconCircle danger" Width="26" Height="26" ToolTip.Tip="Annulla" IsVisible="{Binding CanCancel}" Click="OnSftpDownloadJobCancelClick"><Path Classes="icon" Width="12" Height="12" Data="{StaticResource IconClose}"/></Button>
+                                                                    <Button Classes="iconCircle" Width="26" Height="26" ToolTip.Tip="Riprova (download da capo)" IsVisible="{Binding CanRetry}" Click="OnSftpDownloadJobResumeClick"><Path Classes="icon" Width="12" Height="12" Data="{StaticResource IconRefresh}"/></Button>
+                                                                    <Button Classes="iconCircle danger" Width="26" Height="26" ToolTip.Tip="Rimuovi dalla lista" Click="OnSftpDownloadJobRemoveClick"><Path Classes="icon" Width="12" Height="12" Data="{StaticResource IconTrash}"/></Button>
+                                                                </StackPanel>
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                    </DataGridTemplateColumn>
                                                 </DataGrid.Columns>
                                             </DataGrid>
+                                            </h:FillSlot>
                                         </Border>
                                     </DockPanel>
                                 </Panel>
@@ -2207,6 +2263,7 @@
                                                     <Button ToolTip.Tip="Avvia tutte le copie in attesa, in pausa o fallite" Classes="success" Command="{Binding RelayQueueStartAllCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconPlay}"/><TextBlock Text="Avvia tutti"/></StackPanel></Button>
                                                     <Button ToolTip.Tip="Mette in pausa tutte le copie (ripartono dall'inizio del file)" Classes="warning" Command="{Binding RelayQueuePauseAllCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconPause}"/><TextBlock Text="Pausa tutti"/></StackPanel></Button>
                                                     <Button ToolTip.Tip="Annulla tutte le copie non ancora completate" Classes="danger" Command="{Binding RelayQueueCancelAllCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconClose}"/><TextBlock Text="Annulla tutti"/></StackPanel></Button>
+                                                    <Button ToolTip.Tip="Ferma e rimuove dalla lista TUTTE le copie (i file già copiati restano sul server)" Command="{Binding RelayQueueRemoveAllCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTrash}"/><TextBlock Text="Elimina tutti"/></StackPanel></Button>
                                                     <Button ToolTip.Tip="Rimuove dalla lista le copie completate" Command="{Binding RelayQueueClearCompletedCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCheckCircle}"/><TextBlock Text="Completati"/></StackPanel></Button>
                                                     <Button ToolTip.Tip="Rimuove dalla lista le copie annullate" Command="{Binding RelayQueueClearCancelledCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconBan}"/><TextBlock Text="Annullati"/></StackPanel></Button>
                                                     <Button ToolTip.Tip="Rimuove dalla lista le copie fallite" Command="{Binding RelayQueueClearFailedCommand}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconAlertCircle}"/><TextBlock Text="Failed"/></StackPanel></Button>
@@ -2214,7 +2271,8 @@
                                             </StackPanel>
                                         </Border>
                                         <Border Classes="cardElevated">
-                                            <DataGrid MinHeight="200" ItemsSource="{Binding SftpRelayJobs}" AutoGenerateColumns="False" IsReadOnly="True" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False">
+                                            <h:FillSlot>
+                                            <DataGrid MinHeight="0" ItemsSource="{Binding SftpRelayJobs}" AutoGenerateColumns="False" IsReadOnly="True" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False">
                                                 <DataGrid.ContextMenu>
                                                     <ContextMenu>
                                                         <MenuItem Header="Avvia / Riprendi" Click="OnRelayJobResumeClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconPlay}"/></MenuItem.Icon></MenuItem>
@@ -2242,17 +2300,42 @@
                                                     <DataGridTextColumn Header="Dimensione" Binding="{Binding SizeText}" Width="150"/>
                                                     <DataGridTextColumn Header="Velocità" Binding="{Binding SpeedText}" Width="100"/>
                                                     <DataGridTextColumn Header="ETA" Binding="{Binding EtaText}" Width="100"/>
+                                                    <DataGridTemplateColumn Header="Azioni" Width="Auto">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <StackPanel Orientation="Horizontal" Spacing="4" Margin="4,2" VerticalAlignment="Center">
+                                                                    <Button Classes="iconCircle success" Width="26" Height="26" ToolTip.Tip="Riprendi" IsVisible="{Binding CanResume}" Click="OnRelayJobResumeClick"><Path Classes="icon" Width="12" Height="12" Data="{StaticResource IconPlay}"/></Button>
+                                                                    <Button Classes="iconCircle warning" Width="26" Height="26" ToolTip.Tip="Pausa" IsVisible="{Binding CanPause}" Click="OnRelayJobPauseClick"><Path Classes="icon" Width="12" Height="12" Data="{StaticResource IconPause}"/></Button>
+                                                                    <Button Classes="iconCircle danger" Width="26" Height="26" ToolTip.Tip="Annulla" IsVisible="{Binding CanCancel}" Click="OnRelayJobCancelClick"><Path Classes="icon" Width="12" Height="12" Data="{StaticResource IconClose}"/></Button>
+                                                                    <Button Classes="iconCircle" Width="26" Height="26" ToolTip.Tip="Riprova (copia da capo)" IsVisible="{Binding CanRetry}" Click="OnRelayJobResumeClick"><Path Classes="icon" Width="12" Height="12" Data="{StaticResource IconRefresh}"/></Button>
+                                                                    <Button Classes="iconCircle danger" Width="26" Height="26" ToolTip.Tip="Rimuovi dalla lista" Click="OnRelayJobRemoveClick"><Path Classes="icon" Width="12" Height="12" Data="{StaticResource IconTrash}"/></Button>
+                                                                </StackPanel>
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                    </DataGridTemplateColumn>
                                                 </DataGrid.Columns>
                                             </DataGrid>
+                                            </h:FillSlot>
                                         </Border>
                                     </DockPanel>
                                 </Panel>
                             </Panel>
                         </DockPanel>
                     </DockPanel>
+                    </h:FillViewportPanel>
+                    </ScrollViewer>
+                    <!-- Copia del messaggio fissata in alto, visibile solo scorrendo (StickyBanner) -->
+                    <Border x:Name="SftpStickyBanner" VerticalAlignment="Top" IsVisible="False" Padding="0,10,0,0" Background="{DynamicResource AppBackgroundBrush}">
+                        <ContentControl Margin="0,0,0,8" Theme="{StaticResource StatusBannerTheme}" Content="{Binding SftpStatusMessage}"/>
+                    </Border>
+                    </Panel>
                 </Panel>
                 <Panel IsVisible="{Binding #MainTabs.SelectedIndex, Converter={x:Static vm:IndexEqualsConverter.Default}, ConverterParameter=5}">
-                    <Grid RowDefinitions="Auto, Auto, Auto, *" Margin="0,10,0,10" DataContext="{Binding Videobox}">
+                    <!-- La pagina riempie la finestra; se è troppo bassa scorre (le tabelle restano utilizzabili) -->
+                    <Panel DataContext="{Binding Videobox}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" h:StickyBanner.Overlay="{Binding #VideoboxStickyBanner}">
+                    <h:FillViewportPanel>
+                    <Grid RowDefinitions="Auto, Auto, Auto, *" Margin="0,10,0,10">
 
                         <!-- STATUS (in alto, sopra la guida) -->
                         <ContentControl Grid.Row="0" Theme="{StaticResource StatusBannerTheme}" Content="{Binding StatusMessage}" IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
@@ -2269,7 +2352,8 @@
                                         <Path Grid.Column="1" Classes="chevron"/>
                                     </Grid>
                                 </ToggleButton>
-                                <Border IsVisible="{Binding #ToggleGuideVideobox.IsChecked}" Background="Transparent" Margin="16,0,16,16" Padding="12">
+                                <Border IsVisible="{Binding #ToggleGuideVideobox.IsChecked}" Background="Transparent" Margin="16,0,16,16" Padding="12,12,4,12">
+                                    <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
                                     <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}">
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">A cosa serve</Run><LineBreak/>
                                         Corregge i link video dei post del forum (Invision Community): confronta i link di ogni post con i file presenti sul server SFTP e genera i nuovi link sul dominio corretto.<LineBreak/>
@@ -2278,15 +2362,22 @@
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 1. Configura:</Run> apri "Impostazioni e Domini", compila URL e API Key del forum e aggiungi le <Run FontWeight="SemiBold">sorgenti SFTP</Run>: per ognuna la connessione (un profilo della tab SFTP, anche su server diversi), la cartella sul server, il dominio e il percorso pubblico. L'anteprima mostra il link che verrà generato. Salva.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 2. Carica i post:</Run> scegli una categoria: "Carica Pag." carica 50 post, "Carica Tutti" li carica tutti a blocchi. Con la ricerca e i filtri colorati sotto (clic su un colore per mostrarlo o nasconderlo, "Da sistemare" nasconde i verdi) restano solo i post che ti interessano.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 3. Carica l'albero:</Run> scegli dal menu <Run FontWeight="SemiBold">Sorgenti</Run> quali caricare (la scelta resta salvata e vale per tutte le categorie: cambiando categoria alberi e spunte non cambiano) e premi "Carica": ogni sorgente compare come radice dell'albero, e i colori confrontano i post con i file di tutte. Dopo il caricamento l'albero si aggiorna da solo.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 4. Mappa:</Run> seleziona un post, clicca la cartella con i suoi episodi (o un singolo file, per i film) e premi "Mappa": i link vengono abbinati ai file in ordine naturale, col dominio della sorgente del file. Col clic destro puoi copiare titoli, percorsi e link.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 5. Controlla e applica:</Run> nella tabella puoi scambiare gli abbinamenti e togliere la spunta alle righe da non toccare; "Applica" invia i nuovi link al forum.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 4. Mappa:</Run> seleziona un post, clicca la cartella con i suoi episodi (o un singolo file, per i film) e premi "Mappa": i link vengono abbinati ai file in ordine naturale, col dominio della sorgente del file. Funziona anche con i post <Run FontWeight="SemiBold">senza link</Run>: viene creata una riga per ogni file. Per un film in più parti mappa un file alla volta: va sulla riga selezionata e poi passa alla successiva. Col clic destro puoi copiare titoli, percorsi e link.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 5. Controlla:</Run> sopra la tabella trovi i conteggi di <Run FontWeight="SemiBold">vecchi link</Run>, <Run FontWeight="SemiBold">nuovi link</Run> e <Run FontWeight="SemiBold">file SFTP</Run>, così vedi subito se i numeri tornano. Con le frecce scambi gli abbinamenti e togliendo la spunta "Usa" una riga resta com'è (se il post ha più link che file, quelli in più vengono rimossi).<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 6. Applica:</Run> invia al forum i nuovi link e il titolo. La tabella si ricarica con i link salvati dal forum e sotto i conteggi compare il riepilogo dell'ultimo invio, con quanti link il forum ha salvato davvero.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Rinomina:</Run> il titolo del post in alto si può modificare: "Rinomina" cambia solo il titolo e lascia i link come sono sul forum.<LineBreak/>
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Significato dei colori</Run><LineBreak/>
                                         <Run Text="●" Foreground="#22C55E"/> <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">Verde:</Run> tutti i link puntano a un dominio valido.<LineBreak/>
                                         <Run Text="●" Foreground="#F59E0B"/> <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">Arancione:</Run> link misti, alcuni validi e altri vecchi.<LineBreak/>
                                         <Run Text="●" Foreground="#EF4444"/> <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">Rosso:</Run> link tutti vecchi, oppure file senza nessun link.<LineBreak/>
-                                        <Run Text="●" Foreground="#A855F7"/> <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">Viola:</Run> mismatch, il numero di link del post è diverso dal numero di file nella cartella.
+                                        <Run Text="●" Foreground="#A855F7"/> <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">Viola:</Run> mismatch, il numero di link del post è diverso dal numero di file nella cartella. Il confronto si fa con la cartella della sorgente che ha lo stesso dominio del link: due sorgenti con lo stesso percorso su server diversi (es. "Anime" su DDL 1 e DDL 2) non si confondono.<LineBreak/>
+                                        <Run Text="●" Foreground="Gray"/> <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">Grigio:</Run> post senza link video (si possono mappare lo stesso: vedi il punto 4).<LineBreak/>
+                                        <LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Aggiornamenti automatici</Run><LineBreak/>
+                                        L'albero si aggiorna da solo quando i file cambiano (dall'app subito, dall'esterno ogni minuto); i post visibili si rileggono dal forum ogni 30 secondi (titoli e link modificati, post nuovi o eliminati) senza perdere la selezione.
                                     </TextBlock>
+                                    </ScrollViewer>
                                 </Border>
                             </StackPanel>
                         </Border>
@@ -2558,6 +2649,7 @@
                                 </Border>
 
                                 <Border Grid.Row="2" Classes="cardElevated">
+                                    <h:FillSlot>
                                     <ListBox ItemsSource="{Binding CategoryPosts}" SelectedItem="{Binding SelectedPost, Mode=TwoWay}">
                                         <ListBox.ContextMenu>
                                             <ContextMenu>
@@ -2584,6 +2676,7 @@
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>
                                     </ListBox>
+                                    </h:FillSlot>
                                 </Border>
                             </Grid>
 
@@ -2646,6 +2739,7 @@
                                         </DropDownButton.Flyout>
                                     </DropDownButton>
 
+                                    <h:FillSlot>
                                     <TreeView ItemsSource="{Binding SftpRootNodes}" SelectedItem="{Binding SelectedSftpNode, Mode=TwoWay}" Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                         <TreeView.Styles>
                                             <Style Selector="TextBlock.sourceRoot"><Setter Property="FontWeight" Value="Bold"/></Style>
@@ -2672,13 +2766,21 @@
                                             </TreeDataTemplate>
                                         </TreeView.ItemTemplate>
                                     </TreeView>
+                                    </h:FillSlot>
                                 </DockPanel>
                             </Border>
 
                             <Grid Grid.Column="4" RowDefinitions="Auto, *" IsEnabled="{Binding SelectedPost}">
                                 <Border Classes="cardElevated" Margin="0,0,0,10">
                                     <StackPanel Spacing="10">
-                                        <TextBlock Text="{Binding CurrentPostTitle}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AppAccentBrush}" TextWrapping="Wrap"/>
+                                        <Grid ColumnDefinitions="*, Auto">
+                                            <TextBox Grid.Column="0" Text="{Binding EditablePostTitle, Mode=TwoWay}" Margin="0,0,10,0"
+                                                     FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AppAccentBrush}"
+                                                     PlaceholderText="Titolo del post"
+                                                     ToolTip.Tip="Titolo del post sul forum: modificalo e premi Rinomina (oppure Applica, che lo invia insieme ai link)"/>
+                                            <Button Grid.Column="1" Classes="info" Command="{Binding RenamePostCommand}" IsEnabled="{Binding IsTitleChanged}"
+                                                    ToolTip.Tip="Cambia solo il titolo del post sul forum: i link restano quelli attuali"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconEdit}"/><TextBlock Text="Rinomina"/></StackPanel></Button>
+                                        </Grid>
                                         <Grid ColumnDefinitions="*, Auto">
                                             <TextBox Grid.Column="0" Text="{Binding SftpPathInput, Mode=TwoWay}" Margin="0,0,10,0" PlaceholderText="Seleziona una cartella o un file dall'albero..." ToolTip.Tip="Cartella SFTP con i file del post (serie) oppure un singolo file (film)"/>
                                             <Button Grid.Column="1" Classes="info" Command="{Binding MapSftpFolderAsync}" ToolTip.Tip="Cartella: abbina i suoi file ai link del post, in ordine. File: lo abbina alla riga selezionata nella tabella (o alla prima da mappare)"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconLayers}"/><TextBlock Text="Mappa"/></StackPanel></Button>
@@ -2686,14 +2788,30 @@
                                     </StackPanel>
                                 </Border>
 
-                                <Border Grid.Row="1" Classes="cardElevated">
+                                <Border Grid.Row="1" Classes="cardElevated" ClipToBounds="True">
                                     <DockPanel>
                                         <Grid DockPanel.Dock="Top" ColumnDefinitions="*, Auto" Margin="0,0,0,10">
                                             <TextBlock Grid.Column="0" Text="Anteprima Modifiche" FontWeight="Bold" VerticalAlignment="Center"/>
-                                            <Button Grid.Column="1" Classes="success" Command="{Binding ApplyUpdatesAsync}" ToolTip.Tip="Invia i nuovi link a Videobox. I link deselezionati verranno rimossi dal post."><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCheck}"/><TextBlock Text="Applica"/></StackPanel></Button>
+                                            <Button Grid.Column="1" Classes="success" Command="{Binding ApplyUpdatesAsync}" ToolTip.Tip="Invia i nuovi link (e il titolo) a Videobox. I link deselezionati verranno rimossi dal post."><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCheck}"/><TextBlock Text="Applica"/></StackPanel></Button>
                                         </Grid>
+                                        <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,10">
+                                            <StackPanel Orientation="Horizontal" Spacing="16">
+                                                <TextBlock Foreground="{DynamicResource AppTextMutedBrush}" ToolTip.Tip="Link attuali del post sul forum">
+                                                    <Run Text="Vecchi link:"/> <Run Text="{Binding OldLinkCount}" FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}"/>
+                                                </TextBlock>
+                                                <TextBlock Foreground="{DynamicResource AppTextMutedBrush}" ToolTip.Tip="Link nuovi dalla mappatura (righe con Usa spuntato)">
+                                                    <Run Text="Nuovi link:"/> <Run Text="{Binding NewLinkCount}" FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}"/>
+                                                </TextBlock>
+                                                <TextBlock Foreground="{DynamicResource AppTextMutedBrush}" ToolTip.Tip="File SFTP abbinati alle righe della tabella">
+                                                    <Run Text="File SFTP:"/> <Run Text="{Binding SftpFileCount}" FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}"/>
+                                                </TextBlock>
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding LastApplySummary}" IsVisible="{Binding HasLastApplySummary}" FontSize="12"
+                                                       Foreground="{DynamicResource AppSuccessBrush}" TextWrapping="Wrap"/>
+                                        </StackPanel>
 
-                                        <DataGrid MinHeight="200"
+                                        <h:FillSlot>
+                                        <DataGrid MinHeight="0"
                                                   ItemsSource="{Binding MappingItems}"
                                                   SelectedItem="{Binding SelectedMappingItem, Mode=TwoWay}"
                                                   AutoGenerateColumns="False"
@@ -2746,11 +2864,19 @@
                                                 </DataGridTemplateColumn>
                                             </DataGrid.Columns>
                                         </DataGrid>
+                                        </h:FillSlot>
                                     </DockPanel>
                                 </Border>
                             </Grid>
                         </Grid>
                     </Grid>
+                    </h:FillViewportPanel>
+                    </ScrollViewer>
+                    <!-- Copia del messaggio fissata in alto, visibile solo scorrendo (StickyBanner) -->
+                    <Border x:Name="VideoboxStickyBanner" VerticalAlignment="Top" IsVisible="False" Padding="0,10,0,0" Background="{DynamicResource AppBackgroundBrush}">
+                        <ContentControl Margin="0,0,0,8" Theme="{StaticResource StatusBannerTheme}" Content="{Binding StatusMessage}" IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                    </Border>
+                    </Panel>
                 </Panel>
                 <Panel IsVisible="{Binding #MainTabs.SelectedIndex, Converter={x:Static vm:IndexEqualsConverter.Default}, ConverterParameter=6}">
                     <!-- Il messaggio di stato sta nella pagina; scorrendo ne compare una copia fissa in alto -->
@@ -2870,7 +2996,8 @@
                                         <Path Grid.Column="1" Classes="chevron"/>
                                     </Grid>
                                 </ToggleButton>
-                                <Border IsVisible="{Binding #ToggleGuideProxy.IsChecked}" Background="Transparent" Margin="16,0,16,16" Padding="12">
+                                <Border IsVisible="{Binding #ToggleGuideProxy.IsChecked}" Background="Transparent" Margin="16,0,16,16" Padding="12,12,4,12">
+                                    <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
                                     <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}">
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Come è organizzata</Run><LineBreak/>
                                         Tutti i proxy stanno nell'<Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">Archivio</Run>. Ogni provider ha la sua <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">lista</Run>, con l'esito dei test solo per quel sito e un solo proxy attivo, mostrato nel riquadro "Proxy attivo" in cima alla scheda. Lo stesso proxy può funzionare per un sito e non per un altro.<LineBreak/>
@@ -2898,6 +3025,7 @@
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Importa:</Run> incolla una lista o caricala da file, per tutte le liste o solo per alcune. I doppioni vengono saltati.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Togli da tutte le liste:</Run> resta solo nell'archivio. <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">Elimina</Run> lo cancella definitivamente; "Pulisci archivio" elimina in un colpo i proxy falliti o esclusi ovunque.
                                     </TextBlock>
+                                    </ScrollViewer>
                                 </Border>
                             </StackPanel>
                         </Border>
@@ -3228,7 +3356,8 @@
                                             <Path Grid.Column="1" Classes="chevron"/>
                                         </Grid>
                                     </ToggleButton>
-                                    <Border IsVisible="{Binding #ToggleGuideDomini.IsChecked}" Background="Transparent" Margin="16,0,16,16" Padding="12">
+                                    <Border IsVisible="{Binding #ToggleGuideDomini.IsChecked}" Background="Transparent" Margin="16,0,16,16" Padding="12,12,4,12">
+                                        <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
                                         <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}">
                                             <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">A cosa serve</Run><LineBreak/>
                                             I siti dei provider cambiano spesso indirizzo. Qui vedi il dominio usato per ciascun provider e se risponde.<LineBreak/>
@@ -3241,6 +3370,7 @@
                                             <LineBreak/>
                                             <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Indicatore:</Run> il pallino sulla tab Domini diventa rosso quando almeno un dominio non risponde.
                                         </TextBlock>
+                                        </ScrollViewer>
                                     </Border>
                                 </StackPanel>
                             </Border>
