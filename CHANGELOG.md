@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.4.6] — 2026-10-27
+
+### 🔔 Notifiche e barra di stato
+- **Notifiche di Windows** quando l'app è in secondo piano: serie completata (o finita con errori), download falliti, code SFTP finite (upload, download, copie tra server) e disco pieno. La campanella in alto le accende e spegne.
+- **Barra di stato in basso**, accanto al Log globale e visibile da ogni tab: download Anime e Film/Serie e trasferimenti SFTP (↑ ↓ ⇄) in corso, in coda e falliti, con la velocità. Un clic apre la tab; bordo rosso se ci sono errori.
+
+### 🎬 Anime e Film/Serie Download
+- **Riprova automatica**: un download fallito per un problema temporaneo (rete, proxy, server occupato) riprova da solo fino a 3 volte (dopo 30 s, 2 e 5 minuti), ripartendo da dove era. Nessun nuovo tentativo per file inesistenti, captcha o disco pieno.
+- **Cronologia dei download** (pulsante "Cronologia" nella coda o Ctrl+H): tutto ciò che hai scaricato, anche dopo aver pulito la coda, con ricerca, filtro e apertura della cartella. Accodando episodi già scaricati in passato l'app chiede se riscaricarli o saltarli.
+- **Spazio su disco**: prima di accodare si stima lo spazio necessario e, se non basta, si chiede conferma; con meno di 1 GB libero i download non partono e vanno in pausa spiegando il motivo.
+- **Barre colorate per stato**: verde completato, blu in download, arancione in pausa, rosso errore, grigio-azzurro in coda, grigio annullato (anche nelle code SFTP).
+- **Coda più ordinata**: le barre non si spostano più al cambiare dei pulsanti di ogni riga; dimensione, velocità e tempo rimanente in un'unica colonna, così stato ed errore hanno più spazio.
+
+### 🎬 Videobox Corrector
+- **Dopo "Applica" la tabella non sparisce più**: il post resta aperto e selezionato anche se diventa verde e i verdi sono nascosti (o se cambia pagina).
+- **Conferma riga per riga**: "✓ salvato sul forum" per i link salvati, "inviato, non ancora confermato" per quelli che il forum non restituisce.
+
+### 🧹 Varie
+- **Scorciatoie da tastiera**: Ctrl+1…8 per le tab, Ctrl+F per la ricerca, Ctrl+L per il log, Ctrl+H per la cronologia (elenco nel pulsante con la tastiera in alto).
+- **Organizza file**: "Svuota proposte" e "Svuota cronologia…" nel menu "Pulisci ▾" accanto a Undo.
+- La finestra "Aggiornamento completato" non ricompare più ai riavvii successivi.
+- Menu a tendina (es. "Sorgenti" in Videobox): niente più riquadro grigio dietro la freccia al passaggio del mouse.
+- Guide aggiornate: Anime, Film/Serie, Videobox, Organizza file e SFTP.
+
 ## [1.4.5] — 2026-10-27
 
 ### 🎬 Anime e Film/Serie Download
