@@ -15,7 +15,7 @@
         <!-- Intestazione -->
         <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto, *" Margin="0,0,0,16">
             <Border Width="42" Height="42" CornerRadius="21" Background="{DynamicResource AppAccentSoftBrush}">
-                <Path Classes="icon accent" Data="{StaticResource IconCloud}" Width="20" Height="20"/>
+                <Path x:Name="HeaderIcon" Classes="icon accent" Data="{StaticResource IconCloud}" Width="20" Height="20"/>
             </Border>
             <StackPanel Grid.Column="1" Margin="14,0,0,0" Spacing="2" VerticalAlignment="Center">
                 <TextBlock x:Name="HeaderText" Text="Seleziona cartella remota" FontSize="15" FontWeight="Bold"/>
@@ -29,7 +29,7 @@
             <Button Grid.Column="0" Classes="iconCircle" Click="OnGoUpClick" ToolTip.Tip="Cartella superiore" Margin="0,0,6,0">
                 <Path Classes="icon" Data="{StaticResource IconArrowUp}"/>
             </Button>
-            <Button Grid.Column="1" Classes="iconCircle" Click="OnHomeClick" ToolTip.Tip="Cartella home dell'utente SFTP" Margin="0,0,6,0">
+            <Button Grid.Column="1" x:Name="HomeButton" Classes="iconCircle" Click="OnHomeClick" ToolTip.Tip="Cartella home dell'utente SFTP" Margin="0,0,6,0">
                 <Path Classes="icon" Data="{StaticResource IconHome}"/>
             </Button>
             <Button Grid.Column="2" Classes="iconCircle" Click="OnRefreshClick" ToolTip.Tip="Ricarica il contenuto" Margin="0,0,10,0">

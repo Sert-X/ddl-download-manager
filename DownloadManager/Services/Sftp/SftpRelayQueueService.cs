@@ -73,20 +73,34 @@ public class SftpRelayQueueService : SftpQueueServiceBase<SftpRelayJob>
     private void EnsureRemoteDir(Session session, SftpConfig server, string remoteDir)
     {
         if (string.IsNullOrEmpty(remoteDir) || remoteDir == "/") return;
-        lock (_dirsLock)
-        {
-            if (!_ensuredDirs.Add($"{server.Host}:{server.Port}|{remoteDir}")) return;
-        }
+        var key = $"{server.Host}:{server.Port}|{remoteDir}";
+        lock (_dirsLock) { if (_ensuredDirs.Contains(key)) return; }
 
-        var current = "";
-        foreach (var part in remoteDir.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries))
+        // Si segna come creata solo quando esiste davvero; le copie della stessa cartella partite
+        // insieme aspettano invece di partire prima che la cartella ci sia
+        lock (_dirGates.GetOrAdd(key, _ => new object()))
         {
-            current += "/" + part;
-            if (session.FileExists(current)) continue;
-            try { session.CreateDirectory(current); }
-            catch (Exception ex) { _logger.LogWarning(ex, "Creazione cartella {Dir} su {Server} fallita", current, server.Name); }
+            lock (_dirsLock) { if (_ensuredDirs.Contains(key)) return; }
+            var current = "";
+            foreach (var part in remoteDir.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries))
+            {
+                current += "/" + part;
+                try
+                {
+                    if (session.FileExists(current)) continue;
+                    session.CreateDirectory(current);
+                }
+                catch (Exception ex) { _logger.LogWarning(ex, "Creazione cartella {Dir} su {Server} fallita", current, server.Name); }
+            }
+            bool exists;
+            try { exists = session.FileExists(remoteDir); } catch { exists = false; }
+            if (!exists)
+                throw new InvalidOperationException($"Impossibile creare la cartella {remoteDir} su {server.Name} (permessi o percorso non valido)");
+            lock (_dirsLock) _ensuredDirs.Add(key);
         }
     }
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, object> _dirGates = new(StringComparer.Ordinal);
 
     /// <summary>Le cartelle potrebbero essere state eliminate: si ricontrollano al prossimo job.</summary>
     public void ForgetCreatedFolders()

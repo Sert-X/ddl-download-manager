@@ -230,14 +230,16 @@ public partial class DownloadTabViewModel : ViewModelBase
 
             int totalEpisodes = groups.Sum(g => g.Items.Count);
             int completed = groups.Sum(g => g.Items.Count(i => i.Status == DownloadStatus.Completed));
-            int downloading = groups.Sum(g => g.Items.Count(i => i.Status == DownloadStatus.Downloading));
+            int downloading = groups.Sum(g => g.Items.Count(i => i.Status == DownloadStatus.Downloading && !i.IsPostProcessing));
+            int converting = groups.Sum(g => g.Items.Count(i => i.IsPostProcessing));
             int pending = groups.Sum(g => g.Items.Count(i => i.Status == DownloadStatus.Pending || i.Status == DownloadStatus.Paused));
             int failed = groups.Sum(g => g.Items.Count(i => i.Status == DownloadStatus.Failed));
             int cancelled = groups.Sum(g => g.Items.Count(i => i.Status == DownloadStatus.Cancelled));
 
             var parts = new List<string> { $"{totalEpisodes} {(totalEpisodes == 1 ? "episodio" : "episodi")}" };
             if (completed > 0) parts.Add($"{completed} {(completed == 1 ? "completato" : "completati")}");
-            if (downloading > 0) parts.Add($"{downloading} in corso");
+            if (downloading > 0) parts.Add($"{downloading} in download");
+            if (converting > 0) parts.Add($"{converting} in conversione");
             if (pending > 0) parts.Add($"{pending} in attesa");
             if (failed > 0) parts.Add($"{failed} {(failed == 1 ? "fallito" : "falliti")}");
             if (cancelled > 0) parts.Add($"{cancelled} {(cancelled == 1 ? "annullato" : "annullati")}");
@@ -1004,7 +1006,7 @@ public partial class DownloadTabViewModel : ViewModelBase
     private void OnDownloadItemPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (sender is not DownloadItem item) return;
-        if (e.PropertyName != nameof(DownloadItem.Status)) return;
+        if (e.PropertyName is not (nameof(DownloadItem.Status) or nameof(DownloadItem.IsPostProcessing))) return;
 
         var seriesName = string.IsNullOrWhiteSpace(item.SeriesName) ? "Senza serie" : item.SeriesName;
         var group = SeriesGroups.FirstOrDefault(g => g.SeriesName == seriesName);

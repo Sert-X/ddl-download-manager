@@ -442,14 +442,16 @@ public partial class StreamingTabViewModel : ViewModelBase
 
             int total = groups.Sum(g => g.Items.Count);
             int completed = groups.Sum(g => g.Items.Count(i => i.Status == DownloadStatus.Completed));
-            int active = groups.Sum(g => g.Items.Count(i => i.Status == DownloadStatus.Downloading));
+            int active = groups.Sum(g => g.Items.Count(i => i.Status == DownloadStatus.Downloading && !i.IsPostProcessing));
+            int converting = groups.Sum(g => g.Items.Count(i => i.IsPostProcessing));
             int pending = groups.Sum(g => g.Items.Count(i =>
                 i.Status == DownloadStatus.Pending || i.Status == DownloadStatus.Paused));
             int failed = groups.Sum(g => g.Items.Count(i => i.Status == DownloadStatus.Failed));
 
             var parts = new List<string> { $"{total} {(total == 1 ? "episodio" : "episodi")}" };
             if (completed > 0) parts.Add($"{completed} {(completed == 1 ? "completato" : "completati")}");
-            if (active > 0) parts.Add($"{active} in corso");
+            if (active > 0) parts.Add($"{active} in download");
+            if (converting > 0) parts.Add($"{converting} in conversione");
             if (pending > 0) parts.Add($"{pending} in attesa");
             if (failed > 0) parts.Add($"{failed} {(failed == 1 ? "fallito" : "falliti")}");
 
@@ -640,7 +642,7 @@ public partial class StreamingTabViewModel : ViewModelBase
     private void OnDownloadItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (sender is not DownloadItem item) return;
-        if (e.PropertyName != nameof(DownloadItem.Status)) return;
+        if (e.PropertyName is not (nameof(DownloadItem.Status) or nameof(DownloadItem.IsPostProcessing))) return;
 
         var seriesName = string.IsNullOrWhiteSpace(item.SeriesName) ? "Senza serie" : item.SeriesName;
         var group = SeriesGroups.FirstOrDefault(g => g.SeriesName == seriesName);

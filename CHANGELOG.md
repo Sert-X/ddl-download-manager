@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.4.8] — 2026-10-28
+
+### 📡 SFTP
+- **Upload di cartelle senza errori "No such file"**: con più upload insieme, la cartella di destinazione veniva segnata come creata prima di esserlo davvero e gli altri file della stessa cartella fallivano. Ora aspettano che la cartella esista; se il server la dà comunque per mancante, viene ricreata e il file riprovato. Stessa correzione per le copie tra server.
+- **"Sposta in" sui file locali** usa la finestra dell'app (come per i file del server) invece di quella di Windows: parte dalla cartella aperta, doppio clic per entrare, freccia su fino all'elenco dei dischi.
+
+### 🎬 Anime e Film/Serie Download
+- **"In download" e "in conversione"** al posto di "attivi": le serie, il riepilogo della coda e la barra di stato distinguono gli episodi che stanno scaricando da quelli già scaricati su cui l'app sta lavorando (unione tracce, conversione, copia in MP4, riparazione).
+
 ## [1.4.7] — 2026-10-27
 
 ### 🗂 Organizza file

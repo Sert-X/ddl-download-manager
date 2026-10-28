@@ -96,13 +96,14 @@ public partial class ActivityViewModel : ObservableObject
 
     private (string Text, bool Has, bool Failed, string Tip) Downloads(string category)
     {
-        int active = 0, queued = 0, failed = 0, paused = 0;
+        int active = 0, converting = 0, queued = 0, failed = 0, paused = 0;
         double speed = 0;
         foreach (var i in _queue.AllItems)
         {
             if (i.Category != category) continue;
             switch (i.Status)
             {
+                case DownloadStatus.Downloading when i.IsPostProcessing: converting++; break;
                 case DownloadStatus.Downloading: active++; speed += i.SpeedBytesPerSecond; break;
                 case DownloadStatus.Pending: queued++; break;
                 case DownloadStatus.Paused: paused++; break;
@@ -111,11 +112,12 @@ public partial class ActivityViewModel : ObservableObject
         }
         var parts = new List<string>();
         if (active > 0) parts.Add($"{active} in download");
+        if (converting > 0) parts.Add($"{converting} in conversione");
         if (queued > 0) parts.Add($"{queued} in coda");
         if (failed > 0) parts.Add(failed == 1 ? "1 fallito" : $"{failed} falliti");
         if (active > 0 && speed > 0) parts.Add(Speed(speed));
         var tip = parts.Count == 0 ? "" : string.Join(" · ", parts) + (paused > 0 ? $" · {paused} in pausa" : "") + ". Clic per aprire la tab.";
-        return (string.Join(" · ", parts), active + queued + failed > 0, failed > 0, tip);
+        return (string.Join(" · ", parts), active + converting + queued + failed > 0, failed > 0, tip);
     }
 
     private void Update()

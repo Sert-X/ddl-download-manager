@@ -7,6 +7,8 @@ namespace DownloadManager.Services.Sftp;
 public class SftpUploadQueueService : SftpQueueServiceBase<SftpUploadJob>
 {
     private readonly HashSet<string> _ensuredDirs = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Un lucchetto per cartella: chi arriva mentre un altro la sta creando aspetta.</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, object> _dirGates = new(StringComparer.OrdinalIgnoreCase);
 
     public SftpUploadQueueService(ILogger<SftpUploadQueueService> logger, SftpSessionLimiter sessionLimiter)
     : base(logger, sessionLimiter) { }
@@ -112,8 +114,9 @@ public class SftpUploadQueueService : SftpQueueServiceBase<SftpUploadJob>
     protected override async Task ExecuteTransferAsync(Session session, SftpUploadJob job, CancellationToken ct)
     {
         var remoteDir = Path.GetDirectoryName(job.RemotePath)?.Replace('\\', '/') ?? "";
+        var serverKey = GetSessionConfig(job)?.ServerKey ?? "";
         if (!string.IsNullOrEmpty(remoteDir))
-            EnsureRemoteDir(session, remoteDir, GetSessionConfig(job)?.ServerKey ?? "");
+            EnsureRemoteDir(session, remoteDir, serverKey);
 
         var transferOptions = new TransferOptions
         {
@@ -136,6 +139,17 @@ public class SftpUploadQueueService : SftpQueueServiceBase<SftpUploadJob>
         if (!result.IsSuccess)
         {
             var error = string.Join("; ", result.Failures.Select(f => f.Message));
+            // Cartella sparita (cancellata dopo essere stata creata, o creata da un'altra
+            // connessione non ancora visibile): si ricrea e si riprova una volta
+            if (!string.IsNullOrEmpty(remoteDir) && error.Contains("No such file", StringComparison.OrdinalIgnoreCase))
+            {
+                lock (_ensuredDirs) _ensuredDirs.Remove(serverKey + "|" + remoteDir);
+                EnsureRemoteDir(session, remoteDir, serverKey);
+                try { result = await BlockingWork.Run(() => session.PutFiles(job.LocalPath, job.RemotePath, false, transferOptions), ct); }
+                catch (Exception) when (ct.IsCancellationRequested) { throw new OperationCanceledException(); }
+                if (result.IsSuccess) return;
+                error = string.Join("; ", result.Failures.Select(f => f.Message));
+            }
             throw new InvalidOperationException(error);
         }
     }
@@ -148,18 +162,30 @@ public class SftpUploadQueueService : SftpQueueServiceBase<SftpUploadJob>
     {
         if (string.IsNullOrEmpty(remoteDir)) return;
         // Per server: la stessa cartella può mancare su un server e non sull'altro
-        lock (_ensuredDirs)
-        {
-            if (!_ensuredDirs.Add(serverKey + "|" + remoteDir)) return;
-        }
+        var key = serverKey + "|" + remoteDir;
+        lock (_ensuredDirs) { if (_ensuredDirs.Contains(key)) return; }
 
-        var parts = remoteDir.Replace('\\', '/').Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
-        var current = "";
-        foreach (var p in parts)
+        // Prima la cartella si segnava come "creata" PRIMA di crearla: gli altri upload della stessa
+        // cartella, partiti insieme, la saltavano e fallivano con "No such file". Ora chi arriva
+        // mentre un altro la sta creando aspetta, e la si segna solo quando esiste davvero.
+        lock (_dirGates.GetOrAdd(key, _ => new object()))
         {
-            current += "/" + p;
-            try { session.CreateDirectory(current); }
-            catch { }
+            lock (_ensuredDirs) { if (_ensuredDirs.Contains(key)) return; }
+
+            var parts = remoteDir.Replace('\\', '/').Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+            var current = "";
+            foreach (var p in parts)
+            {
+                current += "/" + p;
+                try { if (!session.FileExists(current)) session.CreateDirectory(current); }
+                catch { /* creata nel frattempo da un'altra connessione: si verifica sotto */ }
+            }
+
+            bool exists;
+            try { exists = session.FileExists(remoteDir); } catch { exists = false; }
+            if (!exists)
+                throw new InvalidOperationException($"Impossibile creare la cartella remota {remoteDir} (permessi o percorso non valido)");
+            lock (_ensuredDirs) _ensuredDirs.Add(key);
         }
     }
 

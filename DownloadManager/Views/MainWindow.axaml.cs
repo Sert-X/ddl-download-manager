@@ -943,7 +943,8 @@ public partial class MainWindow : Window
         if (entries.Count == 0 || Vm == null) return;
 
         var title = entries.Count == 1 ? $"Sposta '{entries[0].Name}' in..." : $"Sposta {entries.Count} elementi in...";
-        var dest = await PickFolderAsync(title);
+        // Finestra dell'app (come per i file del server), dalla cartella aperta nel pannello locale
+        var dest = await RemoteFolderPickerDialog.ShowLocalAsync(this, Vm.Sftp.SftpCurrentLocalPath, title);
         if (string.IsNullOrEmpty(dest)) return;
 
         await Vm.Sftp.SftpLocalMoveManyAsync(entries, dest);

@@ -87,6 +87,28 @@ public partial class DownloadItem : ObservableObject
     public bool IsCancelled => Status == DownloadStatus.Cancelled;
     public bool IsDownloading => Status == DownloadStatus.Downloading;
 
+    // Lavori sul file dopo il download (il messaggio della fase è in ErrorMessage)
+    private static readonly string[] PostPhases =
+    {
+        "Copia in MP4", "Controllo del file", "Riparazione", "Audio italiano", "Unione",
+        "Imprimo", "Conversione", "In attesa"
+    };
+
+    /// <summary>Download finito, l'app sta lavorando sul file (unione tracce, conversione, copia in MP4...).</summary>
+    public bool IsPostProcessing => Status == DownloadStatus.Downloading && !string.IsNullOrEmpty(ErrorMessage)
+                                    && PostPhases.Any(p => ErrorMessage.StartsWith(p, StringComparison.OrdinalIgnoreCase));
+
+    private bool _lastPostProcessing;
+
+    /// <summary>Avvisa solo quando si entra o si esce dalla conversione (non a ogni percentuale).</summary>
+    private void NotifyPostProcessing()
+    {
+        var now = IsPostProcessing;
+        if (now == _lastPostProcessing) return;
+        _lastPostProcessing = now;
+        OnPropertyChanged(nameof(IsPostProcessing));
+    }
+
     /// <summary>
     /// Dimensione, velocità e tempo rimanente in una sola colonna: velocità e tempo solo mentre
     /// scarica (prima erano due colonne quasi sempre con "-").
@@ -104,6 +126,7 @@ public partial class DownloadItem : ObservableObject
     {
         OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(StatusTip));
+        NotifyPostProcessing();
     }
 
     public double Percentage => TotalBytes > 0
@@ -185,6 +208,7 @@ public partial class DownloadItem : ObservableObject
         OnPropertyChanged(nameof(IsPaused));
         OnPropertyChanged(nameof(IsQueued));
         OnPropertyChanged(nameof(IsCancelled));
+        NotifyPostProcessing();
         OnPropertyChanged(nameof(IsDownloading));
         OnPropertyChanged(nameof(InfoText));
     }

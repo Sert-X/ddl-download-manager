@@ -26,7 +26,7 @@ public partial class SeriesGroup : ObservableObject
     // Prima ogni proprietà rileggeva tutti gli episodi (una quindicina di passaggi a ogni cambio
     // di stato): con serie lunghe e "Riscarica" su centinaia di episodi l'app quasi si bloccava.
     private bool _statsDirty = true;
-    private int _completed, _active, _pending, _paused, _failed, _cancelled;
+    private int _completed, _active, _converting, _pending, _paused, _failed, _cancelled;
     private long _totalBytes, _downloadedBytes;
     private double _speed;
 
@@ -34,7 +34,7 @@ public partial class SeriesGroup : ObservableObject
     {
         if (!_statsDirty) return;
         _statsDirty = false;
-        _completed = _active = _pending = _paused = _failed = _cancelled = 0;
+        _completed = _active = _converting = _pending = _paused = _failed = _cancelled = 0;
         _totalBytes = _downloadedBytes = 0;
         _speed = 0;
         foreach (var i in Items)
@@ -42,7 +42,7 @@ public partial class SeriesGroup : ObservableObject
             switch (i.Status)
             {
                 case DownloadStatus.Completed: _completed++; break;
-                case DownloadStatus.Downloading: _active++; break;
+                case DownloadStatus.Downloading: if (i.IsPostProcessing) _converting++; else _active++; break;
                 case DownloadStatus.Pending: _pending++; break;
                 case DownloadStatus.Paused: _paused++; break;
                 case DownloadStatus.Failed: _failed++; break;
@@ -61,7 +61,9 @@ public partial class SeriesGroup : ObservableObject
 
     public int TotalCount => Items.Count;
     public int CompletedCount { get { EnsureStats(); return _completed; } }
+    /// <summary>In download (non conta quelli già scaricati che si stanno convertendo).</summary>
     public int ActiveCount { get { EnsureStats(); return _active; } }
+    public int ConvertingCount { get { EnsureStats(); return _converting; } }
     public int PendingCount { get { EnsureStats(); return _pending; } }
     public int PausedCount { get { EnsureStats(); return _paused; } }
     public int FailedCount { get { EnsureStats(); return _failed; } }
@@ -70,7 +72,7 @@ public partial class SeriesGroup : ObservableObject
     public string FailedBadge => FailedCount == 1 ? "1 fallito" : $"{FailedCount} {(FailedCount == 1 ? "fallito" : "falliti")}";
     public bool HasCancelled => CancelledCount > 0;
     public bool IsAllCompleted => TotalCount > 0 && CompletedCount == TotalCount;
-    public bool IsAllPaused => PausedCount > 0 && ActiveCount == 0 && PendingCount == 0;
+    public bool IsAllPaused => PausedCount > 0 && ActiveCount == 0 && ConvertingCount == 0 && PendingCount == 0;
 
     public double OverallPercentage
     {
@@ -119,11 +121,9 @@ public partial class SeriesGroup : ObservableObject
     {
         get
         {
-            var parts = new List<string>
-            {
-                $"{CompletedCount}/{TotalCount} completati",
-                $"{ActiveCount} attivi"
-            };
+            var parts = new List<string> { $"{CompletedCount}/{TotalCount} completati" };
+            if (ActiveCount > 0) parts.Add($"{ActiveCount} in download");
+            if (ConvertingCount > 0) parts.Add($"{ConvertingCount} in conversione");
 
             if (PendingCount > 0) parts.Add($"{PendingCount} in attesa");
             if (PausedCount > 0) parts.Add($"{PausedCount} in pausa");
@@ -157,6 +157,7 @@ public partial class SeriesGroup : ObservableObject
         OnPropertyChanged(nameof(TotalCount));
         OnPropertyChanged(nameof(CompletedCount));
         OnPropertyChanged(nameof(ActiveCount));
+        OnPropertyChanged(nameof(ConvertingCount));
         OnPropertyChanged(nameof(PendingCount));
         OnPropertyChanged(nameof(PausedCount));
         OnPropertyChanged(nameof(FailedCount));
