@@ -316,7 +316,12 @@ public partial class VideoboxTabViewModel : ObservableObject
     public bool MappingSummaryWarn => IsAfterApply ? RowsNotConfirmed > 0 : SftpFileCount > 0 && !MappingSummaryOk;
     public bool MappingSummaryInfo => !IsAfterApply && MappingItems.Count > 0 && SftpFileCount == 0;
     /// <summary>Post aperto ma tabella vuota: si mostra cosa fare.</summary>
-    public bool ShowMappingHint => SelectedPost != null && MappingItems.Count == 0;
+    public bool ShowMappingHint => SelectedPost != null && MappingItems.Count == 0 && !IsLoadingPost;
+
+    /// <summary>Post appena scelto in caricamento: tabella vuota con "Caricamento del post...".</summary>
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(ShowMappingHint))] private bool _isLoadingPost;
+    [ObservableProperty] private string _loadingPostTitle = "";
+    private int _postLoadSeq;
 
     private void UpdateMappingCounts()
     {
@@ -920,6 +925,14 @@ public partial class VideoboxTabViewModel : ObservableObject
 
     private async Task LoadPostDetailsAsync(int postId)
     {
+        // Scegliendo un altro post la tabella si svuota subito (prima restavano i link del post
+        // precedente finché non arrivava la risposta del forum). Se nel frattempo se ne sceglie un
+        // altro ancora, la risposta di questo viene ignorata.
+        int seq = ++_postLoadSeq;
+        MappingItems.Clear();
+        LastApplySummary = string.Empty;
+        LoadingPostTitle = _allPosts.FirstOrDefault(p => p.Id == postId)?.Title ?? "";
+        IsLoadingPost = true;
         try
         {
             IsBusy = true;
@@ -933,6 +946,7 @@ public partial class VideoboxTabViewModel : ObservableObject
                 StatusMessage = $"Il post {postId} non esiste più sul forum: tolto dalla lista.";
                 return;
             }
+            if (seq != _postLoadSeq) return;   // nel frattempo è stato scelto un altro post
             ApplyFreshPostData(postData);
             CurrentPostId = postData.id;
             CurrentPostTitle = postData.title;
@@ -962,7 +976,11 @@ public partial class VideoboxTabViewModel : ObservableObject
             StatusMessage = $"Caricati {MappingItems.Count} episodi.";
         }
         catch (Exception ex) { StatusMessage = $"Errore: {ex.Message}"; }
-        finally { IsBusy = false; }
+        finally
+        {
+            IsBusy = false;
+            if (seq == _postLoadSeq) IsLoadingPost = false;
+        }
     }
 
     /// <summary>Tabella degli episodi con i link del post, nell'ordine del forum.</summary>

@@ -168,7 +168,7 @@ public partial class OrganizerTabViewModel : ViewModelBase
     public string RemoteStartPath => OrganizerServer?.Path ?? _shared.SftpCurrentRemotePath;
 
     private string SharedSftpRemotePath => RemoteStartPath;
-    private bool SharedIsSftpConnected => RemoteService.IsConnected;
+    private bool SharedIsSftpConnected => (RemoteService as ISftpService)?.IsConnected == true;
     /// <summary>C'è almeno un server aperto (abilita la modalità Remoto).</summary>
     public bool IsSftpConnected => SftpServers.Count > 0;
     public bool HasSeveralServers => SftpServers.Count > 1;
@@ -180,6 +180,8 @@ public partial class OrganizerTabViewModel : ViewModelBase
         OnPropertyChanged(nameof(RemoteStartPath));
         // Cambiando server, le cartelle remote ripartono da quella aperta su quel server
         if (value != null && !OrganizeModeIsLocal) FillRemoteFolders(value.Path);
+        // In Locale: le cartelle remote ricordate erano dell'altro server, si riparte da quello nuovo
+        if (OrganizeModeIsLocal) _remotePaths = null;
     }
 
     private void OnSftpServersChanged()
@@ -312,6 +314,24 @@ public partial class OrganizerTabViewModel : ViewModelBase
         }
     }
 
+    /// <summary>Cartelle di una modalità (Locale o Remoto), ricordate separatamente.</summary>
+    private sealed record ModePaths(string Organize, string MergeDest, string SplitSource, string SplitDest, List<MergeSourceFolder> MergeSources);
+    private ModePaths? _localPaths, _remotePaths;
+
+    private ModePaths CapturePaths() =>
+        new(OrganizeFolder, MergeDestinationFolder, SplitSourceFolder, SplitDestinationFolder, MergeSourceFolders.ToList());
+
+    private void RestorePaths(ModePaths p)
+    {
+        OrganizeFolder = p.Organize;
+        MergeDestinationFolder = p.MergeDest;
+        SplitSourceFolder = p.SplitSource;
+        SplitDestinationFolder = p.SplitDest;
+        MergeSourceFolders.Clear();
+        foreach (var m in p.MergeSources) MergeSourceFolders.Add(m);
+        RenumberPriorities();
+    }
+
     private void OnOrganizeModeIsLocalChanged(bool value)
     {
         OnPropertyChanged(nameof(OrganizeFolderLabel));
@@ -319,7 +339,32 @@ public partial class OrganizerTabViewModel : ViewModelBase
         OnPropertyChanged(nameof(SplitSourceLabel));
         OnPropertyChanged(nameof(SplitDestinationLabel));
 
-        if (!value && SharedIsSftpConnected) FillRemoteFolders(SharedSftpRemotePath);
+        // Locale e Remoto hanno ciascuna le sue cartelle: prima, cambiando modalità, restava il
+        // percorso dell'altra e si creavano cartelle dove non si voleva. Si ritrovano quelle usate
+        // l'ultima volta in quella modalità (la prima volta: cartella base / cartella del server).
+        var current = CapturePaths();
+        if (value)
+        {
+            _remotePaths = current;
+            var b = _settings.Current.BaseDownloadFolder;
+            RestorePaths(_localPaths ?? new ModePaths(b, b, "", b, new List<MergeSourceFolder>()));
+        }
+        else
+        {
+            _localPaths = current;
+            var r = SharedIsSftpConnected ? SharedSftpRemotePath : "";
+            RestorePaths(_remotePaths ?? new ModePaths(r, r, r, r, new List<MergeSourceFolder>()));
+        }
+
+        // Le proposte calcolate nell'altra modalità non vanno applicate qui
+        if (PreviewOperations.Count + MergePreviewOperations.Count + SplitPreviewOperations.Count > 0)
+        {
+            PreviewOperations = new();
+            MergePreviewOperations = new();
+            SplitPreviewOperations = new();
+            OrganizeStatusMessage = MergeStatusMessage = SplitStatusMessage =
+                $"Modalità {(value ? "Locale" : "Remoto")}: proposte svuotate, rifai l'anteprima.";
+        }
     }
 
     partial void OnOrganizePatternChanged(string value) => OnPropertyChanged(nameof(OrganizePatternPreview));

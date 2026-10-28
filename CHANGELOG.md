@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.4.9] — 2026-10-28
+
+### 🎬 Videobox Corrector
+- **Cambio di post**: scegliendo un altro post la tabella si svuota subito e mostra "Caricamento del post..." con il titolo, invece di lasciare i link del post precedente finché il forum non risponde. Scegliendo più post di fila conta solo l'ultimo.
+
+### 🗂 Organizza file
+- **Cartelle separate per Locale e Remoto**: ogni modalità ricorda le proprie (cartella, destinazioni, sorgente di Dividi, elenco di Unisci). Cambiando modalità ritrovi quelle usate lì, invece di restare con il percorso dell'altra e creare cartelle dove non volevi.
+- Al cambio di modalità le proposte già calcolate vengono svuotate: un'anteprima fatta in locale non si può applicare in remoto (e viceversa).
+
 ## [1.4.8] — 2026-10-28
 
 ### 📡 SFTP

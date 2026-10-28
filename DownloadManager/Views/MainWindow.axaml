@@ -1482,7 +1482,7 @@
                                     <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
                                     <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}">
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">A cosa serve</Run><LineBreak/>
-                                        Rinomina, unisce e divide cartelle di episodi in blocco, sia sul PC (Locale) sia sul server (Remoto, serve la connessione SFTP). Ogni operazione si vede prima in anteprima e si può annullare.<LineBreak/>
+                                        Rinomina, unisce e divide cartelle di episodi in blocco, sia sul PC (Locale) sia sul server (Remoto, serve la connessione SFTP). Ogni operazione si vede prima in anteprima e si può annullare. Locale e Remoto ricordano ciascuno le proprie cartelle: cambiando modalità ritrovi quelle che avevi usato lì, e le proposte dell'altra modalità vengono svuotate.<LineBreak/>
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Le tre modalità</Run><LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Singola cartella:</Run> rinomina i file di una cartella secondo il pattern (es. "ep1.mp4" diventa "Frieren - 001.mp4"). "Episodio iniziale" fissa il numero da cui partire.<LineBreak/>
@@ -3415,6 +3415,14 @@
                                                 </DataGrid.Columns>
                                             </DataGrid>
                                             </h:FillSlot>
+
+                                            <!-- Post appena scelto: caricamento -->
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10" MaxWidth="380" IsVisible="{Binding IsLoadingPost}">
+                                                <ProgressBar IsIndeterminate="True" Width="180" Height="4" MinWidth="0" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="Caricamento del post..." FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="{Binding LoadingPostTitle}" FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                                           Foreground="{DynamicResource AppTextMutedBrush}" MaxLines="2" TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
 
                                             <!-- Post aperto ma tabella vuota: cosa fare -->
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" MaxWidth="360" IsVisible="{Binding ShowMappingHint}">
