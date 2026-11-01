@@ -155,7 +155,7 @@ public sealed class WebStreamCheckerService
     /// Esito da salvare e mostrare: le parti non richieste restano quelle già salvate (se il file
     /// non è cambiato), altrimenti vuote.
     /// </summary>
-    private static WebStreamResult Merge(WebStreamResult fresh, WebStreamResult? saved, bool web, bool lang)
+    private static WebStreamResult Merge(WebStreamResult fresh, WebStreamResult? saved, bool web, bool lang, bool duration)
     {
         var keep = saved != null && saved.Matches(fresh.Size, fresh.Modified) ? saved : null;
         var r = fresh;
@@ -174,6 +174,13 @@ public sealed class WebStreamCheckerService
                 LangDetail = keep?.LangDetail ?? "",
                 // La lingua tenuta è stata calcolata con le regole di allora
                 RulesVersion = keep?.RulesVersion ?? RulesVersion
+            };
+        // Durata non richiesta: si tiene quella già salvata (o nessuna), anche se la lettura la conosce
+        if (!duration)
+            r = r with
+            {
+                Duration = keep?.Duration,
+                DurationApprox = keep?.DurationApprox ?? false
             };
         return r;
     }
@@ -361,7 +368,7 @@ public sealed class WebStreamCheckerService
                     // Fermata durante la lettura: l'esito potrebbe essere falsato, non si salva
                     ct.ThrowIfCancellationRequested();
 
-                    var result = Merge(fresh, saved.GetValueOrDefault(v.FullPath), web, lang);
+                    var result = Merge(fresh, saved.GetValueOrDefault(v.FullPath), web, lang, duration);
                     await _repo.SaveAsync(serverKey, result);
 
                     Interlocked.Increment(ref checkedNow);

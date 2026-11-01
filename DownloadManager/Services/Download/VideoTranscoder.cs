@@ -13,7 +13,6 @@ namespace DownloadManager.Services.Download;
 /// </summary>
 public static class VideoTranscoder
 {
-    private static readonly SemaphoreSlim OneAtATime = new(1, 1);
 
     /// <summary>
     /// Stereo con i dialoghi (canale centrale) pieni e volume normalizzato a -16 LUFS, come i servizi
@@ -30,12 +29,13 @@ public static class VideoTranscoder
     /// ("In attesa...", "Conversione H.264: 37%"). True se riuscito; altrimenti il file resta com'era.
     /// </summary>
     public static async Task<bool> ConvertAsync(string ffmpeg, string file, VideoConversion mode,
-        ILogger logger, Action<string> progress, CancellationToken ct)
+        ILogger logger, Action<string> progress, CancellationToken ct, Func<bool>? isPriority = null)
     {
         if (mode is VideoConversion.Original or VideoConversion.Mp4Copy) return true;
 
         progress("In coda per conversione");
-        await OneAtATime.WaitAsync(ct);
+        // Una alla volta; i forzati (fulmine) passano davanti a quelli in attesa
+        await ConversionQueue.EnterAsync(isPriority ?? (() => false), ct);
         try
         {
             var duration = await ProbeDurationAsync(ffmpeg, file, ct);
@@ -76,7 +76,7 @@ public static class VideoTranscoder
         }
         finally
         {
-            OneAtATime.Release();
+            ConversionQueue.Release();
         }
     }
 

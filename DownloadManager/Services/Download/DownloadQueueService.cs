@@ -358,11 +358,28 @@ public class DownloadQueueService
 
     public void ForceQueueItem(DownloadItem item)
     {
+        if (PrioritizeActive(item)) { QueueChanged?.Invoke(); return; }
         if (!EnqueueForced(item)) return;
         MarkRunning(item.Category);
         MakeRoomForPriority(item.Category);
         QueueChanged?.Invoke();
         TryDispatch();
+    }
+
+    /// <summary>
+    /// Fulmine su un episodio già in corso (in download o già scaricato e in attesa di conversione):
+    /// non serve rimetterlo in coda, diventa prioritario per la coda di conversione e passa davanti
+    /// agli altri in attesa. true = era in corso.
+    /// </summary>
+    private bool PrioritizeActive(DownloadItem item)
+    {
+        lock (_queueLock) if (!_active.ContainsKey(item.Id)) return false;
+        if (item.IsPriority) return true;
+        item.IsPriority = true;
+        if (item.ErrorMessage.StartsWith("In coda per conversione", StringComparison.OrdinalIgnoreCase))
+            item.ErrorMessage = "In coda per conversione (forzato)";
+        _logger.LogInformation("[QUEUE] {File}: forzato, passa avanti nella coda di conversione", item.FileName);
+        return true;
     }
 
     /// <summary>Mette l'item in cima alla coda (dietro gli altri forzati). false = non serve.</summary>
@@ -400,7 +417,7 @@ public class DownloadQueueService
         foreach (var item in group.Items.ToList())
         {
             if (item.Status == DownloadStatus.Completed) continue;
-            lock (_queueLock) if (_active.ContainsKey(item.Id)) continue;
+            if (PrioritizeActive(item)) continue;
             if (EnqueueForced(item)) categories.Add(item.Category);
         }
         foreach (var c in categories)
@@ -1094,10 +1111,31 @@ public class DownloadQueueService
         TryDispatch();
     }
 
+    /// <summary>
+    /// Download finito, l'episodio passa alla lavorazione del file (copia in MP4, unione, attesa e
+    /// conversione): non occupa più uno slot dei download paralleli, così parte il successivo.
+    /// Resta tra quelli in corso (si può ancora fermare) finché la lavorazione non finisce.
+    /// </summary>
+    private void ReleaseDownloadSlot(DownloadItem item)
+    {
+        bool released;
+        lock (_queueLock) released = _active.ContainsKey(item.Id) && _activeCategory.Remove(item.Id);
+        if (!released) return;
+        _logger.LogInformation("[QUEUE] {File}: download finito, slot libero durante la lavorazione", item.FileName);
+        QueueChanged?.Invoke();
+        TryDispatch();
+    }
+
     private async Task RunItemAsync(DownloadItem item, CancellationTokenSource cts)
     {
         bool completed = false;
         bool finalFailure = false;
+        void OnItemChanged(object? s, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(DownloadItem.IsPostProcessing) && item.IsPostProcessing)
+                ReleaseDownloadSlot(item);
+        }
+        item.PropertyChanged += OnItemChanged;
         try
         {
             QueueChanged?.Invoke();
@@ -1157,6 +1195,7 @@ public class DownloadQueueService
         }
         finally
         {
+            item.PropertyChanged -= OnItemChanged;
             Dispatcher.UIThread.Post(() =>
             {
                 item.PauseRequested = false;

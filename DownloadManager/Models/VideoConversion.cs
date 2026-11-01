@@ -14,7 +14,7 @@ public enum VideoConversion
     H264Cpu = 2,
     /// <summary>H.264 + AAC ricodificati con la scheda video (NVENC/QSV/AMF): più veloce, file più grandi.</summary>
     H264Gpu = 3,
-    /// <summary>.mkv copiato in .mp4 senza ricodifica, più controllo/riparazione dei .mp4 difettosi.</summary>
+    /// <summary>.mkv copiato in .mp4 senza ricodifica (nessuna traccia ricodificata), più controllo/riparazione dei .mp4 difettosi.</summary>
     Mp4Copy = 4,
     /// <summary>Variante "High Definition" di Maxstream (la migliore dopo l'originale), poi come Mp4Copy.</summary>
     MaxstreamHd = 5,
@@ -47,11 +47,11 @@ public record VideoConversionOption(VideoConversion Mode, string Title, string D
             "senza controlli né modifiche a video, audio e sottotitoli. È pronto appena termina il download. " +
             "Indicato per VLC, PC e Smart TV; non adatto ai player web, e un MP4 difettoso all'origine resta tale."),
         new VideoConversionOption(VideoConversion.Mp4Copy, "Copia in MP4 (senza ricodifica)",
-            "Il video viene trasferito in un contenitore MP4 così com'è (remux): nessuna perdita di qualità. Se il file è già MP4 " +
-            "viene controllato e, se necessario, riparato (es. video che non si apre). Restano tutte le tracce audio e i sottotitoli " +
-            "testuali, con l'italiano come prima traccia audio. L'audio che i browser non riproducono (Dolby AC3/E-AC3, DTS, TrueHD) " +
-            "diventa AAC con gli stessi canali e senza cambiare il volume: così si sente anche nei player web. Nei browser il video " +
-            "HEVC (H.265) può comunque non essere riprodotto. Tempo: circa 1 minuto per un film (2-3 se l'audio va convertito)."),
+            "Video, audio e sottotitoli vengono trasferiti in un contenitore MP4 così come sono (remux): nessuna ricodifica e " +
+            "nessuna perdita di qualità. Se il file è già MP4 viene controllato e, se necessario, riparato (es. video che non si apre). " +
+            "Restano tutte le tracce audio e i sottotitoli testuali, con l'italiano come prima traccia audio. L'audio resta quello " +
+            "originale: se è Dolby AC3/E-AC3 o DTS, nei player web il video può restare muto (per quello c'è \"MP4 + audio AAC\"). " +
+            "Se l'MP4 non può contenere l'audio il file resta nel formato originale. Tempo: circa 1 minuto per un film."),
         new VideoConversionOption(VideoConversion.AacAudio, "MP4 + audio AAC",
             "Come \"Copia in MP4\", ma ogni traccia audio viene ricodificata in AAC stereo a 192 kbps: downmix con i dialoghi in " +
             "primo piano e volume normalizzato a -16 LUFS (lo standard dello streaming, più alto dell'originale). " +
@@ -59,8 +59,8 @@ public record VideoConversionOption(VideoConversion Mode, string Title, string D
             "è però riprodotto solo da Edge/Chrome con scheda video recente e da Safari. Tempo: circa 3-4 minuti per un film."),
         new VideoConversionOption(VideoConversion.MaxstreamHd, "Maxstream HD (qualità massima dopo l'originale)",
             "Invece del file originale si scarica la variante \"High Definition\" preparata da Maxstream: la qualità più alta dopo " +
-            "l'originale, spesso un file più leggero. Poi si lavora come \"Copia in MP4\": controllo del file, italiano come prima " +
-            "traccia e audio AAC se il browser non lo riproduce. Se la variante HD non c'è si scarica la \"Standard Quality\" (e l'originale solo se mancano entrambe). " +
+            "l'originale, spesso un file più leggero. Poi si lavora come \"Copia in MP4\": controllo del file e italiano come prima " +
+            "traccia, senza ricodificare l'audio. Se la variante HD non c'è si scarica la \"Standard Quality\" (e l'originale solo se mancano entrambe). " +
             "Tempo: circa 1 minuto per un film."),
         new VideoConversionOption(VideoConversion.MaxstreamHdLoud, "Maxstream HD + audio aumentato",
             "Come \"Maxstream HD\", poi ogni traccia audio viene ricodificata in AAC stereo a 192 kbps con i dialoghi in primo piano " +

@@ -471,6 +471,7 @@
                                         <Button ToolTip.Tip="Seleziona tutti gli episodi della lista" Content="Seleziona tutti" Click="OnSelectAllEpisodesClick" IsEnabled="{Binding CanInteractWithEpisodes}"/>
                                         <Button ToolTip.Tip="Toglie la selezione a tutti gli episodi" Content="Deseleziona" Click="OnDeselectAllEpisodesClick" IsEnabled="{Binding CanInteractWithEpisodes}"/>
                                         <Button ToolTip.Tip="Inverte la selezione degli episodi" Content="Inverti" Click="OnInvertEpisodeSelectionClick" IsEnabled="{Binding CanInteractWithEpisodes}"/>
+                                        <Button ToolTip.Tip="Apri la pagina dell'anime nel browser" Click="OnOpenSelectedAnimeInBrowserClick"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconGlobe}"/><TextBlock Text="Apri nel browser"/></StackPanel></Button>
                                     </StackPanel>
 
                                     <Panel>
@@ -1106,6 +1107,7 @@
                                         <Button ToolTip.Tip="Seleziona tutti gli episodi della lista" Content="Seleziona tutti" Click="OnStreamingSelectAllEpisodesClick" IsEnabled="{Binding CanInteractWithEpisodes}"/>
                                         <Button ToolTip.Tip="Toglie la selezione a tutti gli episodi" Content="Deseleziona" Click="OnStreamingDeselectAllEpisodesClick" IsEnabled="{Binding CanInteractWithEpisodes}"/>
                                         <Button ToolTip.Tip="Inverte la selezione degli episodi" Content="Inverti" Click="OnStreamingInvertEpisodeSelectionClick" IsEnabled="{Binding CanInteractWithEpisodes}"/>
+                                        <Button ToolTip.Tip="Apri la pagina della serie nel browser" Click="OnOpenSelectedResultInBrowserClick"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconGlobe}"/><TextBlock Text="Apri nel browser"/></StackPanel></Button>
                                         <Button ToolTip.Tip="Interrompe l'accodamento in corso (gli episodi già accodati restano in coda)" Classes="danger" Command="{Binding CancelBatchCommand}" IsVisible="{Binding IsBatchActive}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconStop}"/><TextBlock Text="Stop accodamento"/></StackPanel></Button>
                                     </WrapPanel>
 
@@ -2346,7 +2348,7 @@
                                                                         </DataTemplate>
                                                                     </DataGridTemplateColumn.CellTemplate>
                                                                 </DataGridTemplateColumn>
-                                                                <DataGridTextColumn Header="Nome" Binding="{Binding Name}" Width="*" MinWidth="150"/>
+                                                                <DataGridTextColumn Header="Nome" Binding="{Binding Name}" Width="300" MinWidth="150"/>
                                                                 <DataGridTemplateColumn Header="Web" Width="170" MinWidth="90">
                                                                     <DataGridTemplateColumn.CellTemplate>
                                                                         <DataTemplate x:DataType="models:SftpRemoteEntry">
@@ -2417,7 +2419,7 @@
                                                                 </DataGridTemplateColumn>
                                                                 <DataGridTextColumn Header="Contenuto" Binding="{Binding ContentsInfo}" Width="190" MinWidth="100"/>
                                                                 <DataGridTextColumn Header="Dim." Binding="{Binding SizeText}" Width="90" MinWidth="70"/>
-                                                                <DataGridTextColumn Header="Ultima modifica" Binding="{Binding Modified, Mode=OneWay, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" Width="130" MinWidth="120"/>
+                                                                <DataGridTextColumn Header="Ultima modifica" Binding="{Binding Modified, Mode=OneWay, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" Width="*" MinWidth="130"/>
                                                             </DataGrid.Columns>
                                                         </DataGrid>
                                                         </h:FillSlot>
@@ -2529,7 +2531,7 @@
                                                                     </DataTemplate>
                                                                 </DataGridTemplateColumn.CellTemplate>
                                                             </DataGridTemplateColumn>
-                                                            <DataGridTextColumn Header="Nome" Binding="{Binding Name}" Width="*" MinWidth="150"/>
+                                                            <DataGridTextColumn Header="Nome" Binding="{Binding Name}" Width="300" MinWidth="150"/>
                                                             <DataGridTemplateColumn Header="Web" Width="170" MinWidth="90">
                                                                 <DataGridTemplateColumn.CellTemplate>
                                                                     <DataTemplate x:DataType="models:LocalFileEntry">
@@ -2599,7 +2601,7 @@
                                                                 </DataGridTemplateColumn.CellTemplate>
                                                             </DataGridTemplateColumn>
                                                             <DataGridTextColumn Header="Dim." Binding="{Binding SizeText}" Width="90" MinWidth="70"/>
-                                                            <DataGridTextColumn Header="Ultima modifica" Binding="{Binding Modified, Mode=OneWay, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" Width="130" MinWidth="120"/>
+                                                            <DataGridTextColumn Header="Ultima modifica" Binding="{Binding Modified, Mode=OneWay, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" Width="*" MinWidth="130"/>
                                                         </DataGrid.Columns>
                                                     </DataGrid>
                                                     </h:FillSlot>
@@ -2784,7 +2786,7 @@
                                                                     </DataTemplate>
                                                                 </DataGridTemplateColumn.CellTemplate>
                                                             </DataGridTemplateColumn>
-                                                            <DataGridTextColumn Header="Nome" Binding="{Binding Name}" Width="*" MinWidth="150"/>
+                                                            <DataGridTextColumn Header="Nome" Binding="{Binding Name}" Width="300" MinWidth="150"/>
                                                             <DataGridTemplateColumn Header="Web" Width="170" MinWidth="90">
                                                                 <DataGridTemplateColumn.CellTemplate>
                                                                     <DataTemplate x:DataType="models:SftpRemoteEntry">
@@ -2855,7 +2857,7 @@
                                                             </DataGridTemplateColumn>
                                                             <DataGridTextColumn Header="Contenuto" Binding="{Binding ContentsInfo}" Width="190" MinWidth="100"/>
                                                             <DataGridTextColumn Header="Dim." Binding="{Binding SizeText}" Width="90" MinWidth="70"/>
-                                                            <DataGridTextColumn Header="Ultima modifica" Binding="{Binding Modified, Mode=OneWay, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" Width="130" MinWidth="120"/>
+                                                            <DataGridTextColumn Header="Ultima modifica" Binding="{Binding Modified, Mode=OneWay, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" Width="*" MinWidth="130"/>
                                                         </DataGrid.Columns>
                                                     </DataGrid>
                                                     </h:FillSlot>

@@ -91,7 +91,7 @@ public partial class DownloadItem : ObservableObject
     private static readonly string[] PostPhases =
     {
         "Copia in MP4", "Controllo del file", "Riparazione", "Audio italiano", "Audio per i player web", "Unione",
-        "Imprimo", "Conversione", "In attesa"
+        "Imprimo", "Conversione", "In attesa", "In coda per conversione", "Ripresa della lavorazione"
     };
 
     /// <summary>Download finito, l'app sta lavorando sul file (unione tracce, conversione, copia in MP4...).</summary>

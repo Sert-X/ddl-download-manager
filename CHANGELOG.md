@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.5.2] — 2026-11-01
+
+### 🎬 Film/Serie Download (CB01)
+- **"Copia in MP4" ora copia e basta**: video, audio e sottotitoli passano nel contenitore MP4 così come sono, senza nessuna ricodifica (prima l'audio AC3/E-AC3/DTS diventava AAC, come in "MP4 + audio AAC"). Se l'audio non può stare in un MP4 il file resta nel formato originale. Per l'audio che si sente nei player web c'è "MP4 + audio AAC". Lo stesso vale per "Maxstream HD".
+- **Ripresa dopo il riavvio**: chiudendo l'app durante la lavorazione di un file (copia in MP4, attesa o conversione), alla riapertura l'episodio restava "in download" senza fare nulla. Ora, se il file era già scaricato, l'app salta il download (e la nuova richiesta del link) e riprende la lavorazione da dove serve, togliendo i file temporanei rimasti.
+
+### ⬇️ Code di download (Anime e Film/Serie)
+- **Le conversioni non bloccano più i download**: un episodio "In coda per conversione" risultava ancora in download e teneva occupato uno slot dei download paralleli, così i successivi non partivano. Ora appena un file finisce di scaricare libera il suo posto e parte il prossimo; nella coda e nella barra di stato risulta "in conversione".
+- **Il fulmine vale anche per le conversioni**: un episodio forzato passa davanti agli altri in attesa di conversione (anche premendo il fulmine quando è già in coda di conversione, o sulla serie intera). La conversione in corso non viene interrotta.
+- **"Apri nel browser" anche per le serie**: nel Dettaglio di Film/Serie e di Anime, accanto a "Inverti", apre la pagina sul sito.
+
+### 📡 SFTP
+- **La spunta "Durata" ora conta**: con la casella non spuntata la verifica non salva la durata (resta quella di prima o la colonna vuota), come già per codec e lingua.
+- **Colonna "Nome" ridimensionabile** nelle tabelle dei file: prima la sua larghezza non si poteva cambiare. Lo spazio libero va ora all'ultima colonna.
+
 ## [1.5.1] — 2026-11-01
 
 ### 📡 SFTP — Controllo della durata

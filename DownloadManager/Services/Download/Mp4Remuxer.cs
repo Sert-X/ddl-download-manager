@@ -33,7 +33,12 @@ public static class Mp4Remuxer
 
     /// <summary>Restituisce il percorso del .mp4 creato, oppure null (il file originale resta intatto).</summary>
     /// <param name="webAudio">Per i player web: anche AC3/E-AC3 diventano AAC (il video resta copiato).</param>
-    public static async Task<string?> ConvertAsync(string ffmpegPath, string source, ILogger logger, CancellationToken ct = default, bool webAudio = false)
+    /// <param name="copyOnly">
+    /// Solo cambio di contenitore ("Copia in MP4"): video, audio e sottotitoli copiati, mai ricodificati.
+    /// Se l'MP4 non può contenere l'audio, si restituisce null e il file resta nel formato originale.
+    /// </param>
+    public static async Task<string?> ConvertAsync(string ffmpegPath, string source, ILogger logger, CancellationToken ct = default,
+        bool webAudio = false, bool copyOnly = false)
     {
         var target = Path.ChangeExtension(source, ".mp4");
         var temp = target + ".converting";
@@ -42,7 +47,7 @@ public static class Mp4Remuxer
         var audioMap = AudioTracks.MapArgs(await AudioTracks.ItalianFirstOrderAsync(ffmpegPath, source, ct));
 
         // DTS, TrueHD, Vorbis, FLAC, PCM...: ffmpeg li mette nell'MP4 ma molti lettori non li riproducono
-        bool copyAudio = audioCodecs.All((webAudio ? WebFriendlyAudio : Mp4FriendlyAudio).Contains);
+        bool copyAudio = copyOnly || audioCodecs.All((webAudio ? WebFriendlyAudio : Mp4FriendlyAudio).Contains);
         var audio = copyAudio ? new[] { "-c:a", "copy" } : AacAudio;
         if (!copyAudio)
             logger.LogInformation("[MP4] Audio {Codecs} non adatto all'MP4: verrà convertito in AAC", string.Join(", ", audioCodecs));
@@ -56,12 +61,16 @@ public static class Mp4Remuxer
             ("senza sottotitoli", new[] { "-map", "0:V" }.Concat(audioMap).Concat(new[] { "-c:v", "copy", "-sn" }).Concat(audio).ToArray()),
             ("audio in AAC", new[] { "-map", "0:V" }.Concat(audioMap).Concat(new[] { "-c:v", "copy", "-sn" }).Concat(AacAudio).ToArray()),
         };
+        // Solo copia: niente tentativo con l'audio in AAC
+        if (copyOnly) attempts = attempts.Take(2).ToArray();
 
         foreach (var (name, attemptArgs) in attempts)
         {
             ct.ThrowIfCancellationRequested();
             var args = new List<string> { "-hide_banner", "-nostdin", "-y", "-i", source };
             args.AddRange(attemptArgs);
+            // Solo copia: si ammettono nell'MP4 anche gli audio che ffmpeg considera "sperimentali" (es. TrueHD)
+            if (copyOnly) args.AddRange(new[] { "-strict", "-2" });
             // HEVC con tag hvc1: altrimenti il lettore di Windows e i dispositivi Apple non lo aprono
             if (isHevc) args.AddRange(new[] { "-tag:v", "hvc1" });
             args.AddRange(new[] { "-map_metadata", "0", "-movflags", "+faststart", "-f", "mp4", temp });

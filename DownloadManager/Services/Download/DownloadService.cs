@@ -163,6 +163,26 @@ public partial class DownloadService : IDownloadService
     {
         if (ct.IsCancellationRequested) throw new OperationCanceledException();
 
+        // App chiusa durante la lavorazione (copia in MP4, conversione...): il file è già scaricato,
+        // si riprende da lì invece di riscaricare (e di richiedere di nuovo il link al sito)
+        if (FindFinishedDownload(item) is { } finished)
+        {
+            _logger.LogInformation("[RIPRESA] {File}: download già finito, riprendo la lavorazione", Path.GetFileName(finished));
+            DeleteProcessingLeftovers(finished);
+            SetUi(() =>
+            {
+                item.Status = DownloadStatus.Downloading;
+                item.ErrorMessage = "Ripresa della lavorazione...";
+                item.DestinationPath = finished;
+                item.DownloadedBytes = item.TotalBytes;
+                item.SpeedBytesPerSecond = 0;
+            });
+            long size = item.TotalBytes;
+            try { size = new FileInfo(finished).Length; } catch { }
+            await PostProcessAsync(item, finished, size, ct);
+            return;
+        }
+
         if (item.UrlExtractor != null && ShouldReextractUrl(item.Url))
         {
             SetUi(() =>
@@ -289,8 +309,20 @@ public partial class DownloadService : IDownloadService
         if (File.Exists(item.DestinationPath)) File.Delete(item.DestinationPath);
         File.Move(tempPath, item.DestinationPath);
 
+        await PostProcessAsync(item, item.DestinationPath, totalSize, ct);
+    }
+
+
+    /// <summary>
+    /// Lavorazione del file a fine download (CB01): copia in MP4, controllo e riparazione, audio
+    /// italiano per primo, conversione scelta. Si riprende da qui anche dopo un riavvio dell'app.
+    /// </summary>
+    /// <param name="downloadedPath">File scaricato (o il suo .mp4, se la copia era già fatta).</param>
+    /// <param name="totalSize">Dimensione scaricata (si usa se il file non si può leggere).</param>
+    private async Task PostProcessAsync(DownloadItem item, string downloadedPath, long totalSize, CancellationToken ct)
+    {
         // CB01: "Originale" consegna il file così com'è; tutte le altre scelte partono da un .mp4
-        var finalPath = item.DestinationPath;
+        var finalPath = downloadedPath;
         var conversion = item.Conversion.FileProcessing();   // Maxstream HD → come Copia in MP4 / audio AAC
         var processCb01 = item.ProviderKey == "CB01" && conversion != VideoConversion.Original;
         var rewritten = false;   // file già riscritto da ffmpeg (audio italiano già per primo)
@@ -305,8 +337,9 @@ public partial class DownloadService : IDownloadService
             else
             {
                 SetUi(() => item.ErrorMessage = "Copia in MP4...");
+                // "Copia in MP4": solo cambio di contenitore, nessuna ricodifica (l'audio AAC è "MP4 + audio AAC")
                 var mp4 = await Mp4Remuxer.ConvertAsync(ffmpeg, finalPath, _logger, ct,
-                    webAudio: conversion == VideoConversion.Mp4Copy);
+                    copyOnly: conversion == VideoConversion.Mp4Copy);
                 if (mp4 != null)
                 {
                     finalPath = mp4;
@@ -335,18 +368,16 @@ public partial class DownloadService : IDownloadService
                 }
             }
 
-            // "Copia in MP4" su un .mp4: si riscrive se l'italiano non è la prima traccia audio, o se
-            // l'audio non si sente nei browser (AC3/E-AC3: nel player web il video era muto) e va in AAC.
-            // Il video resta copiato. Le conversioni AAC/H.264 qui sotto fanno già entrambe le cose.
+            // "Copia in MP4" su un .mp4: si riscrive solo se l'italiano non è la prima traccia audio.
+            // Le tracce si copiano così come sono (nessuna ricodifica: per l'audio AAC c'è "MP4 + audio AAC").
             var ffmpegForOrder = _ffmpegLocator.GetFfmpegPath();
             if (conversion == VideoConversion.Mp4Copy && !string.IsNullOrEmpty(ffmpegForOrder))
             {
-                bool needsWebAudio = await Mp4Remuxer.NeedsWebAudioAsync(ffmpegForOrder, pathToCheck, ct);
                 bool needsOrder = !rewritten && await AudioTracks.NeedsReorderAsync(ffmpegForOrder, pathToCheck, ct);
-                if (needsWebAudio || needsOrder)
+                if (needsOrder)
                 {
-                    SetUi(() => item.ErrorMessage = needsWebAudio ? "Audio per i player web (AAC)..." : "Audio italiano per primo...");
-                    await Mp4Remuxer.RewriteAsync(ffmpegForOrder, pathToCheck, _logger, ct, aacAudio: needsWebAudio);
+                    SetUi(() => item.ErrorMessage = "Audio italiano per primo...");
+                    await Mp4Remuxer.RewriteAsync(ffmpegForOrder, pathToCheck, _logger, ct);
                 }
             }
             SetUi(() => item.ErrorMessage = string.Empty);
@@ -361,7 +392,7 @@ public partial class DownloadService : IDownloadService
                 _logger.LogWarning("[CONVERSIONE] ffmpeg non trovato: {File} resta com'è", finalPath);
             else
                 await VideoTranscoder.ConvertAsync(ffmpegPath, finalPath, conversion, _logger,
-                    msg => SetUi(() => item.ErrorMessage = msg), ct);
+                    msg => SetUi(() => item.ErrorMessage = msg), ct, () => item.IsPriority);
             SetUi(() => item.ErrorMessage = string.Empty);
         }
 
@@ -377,6 +408,38 @@ public partial class DownloadService : IDownloadService
             item.SpeedBytesPerSecond = 0;
         });
         await _repository.ClearChunksAsync(item.Id);
+    }
+
+    /// <summary>
+    /// Download CB01 già finito in una sessione precedente (app chiusa durante la lavorazione):
+    /// nessun file parziale ".part" e il file completo presente, così com'è o già copiato in .mp4.
+    /// Restituisce il file da cui riprendere la lavorazione, oppure null (si scarica normalmente).
+    /// </summary>
+    private static string? FindFinishedDownload(DownloadItem item)
+    {
+        if (item.ProviderKey != "CB01" || item.Conversion.FileProcessing() == VideoConversion.Original) return null;
+        var dest = item.DestinationPath;
+        // TotalBytes > 0: il download era partito (un episodio nuovo con un file omonimo non conta)
+        if (string.IsNullOrEmpty(dest) || item.TotalBytes <= 0 || File.Exists(dest + ".part")) return null;
+        if (File.Exists(dest)) return dest;
+        var mp4 = Path.ChangeExtension(dest, ".mp4");
+        return File.Exists(mp4) ? mp4 : null;
+    }
+
+    /// <summary>File temporanei di una copia, riscrittura o conversione interrotta.</summary>
+    private void DeleteProcessingLeftovers(string file)
+    {
+        var mp4 = Path.ChangeExtension(file, ".mp4");
+        foreach (var leftover in new[] { mp4 + ".converting", mp4 + ".rewrite.mp4", mp4 + ".converting.mp4" })
+        {
+            try
+            {
+                if (!File.Exists(leftover)) continue;
+                File.Delete(leftover);
+                _logger.LogInformation("[RIPRESA] Tolto il file temporaneo di una lavorazione interrotta: {File}", Path.GetFileName(leftover));
+            }
+            catch (Exception ex) { _logger.LogWarning(ex, "[RIPRESA] File temporaneo non eliminato: {File}", leftover); }
+        }
     }
 
     // ============================================================
