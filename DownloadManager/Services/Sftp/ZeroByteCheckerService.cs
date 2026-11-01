@@ -19,10 +19,14 @@ internal enum ScanOutcome
 public sealed class ZeroByteCheckerService
 {
     private const int MaxDepth = 3;
-    private const int MaxFolders = 300;
+    /// <summary>Cartelle lette al massimo per ogni cartella analizzata (prima 300: /media/Anime non ci stava).</summary>
+    private const int MaxFolders = 3000;
     private const int MaxConsecutiveErrors = 5;
 
+    /// <summary>Senza risposte dal server per questo tempo si interrompe (non è più un limite al totale).</summary>
     private static readonly TimeSpan PerFolderTimeout = TimeSpan.FromSeconds(90);
+    /// <summary>Ultima cartella letta (per il controllo "il server non risponde più").</summary>
+    private long _lastProgressTicks;
     private static readonly TimeSpan AbortGracePeriod = TimeSpan.FromSeconds(10);
 
     private ISftpService _sftp;
@@ -47,12 +51,16 @@ public sealed class ZeroByteCheckerService
     }
 
     private CancellationTokenSource? _cts;
+    /// <summary>Cosa salva l'analisi in corso: file vuoti, contenuto (numero di file e cartelle).</summary>
+    private bool _scanZero = true, _scanContents = true;
 
     // ---- Salvataggio nel database (i risultati restano dopo la chiusura dell'app) ----
     private ZeroByteCheckRepository? _store;
     private string? _serverKey;
     /// <summary>Cartelle lette dal check in corso (per salvarne i risultati).</summary>
     private HashSet<string>? _scanCollector;
+    /// <summary>Contenuto delle sottocartelle lette dal check in corso (per salvarlo).</summary>
+    private Dictionary<string, string>? _subContentsCollector;
 
     /// <summary>I risultati salvati sono stati caricati (le righe mostrate vanno ricolorate).</summary>
     public event EventHandler? StoreLoaded;
@@ -80,13 +88,15 @@ public sealed class ZeroByteCheckerService
 
             foreach (var p in snap.CheckedParents) _checkedParents.Add(Normalize(p));
             var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var (path, contents) in snap.Folders)
+            foreach (var (path, contents, zeroChecked) in snap.Folders)
             {
                 var key = Normalize(path);
+                if (!string.IsNullOrEmpty(contents)) _contentsCache[key] = contents;
+                // Cartella analizzata solo per il contenuto: dei file vuoti non si sa nulla
+                if (!zeroChecked) continue;
                 known.Add(key);
                 _flagCache[key] = false;
                 _zeroFilesByFolder.TryAdd(key, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
-                if (!string.IsNullOrEmpty(contents)) _contentsCache[key] = contents;
             }
             foreach (var p in _checkedParents) known.Add(p);
 
@@ -174,6 +184,59 @@ public sealed class ZeroByteCheckerService
         if (string.IsNullOrEmpty(path)) return false;
         lock (_cacheLock)
             return _contentsCache.TryGetValue(Normalize(path), out contents!);
+    }
+
+    /// <summary>La cartella ha già un esito (file vuoti o contenuto): non serve analizzarla da sola.</summary>
+    public bool IsFolderKnown(string? path)
+    {
+        if (string.IsNullOrEmpty(path)) return false;
+        var key = Normalize(path);
+        lock (_cacheLock) return _flagCache.ContainsKey(key) || _contentsCache.ContainsKey(key);
+    }
+
+    /// <summary>
+    /// Esiti dell'analisi sulle righe mostrate: file vuoto, numero di file vuoti nelle cartelle
+    /// (anche in profondità) e contenuto. Le cartelle mai analizzate restano vuote.
+    /// </summary>
+    public void ApplyTo(IEnumerable<SftpRemoteEntry> entries)
+    {
+        var list = entries as IList<SftpRemoteEntry> ?? entries.ToList();
+        var dirs = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var e in list) if (e.IsDirectory) dirs[Normalize(e.FullPath)] = 0;
+
+        lock (_cacheLock)
+        {
+            // Ogni cartella con file vuoti li aggiunge a sé e a tutte quelle sopra che sono mostrate
+            if (dirs.Count > 0)
+                foreach (var (folder, files) in _zeroFilesByFolder)
+                {
+                    if (files.Count == 0) continue;
+                    var current = folder;
+                    while (true)
+                    {
+                        if (dirs.TryGetValue(current, out var n)) dirs[current] = n + files.Count;
+                        if (current.Length == 0 || current == "/") break;
+                        var up = Normalize(GetParent(current));
+                        if (up == current) break;
+                        current = up;
+                    }
+                }
+
+            foreach (var e in list)
+            {
+                if (!e.IsDirectory)
+                {
+                    e.HasZeroByteIssue = e.Size == 0;
+                    e.ZeroCount = null;
+                    continue;
+                }
+                var key = Normalize(e.FullPath);
+                bool known = _flagCache.TryGetValue(key, out var flag);
+                e.HasZeroByteIssue = known && flag;
+                e.ZeroCount = known ? dirs[key] : null;
+                e.ContentsInfo = _contentsCache.TryGetValue(key, out var info) ? info : string.Empty;
+            }
+        }
     }
 
     public void SetFolderFlag(string? path, bool hasZero)
@@ -432,14 +495,20 @@ public sealed class ZeroByteCheckerService
         RaiseStateChanged();
     }
 
-    public async Task RunCheckAsync(IReadOnlyList<SftpRemoteEntry> folders)
+    /// <param name="zero">Cerca i file vuoti (0 byte).</param>
+    /// <param name="contents">Conta file e cartelle (colonna Contenuto).</param>
+    /// <returns>false se l'hai fermata tu (o ne era già in corso un'altra): i controlli dopo non partono.</returns>
+    public async Task<bool> RunCheckAsync(IReadOnlyList<SftpRemoteEntry> folders, bool zero = true, bool contents = true)
     {
-        if (IsChecking) return;
+        if (IsChecking) return false;
+        if (!zero && !contents) return true;
+        _scanZero = zero;
+        _scanContents = contents;
 
         if (folders.Count == 0)
         {
             Completed?.Invoke(this, "Nessuna cartella da controllare.");
-            return;
+            return true;
         }
 
         // Si ricorda dove è stato avviato: lì le cartelle nuove o rinominate si controllano da sole
@@ -453,20 +522,22 @@ public sealed class ZeroByteCheckerService
 
         _cts = new CancellationTokenSource();
         var token = _cts.Token;
+        bool stopped = false;
 
         IsChecking = true;
-        ProgressStatus = "Avvio check 0-byte in corso...";
+        ProgressStatus = "Avvio analisi delle cartelle...";
         RaiseStateChanged();
 
         int scanned = 0;
         int flagged = 0;
         int checkedTop = 0;
         int consecutiveErrors = 0;
+        int totalDirs = 0, totalFiles = 0;
         bool abort = false;
         string finalMessage;
 
         // Un solo log importante: START del check
-        Log($"[ZERO-BYTE] START: {folders.Count} cartelle da controllare", important: true);
+        Log($"[ZERO-BYTE] START: {folders.Count} cartelle da analizzare (file vuoti: {zero}, contenuto: {contents})", important: true);
 
         try
         {
@@ -490,7 +561,7 @@ public sealed class ZeroByteCheckerService
 
                 checkedTop++;
 
-                ProgressStatus = $"Controllo {checkedTop}/{folders.Count}: {folder.Name}...";
+                ProgressStatus = $"Analisi {checkedTop}/{folders.Count}: {folder.Name}...";
                 RaiseStateChanged();
 
                 // Log per-cartella: solo Debug (importante=false)
@@ -500,9 +571,12 @@ public sealed class ZeroByteCheckerService
 
                 var scannedFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 _scanCollector = scannedFolders;
+                var subContents = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                _subContentsCollector = subContents;
                 var (outcome, hasZero, fileCount, dirCount) = await ScanWithWatchdogAsync(
                     folder.FullPath, token, folder.FullPath);
                 _scanCollector = null;
+                _subContentsCollector = null;
 
                 sw.Stop();
 
@@ -539,34 +613,49 @@ public sealed class ZeroByteCheckerService
                         continue;
                 }
 
-                var summary = $"{dirCount} cartelle, {fileCount} file";
-                SetFolderFlag(folder.FullPath, hasZero);
-                SetFolderContents(folder.FullPath, summary);
+                var summary = FormatContents(dirCount, fileCount);
+                if (zero) SetFolderFlag(folder.FullPath, hasZero);
+                if (contents) SetFolderContents(folder.FullPath, summary);
 
-                // Salvataggio: cartelle lette e i loro file a 0 byte
+                // Salvataggio: cartelle lette e i loro file a 0 byte, e/o il contenuto
                 if (_store != null && _serverKey != null)
                 {
-                    List<string> zeroFiles;
-                    lock (_cacheLock)
-                        zeroFiles = scannedFolders.SelectMany(f => _zeroFilesByFolder.TryGetValue(f, out var z)
-                            ? z.Select(n => f + "/" + n) : Enumerable.Empty<string>()).ToList();
-                    await _store.SaveCheckAsync(_serverKey, scannedFolders, zeroFiles, folder.FullPath, summary, GetParent(folder.FullPath));
+                    if (zero)
+                    {
+                        List<string> zeroFiles;
+                        lock (_cacheLock)
+                            zeroFiles = scannedFolders.SelectMany(f => _zeroFilesByFolder.TryGetValue(f, out var z)
+                                ? z.Select(n => f + "/" + n) : Enumerable.Empty<string>()).ToList();
+                        await _store.SaveCheckAsync(_serverKey, scannedFolders, zeroFiles, folder.FullPath,
+                            contents ? summary : null, GetParent(folder.FullPath));
+                    }
+                    else
+                        await _store.SaveContentsAsync(_serverKey, folder.FullPath, summary, GetParent(folder.FullPath));
+                    // Anche le sottocartelle lette hanno il loro contenuto (si vede entrando)
+                    if (contents && subContents.Count > 0)
+                        await _store.SaveContentsManyAsync(_serverKey, subContents);
                 }
-                FolderScanned?.Invoke(this, new ZeroByteFolderResult(folder.FullPath, hasZero, summary));
+                FolderScanned?.Invoke(this, new ZeroByteFolderResult(folder.FullPath, zero && hasZero, contents ? summary : ""));
 
-                if (hasZero) flagged++;
+                if (zero && hasZero) flagged++;
+                totalDirs += dirCount;
+                totalFiles += fileCount;
             }
 
+            var found = new List<string>();
+            if (zero) found.Add(flagged == 0 ? "nessuna contiene file vuoti"
+                : flagged == 1 ? "1 contiene file vuoti (in rosso)" : $"{flagged} contengono file vuoti (in rosso)");
+            if (contents) found.Add($"in tutto {FormatContents(totalDirs, totalFiles)}");
+            var summaryText = string.Join("; ", found);
+            stopped = token.IsCancellationRequested;
             if (token.IsCancellationRequested)
-                finalMessage = $"Check interrotto: {checkedTop}/{folders.Count} cartelle ({flagged} con file vuoti).";
+                finalMessage = $"Analisi interrotta: {checkedTop}/{folders.Count} cartelle ({summaryText}).";
             else if (scanned >= MaxFolders)
-                finalMessage = $"Controllate {checkedTop} cartelle (limite {MaxFolders}): {flagged} con file vuoti.";
+                finalMessage = $"Analizzate {checkedTop} cartelle (limite {MaxFolders}): {summaryText}.";
             else if (consecutiveErrors >= MaxConsecutiveErrors)
-                finalMessage = $"Check interrotto dopo {consecutiveErrors} errori consecutivi.";
+                finalMessage = $"Analisi interrotta dopo {consecutiveErrors} errori consecutivi.";
             else
-                finalMessage = flagged == 0
-                    ? $"Controllate {checkedTop} cartelle: nessuna contiene file vuoti."
-                    : $"Controllate {checkedTop} cartelle: {flagged} contengono file vuoti (evidenziate in rosso).";
+                finalMessage = $"Analizzate {checkedTop} cartelle: {summaryText}.";
         }
         finally
         {
@@ -579,6 +668,7 @@ public sealed class ZeroByteCheckerService
 
         Log($"[ZERO-BYTE] FINE: {finalMessage}", important: true);
         Completed?.Invoke(this, finalMessage);
+        return !stopped;
     }
 
     private async Task<(ScanOutcome outcome, bool hasZero, int fileCount, int dirCount)>
@@ -596,7 +686,11 @@ public sealed class ZeroByteCheckerService
         {
             try
             {
-                await Task.Delay(PerFolderTimeout, timeoutCts.Token);
+                // Scatta solo se per 90 s non arriva nessuna cartella: una cartella grande
+                // (centinaia di sottocartelle) può richiedere più tempo, ma avanza
+                Interlocked.Exchange(ref _lastProgressTicks, DateTime.UtcNow.Ticks);
+                while (DateTime.UtcNow.Ticks - Interlocked.Read(ref _lastProgressTicks) < PerFolderTimeout.Ticks)
+                    await Task.Delay(1000, timeoutCts.Token);
                 Log($"[ZERO-BYTE] TIMEOUT {PerFolderTimeout.TotalSeconds}s su {folderFullPath}, abort...", important: true);
                 try { _sftp.AbortCurrentOperation(); } catch { }
             }
@@ -668,6 +762,7 @@ public sealed class ZeroByteCheckerService
         try
         {
             subEntries = await _sftp.ListDirectoryAsync(folderPath, ct);
+            Interlocked.Exchange(ref _lastProgressTicks, DateTime.UtcNow.Ticks);
         }
         catch (OperationCanceledException)
         {
@@ -689,11 +784,12 @@ public sealed class ZeroByteCheckerService
             .Select(e => e.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        lock (_cacheLock)
-        {
-            _zeroFilesByFolder[folderKey] = zeroFiles;
-            _scanCollector?.Add(folderKey);
-        }
+        if (_scanZero)
+            lock (_cacheLock)
+            {
+                _zeroFilesByFolder[folderKey] = zeroFiles;
+                _scanCollector?.Add(folderKey);
+            }
 
         bool hasZero = zeroFiles.Count > 0;
         int fileCount = subEntries.Count(e => !e.IsDirectory);
@@ -718,6 +814,8 @@ public sealed class ZeroByteCheckerService
                     sub.FullPath, remainingDepth - 1, maxFolders,
                     getScanned, setScanned, ct);
 
+                if (subOutcome != ScanOutcome.Ok)
+                    Log($"[ZERO-BYTE] {sub.FullPath}: {subOutcome}", important: subOutcome != ScanOutcome.DepthLimit);
                 if (subOutcome == ScanOutcome.Error ||
                     subOutcome == ScanOutcome.Cancelled ||
                     subOutcome == ScanOutcome.FolderLimit ||
@@ -736,7 +834,13 @@ public sealed class ZeroByteCheckerService
                 if (subModified > lastModified)
                     lastModified = subModified;
 
-                SetFolderFlag(sub.FullPath, subHas);
+                if (_scanZero) SetFolderFlag(sub.FullPath, subHas);
+                if (_scanContents)
+                {
+                    var subSummary = FormatContents(subDirs, subFiles);
+                    SetFolderContents(sub.FullPath, subSummary);
+                    lock (_cacheLock) _subContentsCollector?.TryAdd(Normalize(sub.FullPath), subSummary);
+                }
 
                 if (subHas)
                 {
@@ -746,13 +850,17 @@ public sealed class ZeroByteCheckerService
             }
         }
 
-        lock (_cacheLock)
-            _flaggedSubsByFolder[folderKey] = flaggedSubs;
+        if (_scanZero)
+            lock (_cacheLock)
+                _flaggedSubsByFolder[folderKey] = flaggedSubs;
 
         return (ScanOutcome.Ok, hasZero, fileCount, dirCount, lastModified);
     }
 
     private static string Normalize(string path) => path.TrimEnd('/');
+
+    /// <summary>Testo salvato della colonna Contenuto (letto dalle righe per mostrarlo con le icone).</summary>
+    public static string FormatContents(int dirs, int files) => $"{dirs} cartelle, {files} file";
 
     private void RaiseStateChanged() => StateChanged?.Invoke(this, EventArgs.Empty);
 }

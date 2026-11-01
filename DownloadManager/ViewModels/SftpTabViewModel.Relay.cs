@@ -83,43 +83,43 @@ public partial class SftpTabViewModel
         Server2ZeroByteStatus = checker?.IsChecking == true ? checker.ProgressStatus : "";
     }
 
-    [RelayCommand]
-    private void CheckServer2ZeroByte()
-    {
-        if (!IsServer2Connected || _server2Checker == null) { SftpStatusMessage = "Collega prima il secondo server."; return; }
-        if (_server2Checker.IsChecking) { SftpStatusMessage = $"Un check 0-byte su '{Server2Name}' è già in corso."; return; }
-        var folders = Server2Entries.Where(e => e.IsDirectory).ToList();
-        if (folders.Count == 0) { SftpStatusMessage = "Nessuna cartella da controllare nella cartella corrente."; return; }
-        _server2Checker.UseConnection(_server2, () => _server2.IsConnected);
-        SftpStatusMessage = $"Check di {folders.Count} cartelle su '{Server2Name}' in corso...";
-        _ = _server2Checker.RunCheckAsync(folders);
-    }
+    /// <summary>Analisi delle cartelle mostrate nel pannello di sinistra (server).</summary>
+    public Task<bool> CheckServer2ZeroByte(bool zero, bool contents) =>
+        CheckZeroByteOnSelection(true, Server2Entries.ToList(), zero, contents);
 
     [RelayCommand] private void StopServer2ZeroByte() => _server2Checker?.Stop();
 
     /// <summary>Controllo dei file vuoti solo sulle cartelle selezionate.</summary>
     /// <param name="left">Pannello di sinistra (altrimenti quello di destra).</param>
-    public void CheckZeroByteOnSelection(bool left, IReadOnlyList<SftpRemoteEntry> selection)
+    /// <returns>false se è stata fermata o non è potuta partire; true anche senza cartelle da analizzare.</returns>
+    public async Task<bool> CheckZeroByteOnSelection(bool left, IReadOnlyList<SftpRemoteEntry> selection, bool zero = true, bool contents = true)
     {
         var folders = selection.Where(e => e.IsDirectory).ToList();
-        if (folders.Count == 0) { SftpStatusMessage = "Seleziona una o più cartelle."; return; }
-        if (left)
+        if (folders.Count == 0) return true;
+        try
         {
-            if (!IsServer2Connected || _server2Checker == null) { SftpStatusMessage = "Collega prima il secondo server."; return; }
-            if (_server2Checker.IsChecking) { SftpStatusMessage = $"Un check 0-byte su '{Server2Name}' è già in corso."; return; }
-            _server2Checker.UseConnection(_server2, () => _server2.IsConnected);
-            SftpStatusMessage = $"Check 0-byte di {folders.Count} cartelle su '{Server2Name}'...";
-            _ = _server2Checker.RunCheckAsync(folders);
-        }
-        else
-        {
-            if (!IsRemoteConnected) { SftpStatusMessage = "Nessun server aperto: connettine uno nel pannello di destra."; return; }
+            if (left)
+            {
+                if (!IsServer2Connected || _server2Checker == null) { SftpStatusMessage = "Collega prima il secondo server."; return false; }
+                if (_server2Checker.IsChecking) { SftpStatusMessage = $"Un'analisi delle cartelle su '{Server2Name}' è già in corso."; return false; }
+                _server2Checker.UseConnection(_server2, () => _server2.IsConnected);
+                SftpStatusMessage = $"Analisi di {folders.Count} cartelle su '{Server2Name}'...";
+                return await _server2Checker.RunCheckAsync(folders, zero, contents);
+            }
+            if (!IsRemoteConnected) { SftpStatusMessage = "Nessun server aperto: connettine uno nel pannello di destra."; return false; }
             var checker = ActiveChecker;
             var service = Remote;
             checker.UseConnection(service, () => service.IsConnected);
-            if (checker.IsChecking) { SftpStatusMessage = "Un check 0-byte è già in corso: fermalo prima di avviarne un altro."; return; }
-            SftpStatusMessage = $"Check 0-byte di {folders.Count} cartelle...";
-            _ = checker.RunCheckAsync(folders);
+            if (checker.IsChecking) { SftpStatusMessage = "Un'analisi delle cartelle è già in corso: fermala prima di avviarne un'altra."; return false; }
+            SftpStatusMessage = $"Analisi di {folders.Count} cartelle...";
+            _logger.LogInformation("[ZERO-BYTE] Analisi avviata su {Count} cartelle", folders.Count);
+            return await checker.RunCheckAsync(folders, zero, contents);
+        }
+        catch (Exception ex)
+        {
+            SftpStatusMessage = $"Errore avvio analisi: {ex.Message}";
+            _logger.LogError(ex, "[ZERO-BYTE] Errore avvio analisi");
+            return false;
         }
     }
 
@@ -166,6 +166,7 @@ public partial class SftpTabViewModel
         _relayQueue = relayQueue;
         _relayQueue.MaxConcurrency = SftpMaxRelayConcurrency;
         _relayQueue.QueueChanged += ScheduleQueueRecalc;
+        _relayQueue.JobEnqueued += () => OnJobQueued(QueueKind.Relay);
         _relayQueue.JobCompleted += OnRelayJobCompleted;
         // File arrivato con un upload: si aggiornano i pannelli (destra e sinistra) che mostrano
         // quella cartella di quel server
@@ -204,6 +205,7 @@ public partial class SftpTabViewModel
     private void RefreshPanesShowing(SftpConfig? server, string folder) => Dispatcher.UIThread.Post(() =>
     {
         if (server == null) return;
+        ServerChanged(server);
         if (IsShownInActiveTab(server, folder)) ScheduleMainRefresh();
         if (IsServer2Mode && IsServer2Connected && _server2Config != null &&
             string.Equals(_server2Config.ServerKey, server.ServerKey, StringComparison.OrdinalIgnoreCase) &&
@@ -427,14 +429,9 @@ public partial class SftpTabViewModel
             bool samePath = SamePath(_lastListedServer2Path, path);
             bool differs = !samePath || !SameListing(Server2Entries, entries);
 
-            foreach (var e in entries)
-            {
-                if (!e.IsDirectory) { e.HasZeroByteIssue = e.Size == 0; continue; }
-                // Risultati del controllo 0 byte di questo server (anche se fatto dalla scheda di destra)
-                var normalized = e.FullPath.TrimEnd('/');
-                e.HasZeroByteIssue = checker != null && checker.TryGetFolderFlag(normalized, out var flag) && flag;
-                if (checker != null && checker.TryGetFolderContents(normalized, out var info)) e.ContentsInfo = info;
-            }
+            // Analisi delle cartelle di questo server (anche se fatta dalla scheda di destra)
+            if (checker != null) checker.ApplyTo(entries);
+            else foreach (var e in entries) e.HasZeroByteIssue = !e.IsDirectory && e.Size == 0;
             // Esiti salvati della verifica dei video (colonne Web e Lingua)
             await ApplyWebStreamAsync(entries, path, tab.Config.ServerKey, cleanup: true);
             _ = SyncResultsAsync(left: true, force: false);
@@ -474,6 +471,7 @@ public partial class SftpTabViewModel
         {
             SftpStatusMessage = $"Creazione della cartella '{name.Trim()}'...";
             await _server2.CreateDirectoryAsync($"{Server2Path.TrimEnd('/')}/{name.Trim()}");
+            ServerChanged(_server2Config);
             SftpStatusMessage = $"Cartella creata su '{Server2Name}': {name}";
             await Server2RefreshInternalAsync(silent: true);
         }
@@ -496,6 +494,7 @@ public partial class SftpTabViewModel
             SftpStatusMessage = $"Rinomina in corso: {entry.Name} → {newName.Trim()}";
             var target = $"{TransferJobBase.GetRemoteParent(entry.FullPath).TrimEnd('/')}/{newName.Trim()}";
             await _server2.RenameAsync(entry.FullPath, target);
+            ServerChanged(_server2Config);
             SftpStatusMessage = $"Rinominato in: {newName}";
             await Server2RefreshInternalAsync(silent: true);
         }
@@ -520,6 +519,7 @@ public partial class SftpTabViewModel
                 if (entry.IsDirectory && (dest + "/").StartsWith(entry.FullPath.TrimEnd('/') + "/", StringComparison.Ordinal))
                     throw new InvalidOperationException("non si può spostare una cartella dentro sé stessa");
                 await _server2.RenameAsync(entry.FullPath, target);
+                ServerChanged(_server2Config);
                 moved++;
             }
             catch (Exception ex) { errors.Add($"{entry.Name}: {ex.Message}"); }
@@ -544,6 +544,7 @@ public partial class SftpTabViewModel
             SftpStatusMessage = $"Duplicazione di '{entry.Name}' su '{Server2Name}'...";
             var target = $"{TransferJobBase.GetRemoteParent(entry.FullPath).TrimEnd('/')}/{newName.Trim()}";
             await _server2.DuplicateAsync(entry.FullPath, target);
+            ServerChanged(_server2Config);
             SftpStatusMessage = $"Creata la copia: {newName}";
             await Server2RefreshInternalAsync(silent: true);
         }
@@ -666,6 +667,7 @@ public partial class SftpTabViewModel
     {
         var jobs = _relayQueue.AllJobs;
         HasActiveRelays = jobs.Any(j => j.Status is SftpJobStatus.Transferring or SftpJobStatus.Pending);
+        RelayQueueCount = jobs.Count(j => j.Status is SftpJobStatus.Transferring or SftpJobStatus.Pending);
         if (jobs.Count == 0) { RelayQueueStats = ""; return; }
 
         var parts = new List<string> { $"{jobs.Count} totali" };

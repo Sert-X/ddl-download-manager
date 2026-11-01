@@ -17,9 +17,6 @@ public partial class LocalFileEntry : CheckedFileEntry
     [ObservableProperty] private long _size;
     [ObservableProperty] private DateTime _modified;
 
-    /// <summary>File a 0 byte, o cartella che ne contiene (dopo il check dei file vuoti in locale).</summary>
-    [ObservableProperty] private bool _hasZeroByteIssue;
-
     public string SizeText => IsDirectory
         ? "-"
         : Size >= 1024L * 1024 * 1024

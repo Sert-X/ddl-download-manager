@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.5.3] — 2026-11-01
+
+### 📡 SFTP — Un solo pulsante "Controlla…"
+- **Tutti i controlli in una finestra**: il pulsante con la spunta sostituisce lente e pellicola. Cartelle: **File vuoti** e **Contenuto**; video: **Codec web**, **Lingua**, **Durata**, con "Seleziona tutto". Prima si analizzano le cartelle (veloce), poi i video; fermando le cartelle i video non partono. Tasto destro sul pulsante: "Ricontrolla tutto".
+- **Senza sottocartelle** (es. dentro una cartella di episodi) le voci delle cartelle sono grigie, con la spiegazione: i file vuoti si vedono già nella colonna 0 byte.
+- **Sugli elementi scelti**: clic destro → "Controlla…", con la stessa finestra (le voci delle cartelle valgono solo per le cartelle selezionate).
+
+### 📡 SFTP — Colonne 0 byte e Contenuto
+- **Nuova colonna "0 byte"**: quanti file vuoti ci sono nella cartella e nelle sottocartelle ("3 file vuoti", "Nessuno"); su un file "Vuoto (0 byte)".
+- **Colonna "Contenuto" rinnovata**: numero di cartelle e di file con le icone, come le altre colonne. Ora ce l'hanno anche le **sottocartelle** lette dall'analisi (prima solo la cartella analizzata, ed entrando restava vuota).
+- **Cartelle grandi analizzate per intero**: prima l'analisi si fermava dopo 300 cartelle o 90 secondi (es. /media/Anime si interrompeva a metà); ora si ferma solo se il server smette di rispondere.
+
+### 📡 SFTP — File danneggiati
+- **"File danneggiato"** per i video che iniziano con dati vuoti (download o upload rimasto a metà, es. alcuni episodi di Boruto): prima risultavano "non leggibili" senza spiegazione. Ora sono in rosso in **Web, Lingua e Durata**, con il motivo nel tooltip; le cartelle li contano a parte ("32 danneggiati"). Vanno riscaricati o ricaricati.
+
+### 📡 SFTP — Tabelle più leggibili
+- **Mostra o nascondi ogni colonna**: tasto destro sull'intestazione di una tabella (Web, Lingua, Durata, 0 byte, Contenuto, Dimensione, Ultima modifica), con **"Mostra tutte"** e **"Nascondi tutte"**. Vale per tutte le tabelle e resta salvato.
+- **Evidenziazione delle righe on/off**: occhio → "Evidenzia le righe con problemi"; spenta, gli esiti restano nelle colonne.
+- **Colori distinti**: rosso tenue per i video con problemi, **viola** per i file vuoti (prima erano due rossi quasi uguali).
+- **Legenda dei colori** nella guida SFTP.
+
+### 📡 SFTP — Code e aggiornamenti
+- **Conferma "in coda"**: aggiungendo upload, download o copie tra server compare un avviso animato ("12 file in coda di upload", con "Vedi coda"), e le schede delle code mostrano quanti file sono in corso o in attesa (il numero pulsa quando ne entrano di nuovi).
+- **Esiti aggiornati prima**: dopo una modifica fatta dall'app (eliminazione, upload, copia, rinomina, spostamento) i riassunti delle cartelle sopra si riallineano dopo 2 secondi; le modifiche fatte da fuori ogni minuto (prima ogni 5).
+
+### 🎨 Interfaccia
+- **Schede interne uniformi e centrate**: SFTP (Browser, code), Organizza file (Singola cartella, Unisci, Dividi) e Videobox Corrector (Mappatura, Titoli TMDB) hanno lo stesso selettore, senza la sottolineatura azzurra.
+
+### 🔗 Videobox Corrector
+- **Domini secondari con percorso**: "https://m3u.mugiwara.fans/schls-fast/" accetta solo i link sotto quel percorso, non quelli di altre cartelle dello stesso dominio (es. /ashls-fast/). Un dominio senza percorso vale come prima per tutto il dominio.
+
 ## [1.5.2] — 2026-11-01
 
 ### 🎬 Film/Serie Download (CB01)

@@ -247,6 +247,8 @@ public partial class SftpTabViewModel : ViewModelBase
         // ricalcolano sul thread dell'interfaccia, al massimo una volta ogni 200 ms
         _sftpUploadQueue.QueueChanged += ScheduleQueueRecalc;
         _sftpDownloadQueue.QueueChanged += ScheduleQueueRecalc;
+        _sftpUploadQueue.JobEnqueued += () => OnJobQueued(QueueKind.Upload);
+        _sftpDownloadQueue.JobEnqueued += () => OnJobQueued(QueueKind.Download);
 
         _sftpUploadQueue.MaxConcurrency = SftpMaxUploadConcurrency;
         _sftpDownloadQueue.MaxConcurrency = SftpMaxDownloadConcurrency;
@@ -507,6 +509,8 @@ public partial class SftpTabViewModel : ViewModelBase
             j.Status == SftpJobStatus.Uploading || j.Status == SftpJobStatus.Pending);
         HasActiveDownloads = _sftpDownloadQueue.AllJobs.Any(j =>
             j.Status == SftpJobStatus.Downloading || j.Status == SftpJobStatus.Pending);
+        UploadQueueCount = _sftpUploadQueue.AllJobs.Count(j => j.Status is SftpJobStatus.Uploading or SftpJobStatus.Pending);
+        DownloadQueueCount = _sftpDownloadQueue.AllJobs.Count(j => j.Status is SftpJobStatus.Downloading or SftpJobStatus.Pending);
 
         // Il pallino va ricalcolato a ogni cambio della coda: prima si aggiornava solo se
         // cambiava "attivo/non attivo", quindi eliminando i falliti restava rosso.
@@ -631,21 +635,7 @@ public partial class SftpTabViewModel : ViewModelBase
 
         Dispatcher.UIThread.Post(() =>
         {
-            var checker = ActiveChecker;
-            foreach (var entry in SftpRemoteEntries)
-            {
-                if (!entry.IsDirectory) continue;
-
-                var normalized = entry.FullPath.TrimEnd('/');
-
-                if (checker.TryGetFolderFlag(normalized, out var flag))
-                    entry.HasZeroByteIssue = flag;
-                else
-                    entry.HasZeroByteIssue = false;
-
-                if (checker.TryGetFolderContents(normalized, out var info))
-                    entry.ContentsInfo = info;
-            }
+            ActiveChecker.ApplyTo(SftpRemoteEntries);
         });
     }
 
@@ -800,20 +790,8 @@ public partial class SftpTabViewModel : ViewModelBase
                 // superiori), nel controllo di questo server
                 checker.UpdateFromListing(pathToRead, entries);
 
-                foreach (var e in entries)
-                {
-                    if (!e.IsDirectory)
-                    {
-                        e.HasZeroByteIssue = e.Size == 0;
-                    }
-                    else
-                    {
-                        var normalized = e.FullPath.TrimEnd('/');
-                        e.HasZeroByteIssue = checker.TryGetFolderFlag(normalized, out var flag) && flag;
-                        if (checker.TryGetFolderContents(normalized, out var cachedInfo))
-                            e.ContentsInfo = cachedInfo;
-                    }
-                }
+                // File vuoti e contenuto delle cartelle (colonne 0 byte e Contenuto)
+                checker.ApplyTo(entries);
 
                 // Modifiche fatte da fuori (es. WinSCP): se la cartella è cambiata, o se l'hai
                 // aggiornata a mano, lo si segnala anche all'albero di Videobox Corrector.
@@ -821,7 +799,7 @@ public partial class SftpTabViewModel : ViewModelBase
                 if (RemoteConfig != null)
                 {
                     await ApplyWebStreamAsync(entries, pathToRead, RemoteConfig.ServerKey, cleanup: true);
-                    // Modifiche fatte da fuori anche nelle sottocartelle (al massimo ogni 5 minuti per cartella)
+                    // Modifiche fatte da fuori anche nelle sottocartelle (al massimo ogni minuto per cartella; subito dopo le modifiche fatte dall'app)
                     _ = SyncResultsAsync(left: false, force: false);
                 }
                 if (!ReferenceEquals(service, Remote) || SftpCurrentRemotePath != pathToRead) return;
@@ -1006,45 +984,11 @@ public partial class SftpTabViewModel : ViewModelBase
     /// lascia un messaggio visibile all'utente, così un click "silenzioso"
     /// non è mai ambiguo.
     /// </summary>
-    [RelayCommand]
-    private void CheckZeroByteFolders()
-    {
-        try
-        {
-            if (!IsRemoteConnected)
-            {
-                SftpStatusMessage = "Nessun server aperto: connettine uno nel pannello di destra.";
-                return;
-            }
-
-            var checker = ActiveChecker;
-            var service = Remote;
-            checker.UseConnection(service, () => service.IsConnected);
-            if (checker.IsChecking)
-            {
-                SftpStatusMessage = "Un check 0-byte è già in corso. Usa ⏹ per fermarlo.";
-                return;
-            }
-
-            var folders = SftpRemoteEntries.Where(e => e.IsDirectory).ToList();
-            if (folders.Count == 0)
-            {
-                SftpStatusMessage = "Nessuna cartella da controllare nella cartella corrente.";
-                return;
-            }
-
-            SftpStatusMessage = $"Check di {folders.Count} cartelle in corso...";
-
-            _logger.LogInformation("[ZERO-BYTE] Check manuale avviato su {Count} cartelle", folders.Count);
-
-            _ = checker.RunCheckAsync(folders);
-        }
-        catch (Exception ex)
-        {
-            SftpStatusMessage = $"Errore avvio check: {ex.Message}";
-            _logger.LogError(ex, "[ZERO-BYTE] Errore avvio check");
-        }
-    }
+    /// <param name="zero">Cerca i file vuoti (colonna 0 byte).</param>
+    /// <param name="contents">Conta file e cartelle (colonna Contenuto).</param>
+    /// <returns>false se è stata fermata o non è potuta partire (i controlli dei video dopo non partono).</returns>
+    public Task<bool> CheckZeroByteFolders(bool zero, bool contents) =>
+        CheckZeroByteOnSelection(false, SftpRemoteEntries.ToList(), zero, contents);
 
     [RelayCommand]
     private void StopZeroByteCheck() => ActiveChecker.Stop();
@@ -1071,24 +1015,13 @@ public partial class SftpTabViewModel : ViewModelBase
     {
         Dispatcher.UIThread.Post(() =>
         {
+            if (sender is not ZeroByteCheckerService checker) return;
             var normalized = result.FullPath.TrimEnd('/');
+            bool Same(SftpRemoteEntry e) => string.Equals(e.FullPath.TrimEnd('/'), normalized, StringComparison.OrdinalIgnoreCase);
             // Lo stesso server può essere aperto anche nel Server 2 a sinistra: si aggiorna anche lì
-            if (ReferenceEquals(sender, _server2Checker))
-                foreach (var entry in Server2Entries)
-                    if (string.Equals(entry.FullPath.TrimEnd('/'), normalized, StringComparison.OrdinalIgnoreCase))
-                    {
-                        entry.HasZeroByteIssue = result.HasZeroByte;
-                        entry.ContentsInfo = result.ContentsSummary;
-                    }
+            if (ReferenceEquals(sender, _server2Checker)) checker.ApplyTo(Server2Entries.Where(Same).ToList());
             if (!ReferenceEquals(sender, ActiveChecker)) return;   // cartella di un'altra scheda
-            foreach (var entry in SftpRemoteEntries)
-            {
-                if (string.Equals(entry.FullPath.TrimEnd('/'), normalized, StringComparison.OrdinalIgnoreCase))
-                {
-                    entry.HasZeroByteIssue = result.HasZeroByte;
-                    entry.ContentsInfo = result.ContentsSummary;
-                }
-            }
+            checker.ApplyTo(SftpRemoteEntries.Where(Same).ToList());
         });
     }
 
@@ -1100,6 +1033,7 @@ public partial class SftpTabViewModel : ViewModelBase
     /// </summary>
     private void InvalidateZeroByteCacheRecursive(string? folderPath)
     {
+        ServerChanged(RemoteConfig);
         if (string.IsNullOrEmpty(folderPath) || SamePath(folderPath, SftpCurrentRemotePath)) return;
         ActiveChecker.InvalidateFolder(folderPath);
     }

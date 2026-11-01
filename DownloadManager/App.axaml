@@ -113,8 +113,10 @@
                     <SolidColorBrush x:Key="AppProxyBadgeActiveBorderBrush" Color="#22C55E"/>
                     <SolidColorBrush x:Key="AppProxyBadgeActiveTextBrush" Color="#4ADE80"/>
 
-                    <SolidColorBrush x:Key="AppZeroByteHighlightBrush" Color="#3A0F0F"/>
-                    <SolidColorBrush x:Key="AppZeroByteHighlightBorderBrush" Color="#7F1D1D"/>
+                    <!-- File vuoti (0 byte): viola, distinto dal rosso dei video non adatti / senza italiano -->
+                    <SolidColorBrush x:Key="AppZeroByteHighlightBrush" Color="#2A1F4A"/>
+                    <SolidColorBrush x:Key="AppZeroByteHighlightBorderBrush" Color="#4C3A8A"/>
+                    <SolidColorBrush x:Key="AppZeroBrush">#B79CFF</SolidColorBrush>
 
                     <SolidColorBrush x:Key="AppTextSelectionBrush" Color="#2563EB"/>
                     <SolidColorBrush x:Key="AppTextSelectionForegroundBrush" Color="#FFFFFF"/>
@@ -235,8 +237,9 @@
                     <SolidColorBrush x:Key="AppProxyBadgeActiveBorderBrush" Color="#16A34A"/>
                     <SolidColorBrush x:Key="AppProxyBadgeActiveTextBrush" Color="#15803D"/>
 
-                    <SolidColorBrush x:Key="AppZeroByteHighlightBrush" Color="#FEE2E2"/>
-                    <SolidColorBrush x:Key="AppZeroByteHighlightBorderBrush" Color="#FCA5A5"/>
+                    <SolidColorBrush x:Key="AppZeroByteHighlightBrush" Color="#EDE7FE"/>
+                    <SolidColorBrush x:Key="AppZeroByteHighlightBorderBrush" Color="#C9B8FB"/>
+                    <SolidColorBrush x:Key="AppZeroBrush">#6D28D9</SolidColorBrush>
 
                     <SolidColorBrush x:Key="AppTextSelectionBrush" Color="#2563EB"/>
                     <SolidColorBrush x:Key="AppTextSelectionForegroundBrush" Color="#FFFFFF"/>
@@ -924,11 +927,11 @@
         </Style>
 
         <!-- Zero-Byte Checker: file a 0 byte e cartelle che li contengono (classe .zeroByte
-             impostata dalla riga in base a HasZeroByteIssue). Il rosso resta visibile anche
+             impostata dalla riga in base a HasZeroByteIssue), in viola. Il colore resta visibile anche
              al passaggio del mouse e da selezionata. -->
         <Style Selector="DataGridRow.zeroByte">
             <Setter Property="Background" Value="{DynamicResource AppZeroByteHighlightBrush}"/>
-            <Setter Property="Foreground" Value="{DynamicResource AppDangerBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppZeroBrush}"/>
         </Style>
         <Style Selector="DataGridRow.zeroByte:pointerover /template/ Rectangle#BackgroundRectangle">
             <Setter Property="Fill" Value="{DynamicResource AppZeroByteHighlightBrush}"/>
@@ -1034,6 +1037,8 @@
         <Style Selector="Path.icon.success"><Setter Property="Stroke" Value="{DynamicResource AppSuccessBrush}"/></Style>
         <Style Selector="Path.icon.danger"><Setter Property="Stroke" Value="{DynamicResource AppDangerBrush}"/></Style>
         <Style Selector="Path.icon.muted"><Setter Property="Stroke" Value="{DynamicResource AppTextMutedBrush}"/></Style>
+        <!-- File vuoti (colonna 0 byte): viola come le righe evidenziate -->
+        <Style Selector="Path.icon.zero"><Setter Property="Stroke" Value="{DynamicResource AppZeroBrush}"/></Style>
         <Style Selector="TabItem:selected Path.icon.accent"><Setter Property="Stroke" Value="{DynamicResource AppAccentBrush}"/></Style>
         <Style Selector="TabItem Path.icon"><Setter Property="Stroke" Value="{DynamicResource AppTextMutedBrush}"/></Style>
         <Style Selector="TabItem:selected Path.icon"><Setter Property="Stroke" Value="{DynamicResource AppAccentBrush}"/></Style>
@@ -1492,6 +1497,7 @@
 
         <!-- Videobox: selettore Mappatura | Titoli TMDB -->
         <Style Selector="ToggleButton.modeTab">
+            <Setter Property="FontSize" Value="13"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="CornerRadius" Value="8"/>
@@ -1506,8 +1512,14 @@
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="BorderBrush" Value="Transparent"/>
         </Style>
+        <Style Selector="ToggleButton.modeTab:pointerover /template/ ContentPresenter#PART_ContentPresenter,
+                         ToggleButton.modeTab:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppHoverBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+        </Style>
         <Style Selector="ToggleButton.modeTab:checked /template/ ContentPresenter#PART_ContentPresenter,
-                         ToggleButton.modeTab:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+                         ToggleButton.modeTab:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter,
+                         ToggleButton.modeTab:checked:pressed /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource AppTabSelectedBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource AppTabSelectedBorderBrush}"/>
         </Style>
@@ -1517,6 +1529,110 @@
         </Style>
         <Style Selector="ToggleButton.modeTab:checked Path.icon">
             <Setter Property="Stroke" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
+
+        <!-- Schede interne (Classes="segmented"): stesso selettore di Mappatura | Titoli TMDB,
+             capsula a sinistra con le schede come i pulsanti modeTab -->
+        <Style Selector="TabControl.segmented">
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top"
+                                HorizontalAlignment="Center"
+                                Background="{DynamicResource AppTabTrackBrush}"
+                                BorderBrush="{DynamicResource AppBorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="12"
+                                Padding="3">
+                            <ItemsPresenter Name="PART_ItemsPresenter"
+                                            ItemsPanel="{TemplateBinding ItemsPanel}"/>
+                        </Border>
+                        <ContentPresenter Name="PART_SelectedContentHost"
+                                          Content="{TemplateBinding SelectedContent}"
+                                          ContentTemplate="{TemplateBinding SelectedContentTemplate}"/>
+                    </DockPanel>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="TabControl.segmented > TabItem">
+            <!-- Modello proprio: niente sottolineatura né effetti del tema, solo la "pillola" -->
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Name="PART_ContentPresenter"
+                                          Content="{TemplateBinding Header}"
+                                          ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="Padding" Value="14,6"/>
+            <Setter Property="Margin" Value="0,0,2,0"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}"/>
+        </Style>
+        <Style Selector="TabControl.segmented > TabItem:pointerover">
+            <Setter Property="Background" Value="{DynamicResource AppHoverBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+        </Style>
+        <Style Selector="TabControl.segmented > TabItem:selected, TabControl.segmented > TabItem:selected:pointerover">
+            <Setter Property="Background" Value="{DynamicResource AppTabSelectedBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppTabSelectedBorderBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+
+        <!-- Contatore delle code sulle schede SFTP: pulsa quando entrano file -->
+        <Style Selector="Border.queuePill">
+            <Setter Property="Background" Value="{DynamicResource AppAccentBrush}"/>
+            <Setter Property="CornerRadius" Value="9"/>
+            <Setter Property="MinWidth" Value="18"/>
+            <Setter Property="Height" Value="18"/>
+            <Setter Property="Padding" Value="5,0"/>
+            <Setter Property="RenderTransform" Value="scale(1)"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.18" Easing="CubicEaseOut"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.queuePill.bump">
+            <Setter Property="RenderTransform" Value="scale(1.45)"/>
+        </Style>
+        <Style Selector="Border.queuePill TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- Avviso "in coda" nella tab SFTP: sale dal basso e sparisce dopo qualche secondo -->
+        <Style Selector="Border.queueToast">
+            <Setter Property="Opacity" Value="0"/>
+            <Setter Property="IsHitTestVisible" Value="False"/>
+            <Setter Property="RenderTransform" Value="translateY(16px)"/>
+            <Setter Property="Transitions">
+                <Transitions>
+                    <DoubleTransition Property="Opacity" Duration="0:0:0.22"/>
+                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.26" Easing="CubicEaseOut"/>
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.queueToast.show">
+            <Setter Property="Opacity" Value="1"/>
+            <Setter Property="IsHitTestVisible" Value="True"/>
+            <Setter Property="RenderTransform" Value="translateY(0px)"/>
         </Style>
 
         <!-- Titoli TMDB: filtri, episodi, stato, stagioni -->

@@ -72,12 +72,20 @@ public class WebStreamCheckRepository
         public long DurationApprox { get; set; }
     }
 
-    private static WebStreamResult ToResult(Row r) => new(
-        r.FullPath, (WebStreamLevel)r.Level, r.ShortText, r.Detail, r.Size,
-        DateTime.TryParse(r.Modified, null, System.Globalization.DateTimeStyles.RoundtripKind, out var m) ? m : DateTime.MinValue,
-        DateTime.TryParse(r.CheckedAt, out var c) ? c : DateTime.MinValue,
-        (WebStreamLevel)(r.LangLevel ?? 0), r.LangText ?? "", r.LangDetail ?? "", (int)r.RulesVersion,
-        r.Duration, r.DurationApprox != 0);
+    private static WebStreamResult ToResult(Row r)
+    {
+        var langLevel = (WebStreamLevel)(r.LangLevel ?? 0);
+        var langText = r.LangText ?? "";
+        // File danneggiato salvato con la lingua "Non leggibile" (prima versione): ora lo dice anche lì
+        if (r.ShortText == WebStreamCheckerService.DamagedText && langLevel == WebStreamLevel.Unreadable)
+            (langLevel, langText) = (WebStreamLevel.Bad, WebStreamCheckerService.DamagedText);
+        return new(
+            r.FullPath, (WebStreamLevel)r.Level, r.ShortText, r.Detail, r.Size,
+            DateTime.TryParse(r.Modified, null, System.Globalization.DateTimeStyles.RoundtripKind, out var m) ? m : DateTime.MinValue,
+            DateTime.TryParse(r.CheckedAt, out var c) ? c : DateTime.MinValue,
+            langLevel, langText, r.LangDetail ?? "", (int)r.RulesVersion,
+            r.Duration, r.DurationApprox != 0);
+    }
 
     public async Task SaveAsync(string serverKey, WebStreamResult r)
     {

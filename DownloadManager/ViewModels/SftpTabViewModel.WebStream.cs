@@ -70,8 +70,34 @@ public partial class SftpTabViewModel
 
     // ---- Esiti mostrati nelle tabelle dei file remoti (entrambi i pannelli) ----
     private Persistence.SettingsService? _displaySettings;
-    /// <summary>Evidenziazione rossa dei file vuoti e delle cartelle che li contengono.</summary>
+    /// <summary>Colonna 0 byte ed evidenziazione rossa dei file vuoti e delle cartelle che li contengono.</summary>
     [ObservableProperty] private bool _showZeroByteResults = true;
+    /// <summary>Colonna Contenuto (numero di cartelle e file).</summary>
+    [ObservableProperty] private bool _showContentsResults = true;
+    /// <summary>Colonne Dim. e Ultima modifica (si nascondono dal tasto destro sulle intestazioni).</summary>
+    [ObservableProperty] private bool _showSizeColumn = true;
+    [ObservableProperty] private bool _showModifiedColumn = true;
+    partial void OnShowSizeColumnChanged(bool value) => SaveDisplay(s => s.ShowSizeColumn = value);
+    /// <summary>Evidenziazione delle righe (indipendente dalle colonne).</summary>
+    [ObservableProperty] private bool _highlightRows = true;
+    partial void OnHighlightRowsChanged(bool value) => SaveDisplay(s => s.HighlightRows = value);
+    partial void OnShowModifiedColumnChanged(bool value) => SaveDisplay(s => s.ShowModifiedColumn = value);
+
+    /// <summary>Solo il nome: tutte le altre colonne nascoste (si rimettono una per una o con "Mostra tutte").</summary>
+    public void HideAllColumns()
+    {
+        ShowWebResults = ShowLanguageResults = ShowDurationResults = false;
+        ShowZeroByteResults = ShowContentsResults = false;
+        ShowSizeColumn = ShowModifiedColumn = false;
+    }
+
+    /// <summary>Tutte le colonne delle tabelle dei file di nuovo visibili.</summary>
+    public void ShowAllColumns()
+    {
+        ShowWebResults = ShowLanguageResults = ShowDurationResults = true;
+        ShowZeroByteResults = ShowContentsResults = true;
+        ShowSizeColumn = ShowModifiedColumn = true;
+    }
     /// <summary>Colonna Web ed evidenziazione dei video non adatti al web.</summary>
     [ObservableProperty] private bool _showWebResults = true;
     /// <summary>Colonna Lingua ed evidenziazione dei video senza italiano.</summary>
@@ -82,7 +108,7 @@ public partial class SftpTabViewModel
     /// <summary>Durata minima (minuti): i video più corti sono "corti". 0 = nessuna segnalazione.</summary>
     [ObservableProperty] private double _minVideoDurationMinutes = 5;
 
-    public bool ShowsAllResults => ShowZeroByteResults && ShowWebResults && ShowLanguageResults && ShowDurationResults;
+    public bool ShowsAllResults => ShowZeroByteResults && ShowContentsResults && ShowWebResults && ShowLanguageResults && ShowDurationResults;
     public string MinDurationMenuText => MinVideoDurationMinutes > 0
         ? $"Durata minima: {WebStreamCheckerService.FormatMinutes(MinVideoDurationMinutes * 60)}..."
         : "Durata minima: nessuna...";
@@ -98,6 +124,7 @@ public partial class SftpTabViewModel
     }
 
     partial void OnShowZeroByteResultsChanged(bool value) => SaveDisplay(s => s.ShowZeroByteResults = value);
+    partial void OnShowContentsResultsChanged(bool value) => SaveDisplay(s => s.ShowContentsResults = value);
     partial void OnShowWebResultsChanged(bool value) => SaveDisplay(s => s.ShowWebResults = value);
     partial void OnShowLanguageResultsChanged(bool value) => SaveDisplay(s => s.ShowLanguageResults = value);
 
@@ -116,6 +143,7 @@ public partial class SftpTabViewModel
     {
         var show = !ShowsAllResults;
         ShowZeroByteResults = show;
+        ShowContentsResults = show;
         ShowWebResults = show;
         ShowLanguageResults = show;
         ShowDurationResults = show;
@@ -139,6 +167,10 @@ public partial class SftpTabViewModel
         {
             _loadingDisplay = true;
             ShowZeroByteResults = _displaySettings.Current.ShowZeroByteResults;
+            ShowContentsResults = _displaySettings.Current.ShowContentsResults;
+            ShowSizeColumn = _displaySettings.Current.ShowSizeColumn;
+            HighlightRows = _displaySettings.Current.HighlightRows;
+            ShowModifiedColumn = _displaySettings.Current.ShowModifiedColumn;
             ShowWebResults = _displaySettings.Current.ShowWebResults;
             ShowLanguageResults = _displaySettings.Current.ShowLanguageResults;
             ShowDurationResults = _displaySettings.Current.ShowDurationResults;
@@ -477,6 +509,7 @@ public partial class SftpTabViewModel
     /// <summary>Colonna Durata di un file: "23:41", oppure "3:05 · corto" sotto la soglia.</summary>
     private (WebStreamLevel Level, string Text, string Detail) DurationOfResult(WebStreamResult r)
     {
+        if (r.ShortText == WebStreamCheckerService.DamagedText) return (WebStreamLevel.Bad, r.ShortText, r.Detail);
         if (r.Duration is not { } d || r.Level == WebStreamLevel.Unreadable) return (WebStreamLevel.None, "", "");
         var text = (r.DurationApprox ? "~" : "") + WebStreamCheckerService.FormatDuration(d);
         var threshold = ShortThresholdSeconds;
@@ -492,12 +525,20 @@ public partial class SftpTabViewModel
     {
         var known = inside.Where(r => r.Duration != null && r.Level != WebStreamLevel.Unreadable
                                       && r.Size != Persistence.WebStreamCheckRepository.ChangedMarker).ToList();
-        if (known.Count == 0) return (WebStreamLevel.None, "", "");
+        int damaged = inside.Count(r => r.ShortText == WebStreamCheckerService.DamagedText
+                                        && r.Size != Persistence.WebStreamCheckRepository.ChangedMarker);
+        var damagedText = damaged == 1 ? "1 danneggiato" : $"{damaged} danneggiati";
+        if (known.Count == 0)
+            return damaged > 0
+                ? (WebStreamLevel.Bad, damagedText, $"{damagedText}: vanno riscaricati (o ricaricati) per intero.")
+                : (WebStreamLevel.None, "", "");
         var total = known.Sum(r => r.Duration!.Value);
         var threshold = ShortThresholdSeconds;
         int shortCount = threshold > 0 ? known.Count(r => r.Duration < threshold) : 0;
         var detail = $"{known.Count} video con durata letta, in tutto {WebStreamCheckerService.FormatDuration(total)}"
-                     + (threshold > 0 ? $"\nPiù corti di {WebStreamCheckerService.FormatMinutes(threshold)}: {shortCount}" : "");
+                     + (threshold > 0 ? $"\nPiù corti di {WebStreamCheckerService.FormatMinutes(threshold)}: {shortCount}" : "")
+                     + (damaged > 0 ? $"\nDanneggiati (da riscaricare): {damaged}" : "");
+        if (damaged > 0) return (WebStreamLevel.Bad, damagedText, detail);
         return shortCount > 0
             ? (WebStreamLevel.Warning, $"{shortCount} sotto {WebStreamCheckerService.FormatMinutes(threshold)}", detail)
             : (WebStreamLevel.Ok, $"{known.Count} · {WebStreamCheckerService.FormatDuration(total)}", detail);
@@ -507,7 +548,7 @@ public partial class SftpTabViewModel
     private static (WebStreamLevel Level, string Info, string Detail) Summarize(IReadOnlyList<WebStreamResult> results,
         Func<WebStreamResult, WebStreamLevel> levelOf, string badWord, string badOne, string badMany, string okWord)
     {
-        int ok = 0, warn = 0, bad = 0, unreadable = 0, changed = 0;
+        int ok = 0, warn = 0, bad = 0, unreadable = 0, changed = 0, damaged = 0;
         DateTime first = DateTime.MaxValue, last = DateTime.MinValue;
         foreach (var r in results)
         {
@@ -520,6 +561,8 @@ public partial class SftpTabViewModel
             }
             // Cambiato da fuori dopo il controllo (visto dall'allineamento): l'esito non vale più
             if (r.Size == Persistence.WebStreamCheckRepository.ChangedMarker) { changed++; continue; }
+            // File danneggiato: conta a parte, sia in Web sia in Lingua
+            if (r.ShortText == WebStreamCheckerService.DamagedText) { damaged++; continue; }
             switch (l)
             {
                 case WebStreamLevel.Ok: ok++; break;
@@ -528,16 +571,17 @@ public partial class SftpTabViewModel
                 case WebStreamLevel.Unreadable: unreadable++; break;
             }
         }
-        int total = ok + warn + bad + unreadable + changed;
+        int total = ok + warn + bad + unreadable + changed + damaged;
         if (total == 0) return (WebStreamLevel.None, "", "");
 
         var parts = new List<string>();
+        if (damaged > 0) parts.Add($"{damaged} danneggiat{(damaged == 1 ? "o" : "i")}");
         if (bad > 0) parts.Add($"{bad} {badWord}{(bad == 1 ? badOne : badMany)}");
         if (warn > 0) parts.Add($"{warn} da verificare");
         if (changed > 0) parts.Add($"{changed} da ricontrollare");
         if (unreadable > 0) parts.Add($"{unreadable} non leggibil{(unreadable == 1 ? "e" : "i")}");
 
-        var level = bad > 0 ? WebStreamLevel.Bad
+        var level = bad + damaged > 0 ? WebStreamLevel.Bad
             : warn > 0 ? WebStreamLevel.Warning
             : changed > 0 ? WebStreamLevel.Stale
             : unreadable > 0 ? WebStreamLevel.Unreadable
@@ -547,6 +591,7 @@ public partial class SftpTabViewModel
             : first.Date == last.Date ? $"\nControllati il {first:dd/MM/yyyy}"
             : $"\nControllati tra il {first:dd/MM/yyyy} e il {last:dd/MM/yyyy}";
         var detail = $"{total} video controllati in questa cartella e nelle sottocartelle:\n"
+                     + (damaged > 0 ? $"  danneggiati (da riscaricare): {damaged}\n" : "")
                      + $"  {badWord}{(bad == 1 ? badOne : badMany)}: {bad}\n  da verificare: {warn}\n"
                      + $"  da ricontrollare (cambiati dopo il controllo): {changed}\n  non leggibili: {unreadable}\n  OK: {ok}" + when;
         return (level, info, detail);

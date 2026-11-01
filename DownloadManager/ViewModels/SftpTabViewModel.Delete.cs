@@ -137,6 +137,7 @@ public partial class SftpTabViewModel
 
         await SftpRefreshInternalAsync(silent: true);
         InvalidateZeroByteCacheRecursive(SftpCurrentRemotePath);
+        ServerChanged(server);
         SftpStatusMessage = DeleteSummary(result, list.Count, "dal server");
     }
 
@@ -165,6 +166,7 @@ public partial class SftpTabViewModel
 
         _relayQueue.ForgetCreatedFolders();
         await Server2RefreshInternalAsync(silent: true);
+        ServerChanged(server);
         SftpStatusMessage = DeleteSummary(result, entries.Count, $"da '{server.Name}'");
     }
 }

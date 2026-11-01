@@ -103,10 +103,29 @@ public partial class MainWindow : Window
         viewModel.Sftp.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(SftpTabViewModel.ShowWebResults) or nameof(SftpTabViewModel.ShowLanguageResults)
-                or nameof(SftpTabViewModel.ShowDurationResults))
+                or nameof(SftpTabViewModel.ShowDurationResults) or nameof(SftpTabViewModel.ShowZeroByteResults)
+                or nameof(SftpTabViewModel.ShowContentsResults) or nameof(SftpTabViewModel.ShowSizeColumn)
+                or nameof(SftpTabViewModel.ShowModifiedColumn))
                 UpdateResultColumns();
         };
         Opened += (_, _) => UpdateResultColumns();
+        HookColumnMenus();
+
+        // File accodati: il contatore della scheda della coda pulsa; "Vedi coda" apre la scheda
+        viewModel.Sftp.JobsQueued += kind =>
+        {
+            var pill = kind switch
+            {
+                QueueKind.Upload => UploadQueuePill,
+                QueueKind.Download => DownloadQueuePill,
+                _ => RelayQueuePill
+            };
+            if (pill == null) return;
+            // Il contatore si aggiorna entro 200 ms: si pulsa dopo, quando è già visibile
+            Avalonia.Threading.DispatcherTimer.RunOnce(() => pill.Classes.Add("bump"), TimeSpan.FromMilliseconds(260));
+            Avalonia.Threading.DispatcherTimer.RunOnce(() => pill.Classes.Remove("bump"), TimeSpan.FromMilliseconds(480));
+        };
+        viewModel.Sftp.OpenQueueRequested += kind => SftpTabs.SelectedIndex = (int)kind;
         DownloadManager.Services.Download.EnqueueGuard.Ask = (title, prompt, ok, cancel) =>
             ConfirmDialog.ShowAsync(this, prompt, title, safeDefault: true, okText: ok, cancelText: cancel);
 
@@ -1824,18 +1843,6 @@ public partial class MainWindow : Window
 
     // ───── Verifica dei video: prima si sceglie se controllare anche la lingua ─────
 
-    private void OnCheckWebStreamClick(object? sender, RoutedEventArgs e) => _ = StartVideoCheckWithChoiceAsync(recheckAll: false);
-
-    private void OnRecheckAllWebStreamClick(object? sender, RoutedEventArgs e) => _ = StartVideoCheckWithChoiceAsync(recheckAll: true);
-
-    private async Task StartVideoCheckWithChoiceAsync(bool recheckAll)
-    {
-        if (Vm == null || !Vm.Sftp.CanStartVideoCheck()) return;
-        var choice = await VideoCheckDialog.ShowAsync(this, recheckAll, minDurationMinutes: Vm.Sftp.MinVideoDurationMinutes);
-        if (choice == null) return;
-        Vm.Sftp.StartVideoCheck(choice.Web, choice.Language, recheckAll, choice.Duration);
-    }
-
     // ───── Esiti dei controlli e controlli sugli elementi selezionati ─────
 
     private void UpdateResultColumns()
@@ -1851,66 +1858,172 @@ public partial class MainWindow : Window
                     case "Web": col.IsVisible = Vm.Sftp.ShowWebResults; break;
                     case "Lingua": col.IsVisible = Vm.Sftp.ShowLanguageResults; break;
                     case "Durata": col.IsVisible = Vm.Sftp.ShowDurationResults; break;
+                    case "0 byte": col.IsVisible = Vm.Sftp.ShowZeroByteResults; break;
+                    case "Contenuto": col.IsVisible = Vm.Sftp.ShowContentsResults; break;
+                    case "Dim.": col.IsVisible = Vm.Sftp.ShowSizeColumn; break;
+                    case "Ultima modifica": col.IsVisible = Vm.Sftp.ShowModifiedColumn; break;
                 }
             }
         }
     }
 
-    private void OnRemoteVideoCheckClick(object? sender, RoutedEventArgs e) => _ = VideoCheckOnSelectionAsync(sender, left: false);
-    private void OnServer2VideoCheckClick(object? sender, RoutedEventArgs e) => _ = VideoCheckOnSelectionAsync(sender, left: true);
+    /// <summary>
+    /// Tasto destro sull'intestazione di una tabella di file: menu per mostrare o nascondere le
+    /// colonne (le stesse voci valgono per tutte e tre le tabelle). Il menu delle righe non si apre.
+    /// </summary>
+    private void HookColumnMenus()
+    {
+        foreach (var grid in new[] { RemoteFilesGrid, Server2FilesGrid, LocalFilesGrid })
+            grid?.AddHandler(ContextRequestedEvent, OnFileGridContextRequested, RoutingStrategies.Tunnel);
+    }
 
-    private async Task VideoCheckOnSelectionAsync(object? sender, bool left)
+    private void OnFileGridContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (Vm == null || e.Source is not Visual v) return;
+        var header = v as Avalonia.Controls.DataGridColumnHeader
+                     ?? v.FindAncestorOfType<Avalonia.Controls.DataGridColumnHeader>();
+        if (header == null) return;
+        e.Handled = true;   // niente menu delle righe
+
+        var sftp = Vm.Sftp;
+        MenuItem Item(string header, bool isChecked, Action<bool> set)
+        {
+            var item = new MenuItem { Header = header, ToggleType = MenuItemToggleType.CheckBox, IsChecked = isChecked };
+            item.Click += (_, _) => set(!isChecked);
+            return item;
+        }
+        var menu = new ContextMenu
+        {
+            Items =
+            {
+                new MenuItem { Header = "Colonne da mostrare", IsEnabled = false },
+                Item("Web (codec)", sftp.ShowWebResults, b => sftp.ShowWebResults = b),
+                Item("Lingua", sftp.ShowLanguageResults, b => sftp.ShowLanguageResults = b),
+                Item("Durata", sftp.ShowDurationResults, b => sftp.ShowDurationResults = b),
+                Item("0 byte (file vuoti)", sftp.ShowZeroByteResults, b => sftp.ShowZeroByteResults = b),
+                Item("Contenuto", sftp.ShowContentsResults, b => sftp.ShowContentsResults = b),
+                Item("Dimensione", sftp.ShowSizeColumn, b => sftp.ShowSizeColumn = b),
+                Item("Ultima modifica", sftp.ShowModifiedColumn, b => sftp.ShowModifiedColumn = b),
+                new Separator(),
+                Item("Evidenzia le righe con problemi", sftp.HighlightRows, b => sftp.HighlightRows = b),
+            }
+        };
+        // "Mostra tutte" e "Nascondi tutte" sulla stessa riga
+        Button Pill(string text, string icon, Action act)
+        {
+            var b = new Button
+            {
+                Classes = { "ghost" },
+                Padding = new Thickness(10, 4),
+                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+                Content = new StackPanel
+                {
+                    Classes = { "bi" },
+                    Children =
+                    {
+                        new Avalonia.Controls.Shapes.Path { Classes = { "icon" }, Data = (Avalonia.Media.Geometry)this.FindResource(icon)! },
+                        new TextBlock { Text = text }
+                    }
+                }
+            };
+            b.Click += (_, _) => { act(); menu.Close(); };
+            return b;
+        }
+        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*, 6, *"), Margin = new Thickness(4, 2) };
+        var show = Pill("Mostra tutte", "IconEye", sftp.ShowAllColumns);
+        var hide = Pill("Nascondi tutte", "IconMinusCircle", sftp.HideAllColumns);
+        Grid.SetColumn(hide, 2);
+        row.Children.Add(show);
+        row.Children.Add(hide);
+        menu.Items.Add(row);
+        menu.Open(header);
+    }
+
+    // ───── Controlla… : un'unica finestra per cartelle (file vuoti, contenuto) e video ─────
+
+    /// <summary>
+    /// Chiede cosa controllare e lo fa: prima le cartelle (veloce), poi i video. Se l'analisi
+    /// delle cartelle viene fermata, i video non partono.
+    /// </summary>
+    private async Task RunChecksAsync(bool hasFolders, string? prompt, bool recheckAll, Func<bool> canStartVideos,
+        Func<CheckDialog.Selection, Task<bool>> folders, Action<CheckDialog.Selection> videos)
     {
         if (Vm == null) return;
+        var c = await CheckDialog.ShowAsync(this, hasFolders, prompt, recheckAll, Vm.Sftp.MinVideoDurationMinutes);
+        if (c == null) return;
+        if (c.AnyVideo && !canStartVideos()) return;
+        if (c.AnyFolder && !await folders(c)) return;
+        if (c.AnyVideo) videos(c);
+    }
+
+    private static string SelectionPrompt(IReadOnlyList<(string Name, bool IsDir)> items, string where) =>
+        items.Count == 1
+            ? $"«{items[0].Name}»{(items[0].IsDir ? " e tutto quello che contiene" : "")}{where}. I video si rileggono anche se già controllati."
+            : $"I {items.Count} elementi selezionati (con le loro sottocartelle){where}. I video si rileggono anche se già controllati.";
+
+    // Pannello di destra: tutta la cartella aperta (tasto destro sul pulsante: ricontrolla tutto)
+    private void OnRemoteCheckClick(object? sender, RoutedEventArgs e) => _ = RemoteCheckAsync(recheckAll: false);
+    private void OnRemoteRecheckAllClick(object? sender, RoutedEventArgs e) => _ = RemoteCheckAsync(recheckAll: true);
+    private Task RemoteCheckAsync(bool recheckAll)
+    {
+        if (Vm == null) return Task.CompletedTask;
+        var sftp = Vm.Sftp;
+        return RunChecksAsync(sftp.SftpRemoteEntries.Any(x => x.IsDirectory), null, recheckAll, sftp.CanStartVideoCheck,
+            c => sftp.CheckZeroByteFolders(c.Zero, c.Contents),
+            c => sftp.StartVideoCheck(c.Web, c.Language, recheckAll, c.Duration));
+    }
+
+    // Pannello di sinistra (server): tutta la cartella aperta
+    private void OnServer2CheckClick(object? sender, RoutedEventArgs e) => _ = Server2CheckAsync(recheckAll: false);
+    private void OnServer2RecheckAllClick(object? sender, RoutedEventArgs e) => _ = Server2CheckAsync(recheckAll: true);
+    private Task Server2CheckAsync(bool recheckAll)
+    {
+        if (Vm == null) return Task.CompletedTask;
+        var sftp = Vm.Sftp;
+        return RunChecksAsync(sftp.Server2Entries.Any(x => x.IsDirectory), null, recheckAll, sftp.CanStartVideoCheckAnywhere,
+            c => sftp.CheckServer2ZeroByte(c.Zero, c.Contents),
+            c => sftp.StartVideoCheckLeft(c.Web, c.Language, recheckAll, c.Duration));
+    }
+
+    // PC: tutta la cartella aperta
+    private void OnLocalCheckClick(object? sender, RoutedEventArgs e) => _ = LocalCheckAsync(recheckAll: false);
+    private void OnLocalRecheckAllClick(object? sender, RoutedEventArgs e) => _ = LocalCheckAsync(recheckAll: true);
+    private Task LocalCheckAsync(bool recheckAll)
+    {
+        if (Vm == null) return Task.CompletedTask;
+        var sftp = Vm.Sftp;
+        return RunChecksAsync(sftp.SftpLocalEntries.Any(x => x.IsDirectory), "La cartella aperta del PC e tutte le sottocartelle.", recheckAll,
+            sftp.CanStartVideoCheckAnywhere,
+            async c => { await sftp.CheckLocalZeroBytesAsync(c.Zero, c.Contents); return true; },
+            c => sftp.StartVideoCheckLocal(c.Web, c.Language, recheckAll, null, c.Duration));
+    }
+
+    // Elementi selezionati (tasto destro sulle righe): le voci delle cartelle valgono solo per le cartelle
+    private void OnRemoteCheckSelectionClick(object? sender, RoutedEventArgs e) => _ = RemoteSelectionCheckAsync(sender, left: false);
+    private void OnServer2CheckSelectionClick(object? sender, RoutedEventArgs e) => _ = RemoteSelectionCheckAsync(sender, left: true);
+    private Task RemoteSelectionCheckAsync(object? sender, bool left)
+    {
+        if (Vm == null) return Task.CompletedTask;
+        var sftp = Vm.Sftp;
         var targets = ResolveItems<SftpRemoteEntry>(sender);
-        if (targets.Count == 0) return;
-        var prompt = targets.Count == 1
-            ? $"«{targets[0].Name}»{(targets[0].IsDirectory ? " e tutto quello che contiene" : "")}. Si rilegge anche se già controllato."
-            : $"I {targets.Count} elementi selezionati (con le loro sottocartelle). Si rileggono anche se già controllati.";
-        var choice = await VideoCheckDialog.ShowAsync(this, prompt: prompt, minDurationMinutes: Vm.Sftp.MinVideoDurationMinutes);
-        if (choice == null) return;
-        Vm.Sftp.StartVideoCheckOnSelection(left, targets, choice.Web, choice.Language, choice.Duration);
+        if (targets.Count == 0) return Task.CompletedTask;
+        return RunChecksAsync(targets.Any(t => t.IsDirectory), SelectionPrompt(targets.Select(t => (t.Name, t.IsDirectory)).ToList(), ""),
+            recheckAll: true, sftp.CanStartVideoCheckAnywhere,
+            c => sftp.CheckZeroByteOnSelection(left, targets, c.Zero, c.Contents),
+            c => sftp.StartVideoCheckOnSelection(left, targets, c.Web, c.Language, c.Duration));
     }
 
-    private void OnRemoteZeroCheckClick(object? sender, RoutedEventArgs e) => Vm?.Sftp.CheckZeroByteOnSelection(false, ResolveItems<SftpRemoteEntry>(sender));
-    private void OnServer2ZeroCheckClick(object? sender, RoutedEventArgs e) => Vm?.Sftp.CheckZeroByteOnSelection(true, ResolveItems<SftpRemoteEntry>(sender));
-
-    // ───── Verifica dei video nel pannello di sinistra (server) e sui file del PC ─────
-
-    private void OnServer2CheckWebStreamClick(object? sender, RoutedEventArgs e) => _ = LeftVideoCheckAsync(recheckAll: false);
-    private void OnServer2RecheckAllWebStreamClick(object? sender, RoutedEventArgs e) => _ = LeftVideoCheckAsync(recheckAll: true);
-
-    private async Task LeftVideoCheckAsync(bool recheckAll)
+    private void OnLocalCheckSelectionClick(object? sender, RoutedEventArgs e)
     {
-        if (Vm == null || !Vm.Sftp.CanStartVideoCheckAnywhere()) return;
-        var choice = await VideoCheckDialog.ShowAsync(this, recheckAll, minDurationMinutes: Vm.Sftp.MinVideoDurationMinutes);
-        if (choice == null) return;
-        Vm.Sftp.StartVideoCheckLeft(choice.Web, choice.Language, recheckAll, choice.Duration);
-    }
-
-    private void OnLocalCheckWebStreamClick(object? sender, RoutedEventArgs e) => _ = LocalVideoCheckAsync(recheckAll: false, targets: null);
-    private void OnLocalRecheckAllWebStreamClick(object? sender, RoutedEventArgs e) => _ = LocalVideoCheckAsync(recheckAll: true, targets: null);
-    private void OnLocalVideoCheckClick(object? sender, RoutedEventArgs e)
-    {
+        if (Vm == null) return;
+        var sftp = Vm.Sftp;
         var targets = ResolveItems<LocalFileEntry>(sender);
-        if (targets.Count > 0) _ = LocalVideoCheckAsync(recheckAll: true, targets);
-    }
-
-    private async Task LocalVideoCheckAsync(bool recheckAll, List<LocalFileEntry>? targets)
-    {
-        if (Vm == null || !Vm.Sftp.CanStartVideoCheckAnywhere()) return;
-        string? prompt = targets == null ? null
-            : targets.Count == 1
-                ? $"«{targets[0].Name}»{(targets[0].IsDirectory ? " e tutto quello che contiene" : "")}, sul PC. Si rilegge anche se già controllato."
-                : $"I {targets.Count} elementi selezionati del PC (con le loro sottocartelle). Si rileggono anche se già controllati.";
-        var choice = await VideoCheckDialog.ShowAsync(this, recheckAll, prompt, Vm.Sftp.MinVideoDurationMinutes);
-        if (choice == null) return;
-        Vm.Sftp.StartVideoCheckLocal(choice.Web, choice.Language, recheckAll, targets, choice.Duration);
-    }
-
-    private void OnLocalZeroCheckClick(object? sender, RoutedEventArgs e)
-    {
-        if (Vm != null) _ = Vm.Sftp.CheckLocalZeroOnSelectionAsync(ResolveItems<LocalFileEntry>(sender));
+        if (targets.Count == 0) return;
+        _ = RunChecksAsync(targets.Any(t => t.IsDirectory), SelectionPrompt(targets.Select(t => (t.Name, t.IsDirectory)).ToList(), ", sul PC"),
+            recheckAll: true, sftp.CanStartVideoCheckAnywhere,
+            async c => { await sftp.CheckLocalZeroOnSelectionAsync(targets, c.Zero, c.Contents); return true; },
+            c => sftp.StartVideoCheckLocal(c.Web, c.Language, true, targets, c.Duration));
     }
 
     // ───── Soglia della durata (menu con l'occhio) ─────

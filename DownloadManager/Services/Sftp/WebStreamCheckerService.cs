@@ -246,12 +246,24 @@ public sealed class WebStreamCheckerService
             return BuildResult(v, streams, container);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (DamagedFileException) { return Damaged(v); }
         catch (Exception ex)
         {
             var detail = $"Non è stato possibile leggere il file: {ex.Message}";
             return new WebStreamResult(v.FullPath, WebStreamLevel.Unreadable, "Non leggibile", detail,
                 v.Size, v.Modified, DateTime.Now, WebStreamLevel.Unreadable, "Non leggibile", detail);
         }
+    }
+
+    /// <summary>Esito di un file con l'inizio vuoto: "File danneggiato" in rosso in tutte le colonne.</summary>
+    public const string DamagedText = "File danneggiato";
+
+    private static WebStreamResult Damaged(SftpRemoteEntry v)
+    {
+        const string detail = "Il file inizia con dati vuoti (solo zeri): è un download o un upload rimasto incompleto, " +
+                              "quindi manca una parte del video e nessun lettore lo apre.\nVa riscaricato (o ricaricato) per intero.";
+        return new WebStreamResult(v.FullPath, WebStreamLevel.Bad, DamagedText, detail,
+            v.Size, v.Modified, DateTime.Now, WebStreamLevel.Bad, DamagedText, detail);
     }
 
     /// <summary>Nucleo della verifica: elenco dei video, lettura (3 alla volta), salvataggio, riepilogo.</summary>
@@ -287,13 +299,14 @@ public sealed class WebStreamCheckerService
         _logger.LogInformation("[WEB-STREAM] {What} avviato su {Root} ({Server})", what, root, serverName);
 
         int checkedNow = 0, done = 0, skipped = 0;
-        int webBad = 0, webWarn = 0, langBad = 0, langWarn = 0, unreadable = 0, shortCount = 0;
+        int webBad = 0, webWarn = 0, langBad = 0, langWarn = 0, unreadable = 0, damaged = 0, shortCount = 0;
         var shortBelow = ShortThresholdSeconds;
         var countLock = new object();
         void CountResult(WebStreamResult r)
         {
             lock (countLock)
             {
+                if (r.ShortText == DamagedText) { damaged++; return; }
                 if (r.Level == WebStreamLevel.Unreadable || r.LangLevel == WebStreamLevel.Unreadable) { unreadable++; return; }
                 if (web) { if (r.Level == WebStreamLevel.Bad) webBad++; else if (r.Level == WebStreamLevel.Warning) webWarn++; }
                 if (lang) { if (r.LangLevel == WebStreamLevel.Bad) langBad++; else if (r.LangLevel == WebStreamLevel.Warning) langWarn++; }
@@ -411,6 +424,7 @@ public sealed class WebStreamCheckerService
                 if (langBad > 0) parts.Add($"{langBad} senza italiano");
                 if (webWarn + langWarn > 0) parts.Add($"{webWarn + langWarn} da verificare");
                 if (shortCount > 0) parts.Add($"{shortCount} più corti di {FormatMinutes(shortBelow)}");
+                if (damaged > 0) parts.Add($"{damaged} danneggiati (da riscaricare)");
                 if (unreadable > 0) parts.Add($"{unreadable} non leggibili");
                 var outcome = parts.Count == 0 ? "nessun problema" : string.Join(", ", parts);
                 var news = skipped > 0 ? $" ({checkedNow} letti ora, {skipped} già controllati)" : "";
@@ -560,6 +574,11 @@ public sealed class WebStreamCheckerService
             {
                 _logger.LogInformation("[WEB-STREAM] Connessione caduta su {File}, riprovo: {Msg}", v.FullPath, ex.Message);
             }
+            catch (DamagedFileException)
+            {
+                _logger.LogInformation("[WEB-STREAM] {File} danneggiato: inizio vuoto", v.FullPath);
+                return Damaged(v);
+            }
             catch (Exception ex)
             {
                 _logger.LogInformation("[WEB-STREAM] {File} non leggibile: {Msg}", v.FullPath, ex.Message);
@@ -661,8 +680,29 @@ public sealed class WebStreamCheckerService
     private static readonly HashSet<string> Mp4TopBoxes = new(StringComparer.Ordinal)
         { "ftyp", "moov", "mdat", "free", "skip", "wide", "pnot", "uuid", "styp" };
 
+    /// <summary>
+    /// Il file inizia con zeri: pezzi mai scritti di un download o upload rimasto incompleto
+    /// (es. un episodio di 240 MB con i primi 200 MB vuoti). Nessun lettore lo apre: va riscaricato.
+    /// </summary>
+    private sealed class DamagedFileException() : Exception("l'inizio del file è vuoto (solo zeri)");
+
+    private const int ZeroProbeBytes = 64 * 1024;
+
     private static async Task<Container> DetectContainerAsync(Stream remote, CancellationToken ct)
     {
+        // I primi 64 KB tutti a zero: file danneggiato (nessun formato video inizia così)
+        var probe = new byte[ZeroProbeBytes];
+        int got = 0;
+        while (got < probe.Length)
+        {
+            int n = await remote.ReadAsync(probe.AsMemory(got), ct);
+            if (n <= 0) break;
+            got += n;
+        }
+        if (got >= 8 && probe.AsSpan(0, got).IndexOfAnyExcept((byte)0) < 0)
+            throw new DamagedFileException();
+        remote.Position = 0;
+
         var head = new byte[8];
         int read = 0;
         while (read < head.Length)

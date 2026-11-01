@@ -1643,7 +1643,7 @@ public partial class VideoboxTabViewModel : ObservableObject
 
     private readonly System.Runtime.CompilerServices.ConditionalWeakTable<VideoboxPostItem, PostLinks> _postLinks = new();
 
-    private PostLinks AnalyzeLinks(VideoboxPostItem post, HashSet<string> validHosts, string domainsStamp)
+    private PostLinks AnalyzeLinks(VideoboxPostItem post, DomainMatcher validDomains, string domainsStamp)
     {
         if (_postLinks.TryGetValue(post, out var info) && ReferenceEquals(info.Links, post.Links) && info.DomainsStamp == domainsStamp)
             return info;
@@ -1658,7 +1658,7 @@ public partial class VideoboxTabViewModel : ObservableObject
         {
             var url = post.Links[i];
             var host = LinkValidator.HostOf(url);
-            info.Valid[i] = host.Length > 0 && validHosts.Contains(host);
+            info.Valid[i] = validDomains.IsValid(url, host);
             info.Host[i] = host.ToLowerInvariant();
             if (info.Valid[i])
             {
@@ -1674,7 +1674,7 @@ public partial class VideoboxTabViewModel : ObservableObject
     {
         var domains = _settingsService.Current.AllValidStorageDomains.ToList();
         var domainsStamp = string.Join("|", domains);
-        var validHosts = domains.Select(LinkValidator.CleanDomain).Where(d => d.Length > 0).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var validDomains = new DomainMatcher(domains);
         var treeSources = SftpRootNodes.Where(r => r.Source != null).Select(r => r.Source!).Distinct().ToList();
 
         // Domini e percorsi pubblici delle sorgenti: calcolati una volta per giro
@@ -1702,7 +1702,7 @@ public partial class VideoboxTabViewModel : ObservableObject
         var keysByPost = new Dictionary<VideoboxPostItem, Dictionary<VideoboxSource, List<string>>>();
         foreach (var post in _allPosts)
         {
-            var info = AnalyzeLinks(post, validHosts, domainsStamp);
+            var info = AnalyzeLinks(post, validDomains, domainsStamp);
             post.ValidLinkCount = info.ValidCount;
             post.BaseStatus = GetBasePostStatus(post.Links, info.ValidCount);
             post.Status = post.BaseStatus;

@@ -126,6 +126,9 @@ public abstract class SftpQueueServiceBase<TJob> where TJob : TransferJobBase
 
     public event Action? QueueChanged;
 
+    /// <summary>Un job è stato aggiunto alla coda (per l'avviso "in coda" nell'interfaccia).</summary>
+    public event Action? JobEnqueued;
+
     /// <summary>Sollevato quando un job termina con successo.</summary>
     public event Action<TJob>? JobCompleted;
 
@@ -153,6 +156,7 @@ public abstract class SftpQueueServiceBase<TJob> where TJob : TransferJobBase
         }
 
         QueueChanged?.Invoke();
+        JobEnqueued?.Invoke();
         TryDispatch();
     }
 

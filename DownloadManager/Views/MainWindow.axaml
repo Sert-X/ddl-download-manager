@@ -1572,15 +1572,15 @@
                         </Border>
 
                         <DockPanel>
-                            <TabControl x:Name="OrganizerTabs" SelectedIndex="{Binding SelectedSubTabIndex}" DockPanel.Dock="Top">
+                            <TabControl x:Name="OrganizerTabs" Classes="segmented" SelectedIndex="{Binding SelectedSubTabIndex}" DockPanel.Dock="Top">
                                 <!-- ===== SINGOLA CARTELLA ===== -->
-                                <TabItem Header="Singola cartella"/>
+                                <TabItem><TabItem.Header><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconFolder}"/><TextBlock Text="Singola cartella" VerticalAlignment="Center"/></StackPanel></TabItem.Header></TabItem>
 
                                 <!-- ===== UNISCI CARTELLE ===== -->
-                                <TabItem Header="Unisci cartelle"/>
+                                <TabItem><TabItem.Header><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconLayers}"/><TextBlock Text="Unisci cartelle" VerticalAlignment="Center"/></StackPanel></TabItem.Header></TabItem>
 
                                 <!-- ===== DIVIDI CARTELLA ===== -->
-                                <TabItem Header="Dividi cartella"/>
+                                <TabItem><TabItem.Header><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCopy}"/><TextBlock Text="Dividi cartella" VerticalAlignment="Center"/></StackPanel></TabItem.Header></TabItem>
                             </TabControl>
                             <!-- Contenuti sempre nel visual tree: cambiando tab restano scroll e stato -->
                             <Panel ClipToBounds="True">
@@ -1979,9 +1979,9 @@
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">5. Controlli sui file</Run><LineBreak/>
                                         Funzionano nel pannello di destra, in quello di sinistra (server o Locale) e sui singoli elementi.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Lente:</Run> cerca file vuoti (0 byte), di solito upload interrotti, nelle sottocartelle della cartella aperta. I file vuoti e le cartelle che li contengono diventano rossi; la colonna "Contenuto" ne riassume il contenuto.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Pellicola:</Run> controlla i video della cartella e delle sottocartelle. Una finestra chiede cosa controllare: codec web, lingua, durata, anche tutti insieme (stessa velocità: ogni file si legge una volta; l'ultima scelta resta). Tasto destro sulla pellicola: "Ricontrolla tutti i video".<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Singoli elementi:</Run> clic destro su file o cartelle, "Controlla codec / lingua…" oppure "Controlla file vuoti (0 byte)" (solo cartelle). Si rileggono anche se già controllati.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Controlla (pulsante con la spunta):</Run> una sola finestra per tutti i controlli della cartella aperta e delle sottocartelle. Cartelle: "File vuoti" (quanti file da 0 byte, colonna 0 byte) e "Contenuto" (numero di cartelle e file). Video: codec web, lingua, durata. Scegli le voci che vuoi o "Seleziona tutto"; prima si analizzano le cartelle (veloce), poi i video. Il pulsante ■ ferma la fase in corso: fermando le cartelle i video non partono. L'ultima scelta resta.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Senza sottocartelle:</Run> (es. dentro una cartella di episodi) le voci delle cartelle sono grigie: i file vuoti si vedono già nella colonna 0 byte e il numero di file è nella riga sopra la tabella. Tasto destro sul pulsante: "Ricontrolla tutto", anche i video già controllati.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Singoli elementi:</Run> clic destro su file o cartelle, "Controlla…": stessa finestra; le voci delle cartelle valgono solo per le cartelle selezionate, quelle dei video per tutto. I video si rileggono anche se già controllati.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Velocità:</Run> dei video si leggono solo pochi MB (l'intestazione o l'indice), 3 alla volta; la riga di stato dice "Web 125/4421 · nome del file" e la riga del file (o della cartella che lo contiene) mostra "In lettura…".<LineBreak/>
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Colonna Web: si vede nei browser?</Run><LineBreak/>
@@ -2003,13 +2003,28 @@
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Soglia:</Run> occhio → "Durata minima…" (all'inizio 5 minuti, 0 = nessuna segnalazione). Cambiandola le segnalazioni si aggiornano subito, senza ricontrollare i file.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• File .ts e .mpg:</Run> non scrivono la durata nel file: si stima dalla dimensione e compare con "~".<LineBreak/>
                                         <LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Colonne 0 byte e Contenuto</Run><LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 0 byte:</Run> quanti file vuoti ci sono nella cartella e nelle sottocartelle analizzate ("Nessuno" se non ce ne sono); su un file, "Vuoto (0 byte)".<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Contenuto:</Run> numero di cartelle (icona cartella) e di file (icona foglio). Lo hanno anche le sottocartelle lette dall'analisi, fino a 3 livelli sotto la cartella analizzata.<LineBreak/>
+                                        <LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Legenda dei colori</Run><LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppSuccessBrush}">●  Verde:</Run> tutto a posto (OK, ITA, nessun file vuoto).<LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppWarningBrush}">●  Giallo:</Run> da verificare: funziona in parte o non si può dire con certezza (HEVC, lingua non indicata, video corto).<LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppDangerBrush}">●  Rosso:</Run> problema dei video: non adatto al web, senza italiano, file danneggiato.<LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppZeroBrush}">●  Viola:</Run> file vuoti (0 byte) e cartelle che ne contengono.<LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextMutedBrush}">●  Grigio:</Run> non leggibile, oppure orologio = da ricontrollare (il file è cambiato dopo il controllo).<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Righe colorate:</Run> la riga intera si colora di rosso (video con problemi) o di viola (file vuoti). Si spengono tutte con l'occhio → "Evidenzia le righe con problemi" (o tasto destro sulle intestazioni): gli esiti restano nelle colonne.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Cartelle:</Run> prendono il colore del caso peggiore che contengono (es. un solo video rosso rende rossa la cella della cartella).<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• File danneggiato:</Run> il file inizia con dati vuoti (download o upload rimasto a metà): rosso in Web, Lingua e Durata, va riscaricato o ricaricato.<LineBreak/>
+                                        <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">6. Esiti salvati e sempre aggiornati</Run><LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Salvati:</Run> tutti gli esiti (file vuoti, Web, Lingua) restano nel PC anche chiudendo l'app; riaprendo una cartella si vedono subito.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Si salta il già fatto:</Run> rilanciando un controllo si leggono solo i video nuovi o cambiati (dimensione o data diverse). Un file cambiato dopo il controllo è "Da ricontrollare".<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Cartelle:</Run> mostrano il riassunto di ciò che contengono, anche in profondità ("3 non idonei · 2 da verificare"); nel tooltip i numeri e le date dei controlli.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Modifiche dall'app:</Run> rinomine, spostamenti ed eliminazioni portano con sé i loro esiti.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Modifiche da fuori (WinSCP, altri PC):</Run> all'apertura di una cartella (al massimo ogni 5 minuti) e ogni 5 minuti il server elenca tutti i file sotto la cartella aperta, anche migliaia, in un paio di secondi. Gli esiti di file eliminati si tolgono, quelli di file rinominati o spostati li seguono, i file cambiati diventano "Da ricontrollare" e i file vuoti si aggiornano in tutto l'albero. Per farlo subito: occhio → "Riallinea esiti ora".<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Mostra / nascondi:</Run> l'occhio nella barra sceglie quali esiti vedere (file vuoti, codec web, lingua, durata) in tutte le tabelle, colonne ed evidenziazioni comprese. È colorato quando qualcosa è nascosto.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Modifiche da fuori (WinSCP, altri PC):</Run> all'apertura di una cartella e ogni minuto (2 secondi dopo una modifica fatta dall'app) il server elenca tutti i file sotto la cartella aperta, anche migliaia, in un paio di secondi. Gli esiti di file eliminati si tolgono, quelli di file rinominati o spostati li seguono, i file cambiati diventano "Da ricontrollare" e i file vuoti si aggiornano in tutto l'albero. Per farlo subito: occhio → "Riallinea esiti ora".<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Mostra / nascondi:</Run> l'occhio nella barra sceglie quali esiti vedere (file vuoti, contenuto, codec web, lingua, durata) in tutte le tabelle, colonne ed evidenziazioni comprese. È colorato quando qualcosa è nascosto.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Colonne:</Run> tasto destro sull'intestazione di una tabella per mostrare o nascondere ogni colonna (Web, Lingua, Durata, 0 byte, Contenuto, Dimensione, Ultima modifica) e fare spazio al nome; in fondo al menu "Mostra tutte" e "Nascondi tutte" (resta solo il nome). Vale per tutte le tabelle e resta salvato.<LineBreak/>
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">7. Altre tab</Run><LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Organizza file:</Run> in modalità Remoto lavora su uno qualsiasi dei server aperti qui (menu "Server").<LineBreak/>
@@ -2093,7 +2108,7 @@
                         </Border>
 
                         <DockPanel>
-                            <TabControl x:Name="SftpTabs" DockPanel.Dock="Top">
+                            <TabControl x:Name="SftpTabs" Classes="segmented" DockPanel.Dock="Top">
                                 <!-- ===== BROWSER ===== -->
                                 <TabItem>
                                     <TabItem.Header>
@@ -2110,7 +2125,7 @@
                                         <StackPanel Classes="bi">
                                             <Path Classes="icon" Data="{StaticResource IconUpload}"/>
                                             <TextBlock Text="Upload queue" VerticalAlignment="Center"/>
-                                            <Border Width="9" Height="9" CornerRadius="5" Background="{DynamicResource AppAccentBrush}" IsVisible="{Binding HasActiveUploads}" VerticalAlignment="Center"/>
+                                            <Border x:Name="UploadQueuePill" Classes="queuePill" IsVisible="{Binding HasUploadQueueCount}" VerticalAlignment="Center" ToolTip.Tip="File in corso o in attesa"><TextBlock Text="{Binding UploadQueueCount}"/></Border>
                                         </StackPanel>
                                     </TabItem.Header>
                                 </TabItem>
@@ -2121,7 +2136,7 @@
                                         <StackPanel Classes="bi">
                                             <Path Classes="icon" Data="{StaticResource IconDownload}"/>
                                             <TextBlock Text="Download queue" VerticalAlignment="Center"/>
-                                            <Border Width="9" Height="9" CornerRadius="5" Background="{DynamicResource AppAccentBrush}" IsVisible="{Binding HasActiveDownloads}" VerticalAlignment="Center"/>
+                                            <Border x:Name="DownloadQueuePill" Classes="queuePill" IsVisible="{Binding HasDownloadQueueCount}" VerticalAlignment="Center" ToolTip.Tip="File in corso o in attesa"><TextBlock Text="{Binding DownloadQueueCount}"/></Border>
                                         </StackPanel>
                                     </TabItem.Header>
                                 </TabItem>
@@ -2132,7 +2147,7 @@
                                         <StackPanel Classes="bi">
                                             <Path Classes="icon" Data="{StaticResource IconRepeat}"/>
                                             <TextBlock Text="Server ↔ Server" VerticalAlignment="Center"/>
-                                            <Border Width="9" Height="9" CornerRadius="5" Background="{DynamicResource AppAccentBrush}" IsVisible="{Binding HasActiveRelays}" VerticalAlignment="Center"/>
+                                            <Border x:Name="RelayQueuePill" Classes="queuePill" IsVisible="{Binding HasRelayQueueCount}" VerticalAlignment="Center" ToolTip.Tip="File in corso o in attesa"><TextBlock Text="{Binding RelayQueueCount}"/></Border>
                                         </StackPanel>
                                     </TabItem.Header>
                                 </TabItem>
@@ -2249,28 +2264,30 @@
                                                                 <Button Grid.Column="3" Classes="iconCircle" Command="{Binding Server2RefreshCommand}" Margin="0,0,6,0" ToolTip.Tip="Aggiorna"><Path Classes="icon" Data="{StaticResource IconRefresh}"/></Button>
                                                                 <Button Grid.Column="4" Classes="iconCircle" Click="OnServer2NewFolderClick" Margin="0,0,6,0" ToolTip.Tip="Nuova cartella"><Path Classes="icon" Data="{StaticResource IconPlus}"/></Button>
                                                                 <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="4" Margin="0,0,6,0">
-                                                                    <Button Classes="iconCircle" Command="{Binding CheckServer2ZeroByteCommand}" IsEnabled="{Binding !IsServer2CheckingZeroByte}" ToolTip.Tip="Analizza la cartella di questo server per trovare file vuoti (0 byte). Se lo stesso server è aperto anche a destra, i risultati sono condivisi"><Path Classes="icon" Data="{StaticResource IconSearch}"/></Button>
-                                                                    <Button Classes="iconCircle danger" Command="{Binding StopServer2ZeroByteCommand}" IsVisible="{Binding IsServer2CheckingZeroByte}" ToolTip.Tip="Ferma il check in corso"><Path Classes="icon" Data="{StaticResource IconStop}"/></Button>
-                                                                    <Button Classes="iconCircle" Click="OnServer2CheckWebStreamClick" IsEnabled="{Binding !IsCheckingWebStream}" ToolTip.Tip="Controlla i video di questa cartella e delle sottocartelle: codec per i player web, lingua dell'audio o entrambi. I video già controllati e non cambiati si saltano. Tasto destro: ricontrolla tutto">
+                                                                    <Button Classes="iconCircle danger" Command="{Binding StopServer2ZeroByteCommand}" IsVisible="{Binding IsServer2CheckingZeroByte}" ToolTip.Tip="Ferma l'analisi in corso"><Path Classes="icon" Data="{StaticResource IconStop}"/></Button>
+                                                                    <Button Classes="iconCircle" Click="OnServer2CheckClick" IsEnabled="{Binding !IsCheckingWebStream}" ToolTip.Tip="Controlla: cartelle (file vuoti, contenuto) e video (codec web, lingua, durata), lo scegli nella finestra. I video già controllati e non cambiati si saltano. Tasto destro: ricontrolla tutto">
                                                                         <Button.ContextMenu>
                                                                             <ContextMenu>
-                                                                                <MenuItem Header="Ricontrolla tutti i video" Click="OnServer2RecheckAllWebStreamClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconRepeat}"/></MenuItem.Icon></MenuItem>
+                                                                                <MenuItem Header="Ricontrolla tutto (anche i video già controllati)" Click="OnServer2RecheckAllClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconRepeat}"/></MenuItem.Icon></MenuItem>
                                                                             </ContextMenu>
                                                                         </Button.ContextMenu>
-                                                                        <Path Classes="icon" Data="{StaticResource IconFilm}"/>
+                                                                        <Path Classes="icon" Data="{StaticResource IconCheckCircle}"/>
                                                                     </Button>
                                                                     <Button Classes="iconCircle danger" Command="{Binding StopWebStreamCheckCommand}" IsVisible="{Binding IsCheckingWebStream}" ToolTip.Tip="Ferma il controllo dei video (gli esiti già trovati restano salvati)"><Path Classes="icon" Data="{StaticResource IconStop}"/></Button>
-                                                                    <Button Classes="iconCircle" Classes.accent="{Binding !ShowsAllResults}" ToolTip.Tip="Esiti dei controlli da mostrare nelle tabelle (file vuoti, codec web, lingua). Evidenziato quando qualcosa è nascosto">
+                                                                    <Button Classes="iconCircle" Classes.accent="{Binding !ShowsAllResults}" ToolTip.Tip="Esiti dei controlli da mostrare nelle tabelle (file vuoti, contenuto, codec web, lingua, durata). Evidenziato quando qualcosa è nascosto">
                                                                         <Path Classes="icon" Data="{StaticResource IconEye}"/>
                                                                         <Button.Flyout>
                                                                             <MenuFlyout Placement="BottomEdgeAlignedRight">
-                                                                                <MenuItem Header="File vuoti (0 byte)" ToggleType="CheckBox" IsChecked="{Binding ShowZeroByteResults, Mode=TwoWay}"/>
+                                                                                <MenuItem Header="File vuoti (colonna 0 byte)" ToggleType="CheckBox" IsChecked="{Binding ShowZeroByteResults, Mode=TwoWay}"/>
+<MenuItem Header="Contenuto (colonna Contenuto)" ToggleType="CheckBox" IsChecked="{Binding ShowContentsResults, Mode=TwoWay}"/>
                                                                                 <MenuItem Header="Codec web (colonna Web)" ToggleType="CheckBox" IsChecked="{Binding ShowWebResults, Mode=TwoWay}"/>
                                                                                 <MenuItem Header="Lingua (colonna Lingua)" ToggleType="CheckBox" IsChecked="{Binding ShowLanguageResults, Mode=TwoWay}"/>
                                                                                 <MenuItem Header="Durata (colonna Durata)" ToggleType="CheckBox" IsChecked="{Binding ShowDurationResults, Mode=TwoWay}"/>
                                                                                 <MenuItem Header="{Binding MinDurationMenuText}" Click="OnMinDurationClick" ToolTip.Tip="Video più corti di questa durata segnalati come corto"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconClock}"/></MenuItem.Icon></MenuItem>
                                                                                 <Separator/>
-                                                                                <MenuItem Header="Mostra / nascondi tutti" Command="{Binding ToggleAllResultsCommand}"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconEye}"/></MenuItem.Icon></MenuItem>
+                                                                                <MenuItem Header="Evidenzia le righe con problemi" ToggleType="CheckBox" IsChecked="{Binding HighlightRows, Mode=TwoWay}" ToolTip.Tip="Colora le righe: rosso per i video con problemi, viola per i file vuoti. Spento, gli esiti restano nelle colonne"/>
+<MenuItem Header="Tutte le colonne: tasto destro sulle intestazioni della tabella" IsEnabled="False"/>
+<MenuItem Header="Mostra / nascondi tutti" Command="{Binding ToggleAllResultsCommand}"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconEye}"/></MenuItem.Icon></MenuItem>
                                                                                 <MenuItem Header="Riallinea esiti ora" Command="{Binding RealignResultsCommand}" ToolTip.Tip="Confronta gli esiti salvati con i file sul server (anche nelle sottocartelle): toglie quelli di file eliminati, segue quelli rinominati, segna da ricontrollare quelli cambiati"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconRefresh}"/></MenuItem.Icon></MenuItem>
                                                                             </MenuFlyout>
                                                                         </Button.Flyout>
@@ -2305,18 +2322,21 @@
                                                                         <MultiBinding Converter="{x:Static BoolConverters.And}">
                                                                             <Binding Path="IsWebBad"/>
                                                                             <Binding Path="$parent[DataGrid].((vm:SftpTabViewModel)DataContext).ShowWebResults"/>
+                                                                            <Binding Path="$parent[DataGrid].((vm:SftpTabViewModel)DataContext).HighlightRows"/>
                                                                         </MultiBinding>
                                                                     </Setter>
                                                                     <Setter Property="Classes.langBad">
                                                                         <MultiBinding Converter="{x:Static BoolConverters.And}">
                                                                             <Binding Path="IsLangBad"/>
                                                                             <Binding Path="$parent[DataGrid].((vm:SftpTabViewModel)DataContext).ShowLanguageResults"/>
+                                                                            <Binding Path="$parent[DataGrid].((vm:SftpTabViewModel)DataContext).HighlightRows"/>
                                                                         </MultiBinding>
                                                                     </Setter>
                                                                     <Setter Property="Classes.zeroByte">
                                                                         <MultiBinding Converter="{x:Static BoolConverters.And}">
                                                                             <Binding Path="HasZeroByteIssue"/>
                                                                             <Binding Path="$parent[DataGrid].((vm:SftpTabViewModel)DataContext).ShowZeroByteResults"/>
+                                                                            <Binding Path="$parent[DataGrid].((vm:SftpTabViewModel)DataContext).HighlightRows"/>
                                                                         </MultiBinding>
                                                                     </Setter>
                                                                 </Style>
@@ -2326,8 +2346,7 @@
                                                                     <MenuItem Header="Apri" Tag="dir" Click="OnServer2OpenClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconFolder}"/></MenuItem.Icon></MenuItem>
                                                                     <MenuItem Header="Anteprima video" Tag="video" Click="OnServer2PreviewClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconPlayCircle}"/></MenuItem.Icon></MenuItem>
                                                                     <Separator/>
-                                                                    <MenuItem Header="Controlla codec / lingua..." Click="OnServer2VideoCheckClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconFilm}"/></MenuItem.Icon></MenuItem>
-                                                                    <MenuItem Header="Controlla file vuoti (0 byte)" Tag="dirs" Click="OnServer2ZeroCheckClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconSearch}"/></MenuItem.Icon></MenuItem>
+                                                                    <MenuItem Header="Controlla..." Click="OnServer2CheckSelectionClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconCheckCircle}"/></MenuItem.Icon></MenuItem>
                                                                     <Separator/>
                                                                     <MenuItem Header="Rinomina" Click="OnServer2RenameClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconEdit}"/></MenuItem.Icon></MenuItem>
                                                                     <MenuItem Header="Duplica..." Click="OnServer2DuplicateClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconCopy}"/></MenuItem.Icon></MenuItem>
@@ -2407,17 +2426,50 @@
                                                                                     <Path Classes="icon muted" Width="13" Height="13" Data="{StaticResource IconClock}" IsVisible="{Binding IsDurationOk}"/>
                                                                                     <Path Classes="icon warn" Width="13" Height="13" Data="{StaticResource IconAlert}" IsVisible="{Binding IsDurationShort}"/>
                                                                                     <Path Classes="icon muted" Width="13" Height="13" Data="{StaticResource IconClock}" IsVisible="{Binding IsDurationStale}"/>
+<Path Classes="icon danger" Width="13" Height="13" Data="{StaticResource IconBan}" IsVisible="{Binding IsDurationBad}"/>
                                                                                 </Panel>
                                                                                 <Panel VerticalAlignment="Center">
                                                                                     <TextBlock Text="{Binding DurationText}" FontSize="12" TextTrimming="CharacterEllipsis" IsVisible="{Binding IsDurationOk}"/>
                                                                                     <TextBlock Text="{Binding DurationText}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppWarningBrush}" IsVisible="{Binding IsDurationShort}"/>
                                                                                     <TextBlock Text="{Binding DurationText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding IsDurationStale}"/>
+<TextBlock Text="{Binding DurationText}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppDangerBrush}" IsVisible="{Binding IsDurationBad}"/>
                                                                                 </Panel>
                                                                             </StackPanel>
                                                                         </DataTemplate>
                                                                     </DataGridTemplateColumn.CellTemplate>
                                                                 </DataGridTemplateColumn>
-                                                                <DataGridTextColumn Header="Contenuto" Binding="{Binding ContentsInfo}" Width="190" MinWidth="100"/>
+                                                                <DataGridTemplateColumn Header="0 byte" Width="130" MinWidth="80">
+                                                                    <DataGridTemplateColumn.CellTemplate>
+                                                                        <DataTemplate x:DataType="models:CheckedFileEntry">
+                                                                            <StackPanel Classes="bi" Margin="8,0" Background="Transparent" ToolTip.Tip="{Binding ZeroDetail}" ToolTip.ShowDelay="300" IsVisible="{Binding HasZeroText}">
+                                                                                <Panel VerticalAlignment="Center">
+                                                                                    <Path Classes="icon success" Width="13" Height="13" Data="{StaticResource IconCheckCircle}" IsVisible="{Binding IsZeroOk}"/>
+                                                                                    <Path Classes="icon zero" Width="13" Height="13" Data="{StaticResource IconAlertCircle}" IsVisible="{Binding IsZeroBad}"/>
+                                                                                </Panel>
+                                                                                <Panel VerticalAlignment="Center">
+                                                                                    <TextBlock Text="{Binding ZeroText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppSuccessBrush}" IsVisible="{Binding IsZeroOk}"/>
+                                                                                    <TextBlock Text="{Binding ZeroText}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppZeroBrush}" IsVisible="{Binding IsZeroBad}"/>
+                                                                                </Panel>
+                                                                            </StackPanel>
+                                                                        </DataTemplate>
+                                                                    </DataGridTemplateColumn.CellTemplate>
+                                                                </DataGridTemplateColumn>
+                                                                <DataGridTemplateColumn Header="Contenuto" Width="150" MinWidth="90">
+                                                                    <DataGridTemplateColumn.CellTemplate>
+                                                                        <DataTemplate x:DataType="models:CheckedFileEntry">
+                                                                            <StackPanel Orientation="Horizontal" Spacing="14" Margin="8,0" VerticalAlignment="Center" Background="Transparent" ToolTip.Tip="{Binding ContentsDetail}" ToolTip.ShowDelay="300" IsVisible="{Binding HasContents}">
+                                                                                <StackPanel Classes="bi">
+                                                                                    <Path Classes="icon" Width="13" Height="13" Data="{StaticResource IconFolder}" Stroke="{DynamicResource AppWarningBrush}"/>
+                                                                                    <TextBlock Text="{Binding ContentsDirsText}" FontSize="12" VerticalAlignment="Center"/>
+                                                                                </StackPanel>
+                                                                                <StackPanel Classes="bi">
+                                                                                    <Path Classes="icon" Width="13" Height="13" Data="{StaticResource IconFile}" Stroke="{DynamicResource AppTextMutedBrush}"/>
+                                                                                    <TextBlock Text="{Binding ContentsFilesText}" FontSize="12" VerticalAlignment="Center"/>
+                                                                                </StackPanel>
+                                                                            </StackPanel>
+                                                                        </DataTemplate>
+                                                                    </DataGridTemplateColumn.CellTemplate>
+                                                                </DataGridTemplateColumn>
                                                                 <DataGridTextColumn Header="Dim." Binding="{Binding SizeText}" Width="90" MinWidth="70"/>
                                                                 <DataGridTextColumn Header="Ultima modifica" Binding="{Binding Modified, Mode=OneWay, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" Width="*" MinWidth="130"/>
                                                             </DataGrid.Columns>
@@ -2435,27 +2487,29 @@
                                                             <Button Grid.Column="3" Classes="iconCircle" Click="OnSftpLocalRefreshClick" Margin="0,0,6,0" ToolTip.Tip="Aggiorna"><Path Classes="icon" Data="{StaticResource IconRefresh}"/></Button>
                                                             <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="4" Margin="0,0,6,0">
                                                                 <Button Classes="iconCircle" Click="OnLocalNewFolderClick" ToolTip.Tip="Nuova cartella"><Path Classes="icon" Data="{StaticResource IconPlus}"/></Button>
-                                                                <Button Classes="iconCircle" Command="{Binding CheckLocalZeroBytesCommand}" IsEnabled="{Binding !IsCheckingLocalZero}" ToolTip.Tip="Analizza le cartelle di questa cartella del PC (con le sottocartelle) per trovare file vuoti (0 byte)"><Path Classes="icon" Data="{StaticResource IconSearch}"/></Button>
-                                                                <Button Classes="iconCircle" Click="OnLocalCheckWebStreamClick" IsEnabled="{Binding !IsCheckingWebStream}" ToolTip.Tip="Controlla i video di questa cartella del PC e delle sottocartelle: codec per i player web, lingua dell'audio o entrambi. I video già controllati e non cambiati si saltano. Tasto destro: ricontrolla tutto">
+                                                                <Button Classes="iconCircle" Click="OnLocalCheckClick" IsEnabled="{Binding !IsCheckingWebStream}" ToolTip.Tip="Controlla: cartelle (file vuoti, contenuto) e video (codec web, lingua, durata), lo scegli nella finestra. I video già controllati e non cambiati si saltano. Tasto destro: ricontrolla tutto">
                                                                     <Button.ContextMenu>
                                                                         <ContextMenu>
-                                                                            <MenuItem Header="Ricontrolla tutti i video" Click="OnLocalRecheckAllWebStreamClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconRepeat}"/></MenuItem.Icon></MenuItem>
+                                                                            <MenuItem Header="Ricontrolla tutto (anche i video già controllati)" Click="OnLocalRecheckAllClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconRepeat}"/></MenuItem.Icon></MenuItem>
                                                                         </ContextMenu>
                                                                     </Button.ContextMenu>
-                                                                    <Path Classes="icon" Data="{StaticResource IconFilm}"/>
+                                                                    <Path Classes="icon" Data="{StaticResource IconCheckCircle}"/>
                                                                 </Button>
                                                                 <Button Classes="iconCircle danger" Command="{Binding StopWebStreamCheckCommand}" IsVisible="{Binding IsCheckingWebStream}" ToolTip.Tip="Ferma il controllo dei video (gli esiti già trovati restano salvati)"><Path Classes="icon" Data="{StaticResource IconStop}"/></Button>
-                                                                <Button Classes="iconCircle" Classes.accent="{Binding !ShowsAllResults}" ToolTip.Tip="Esiti dei controlli da mostrare nelle tabelle (file vuoti, codec web, lingua). Evidenziato quando qualcosa è nascosto">
+                                                                <Button Classes="iconCircle" Classes.accent="{Binding !ShowsAllResults}" ToolTip.Tip="Esiti dei controlli da mostrare nelle tabelle (file vuoti, contenuto, codec web, lingua, durata). Evidenziato quando qualcosa è nascosto">
                                                                     <Path Classes="icon" Data="{StaticResource IconEye}"/>
                                                                     <Button.Flyout>
                                                                         <MenuFlyout Placement="BottomEdgeAlignedRight">
-                                                                            <MenuItem Header="File vuoti (0 byte)" ToggleType="CheckBox" IsChecked="{Binding ShowZeroByteResults, Mode=TwoWay}"/>
+                                                                            <MenuItem Header="File vuoti (colonna 0 byte)" ToggleType="CheckBox" IsChecked="{Binding ShowZeroByteResults, Mode=TwoWay}"/>
+<MenuItem Header="Contenuto (colonna Contenuto)" ToggleType="CheckBox" IsChecked="{Binding ShowContentsResults, Mode=TwoWay}"/>
                                                                             <MenuItem Header="Codec web (colonna Web)" ToggleType="CheckBox" IsChecked="{Binding ShowWebResults, Mode=TwoWay}"/>
                                                                             <MenuItem Header="Lingua (colonna Lingua)" ToggleType="CheckBox" IsChecked="{Binding ShowLanguageResults, Mode=TwoWay}"/>
                                                                             <MenuItem Header="Durata (colonna Durata)" ToggleType="CheckBox" IsChecked="{Binding ShowDurationResults, Mode=TwoWay}"/>
                                                                             <MenuItem Header="{Binding MinDurationMenuText}" Click="OnMinDurationClick" ToolTip.Tip="Video più corti di questa durata segnalati come corto"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconClock}"/></MenuItem.Icon></MenuItem>
                                                                             <Separator/>
-                                                                            <MenuItem Header="Mostra / nascondi tutti" Command="{Binding ToggleAllResultsCommand}"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconEye}"/></MenuItem.Icon></MenuItem>
+                                                                            <MenuItem Header="Evidenzia le righe con problemi" ToggleType="CheckBox" IsChecked="{Binding HighlightRows, Mode=TwoWay}" ToolTip.Tip="Colora le righe: rosso per i video con problemi, viola per i file vuoti. Spento, gli esiti restano nelle colonne"/>
+<MenuItem Header="Tutte le colonne: tasto destro sulle intestazioni della tabella" IsEnabled="False"/>
+<MenuItem Header="Mostra / nascondi tutti" Command="{Binding ToggleAllResultsCommand}"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconEye}"/></MenuItem.Icon></MenuItem>
                                                                             <MenuItem Header="Riallinea esiti ora" Command="{Binding RealignResultsCommand}" ToolTip.Tip="Confronta gli esiti salvati con i file sul server (anche nelle sottocartelle): toglie quelli di file eliminati, segue quelli rinominati, segna da ricontrollare quelli cambiati"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconRefresh}"/></MenuItem.Icon></MenuItem>
                                                                         </MenuFlyout>
                                                                     </Button.Flyout>
@@ -2490,18 +2544,21 @@
                                                                     <MultiBinding Converter="{x:Static BoolConverters.And}">
                                                                         <Binding Path="IsWebBad"/>
                                                                         <Binding Path="$parent[DataGrid].((vm:SftpTabViewModel)DataContext).ShowWebResults"/>
+                                                                        <Binding Path="$parent[DataGrid].((vm:SftpTabViewModel)DataContext).HighlightRows"/>
                                                                     </MultiBinding>
                                                                 </Setter>
                                                                 <Setter Property="Classes.langBad">
                                                                     <MultiBinding Converter="{x:Static BoolConverters.And}">
                                                                         <Binding Path="IsLangBad"/>
                                                                         <Binding Path="$parent[DataGrid].((vm:SftpTabViewModel)DataContext).ShowLanguageResults"/>
+                                                                        <Binding Path="$parent[DataGrid].((vm:SftpTabViewModel)DataContext).HighlightRows"/>
                                                                     </MultiBinding>
                                                                 </Setter>
                                                                 <Setter Property="Classes.zeroByte">
                                                                     <MultiBinding Converter="{x:Static BoolConverters.And}">
                                                                         <Binding Path="HasZeroByteIssue"/>
                                                                         <Binding Path="$parent[DataGrid].((vm:SftpTabViewModel)DataContext).ShowZeroByteResults"/>
+                                                                        <Binding Path="$parent[DataGrid].((vm:SftpTabViewModel)DataContext).HighlightRows"/>
                                                                     </MultiBinding>
                                                                 </Setter>
                                                             </Style>
@@ -2511,8 +2568,7 @@
                                                                 <MenuItem Header="Apri" Tag="dir" Click="OnLocalOpenClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconFolder}"/></MenuItem.Icon></MenuItem>
                                                                 <MenuItem Header="Anteprima video" Tag="video" Click="OnLocalPreviewClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconPlayCircle}"/></MenuItem.Icon></MenuItem>
                                                                 <Separator/>
-                                                                <MenuItem Header="Controlla codec / lingua..." Click="OnLocalVideoCheckClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconFilm}"/></MenuItem.Icon></MenuItem>
-                                                                <MenuItem Header="Controlla file vuoti (0 byte)" Tag="dirs" Click="OnLocalZeroCheckClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconSearch}"/></MenuItem.Icon></MenuItem>
+                                                                <MenuItem Header="Controlla..." Click="OnLocalCheckSelectionClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconCheckCircle}"/></MenuItem.Icon></MenuItem>
                                                                 <Separator/>
                                                                 <MenuItem Header="Rinomina" Click="OnLocalRenameClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconEdit}"/></MenuItem.Icon></MenuItem>
                                                                 <MenuItem Header="Duplica..." Click="OnLocalDuplicateClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconCopy}"/></MenuItem.Icon></MenuItem>
@@ -2590,12 +2646,46 @@
                                                                                 <Path Classes="icon muted" Width="13" Height="13" Data="{StaticResource IconClock}" IsVisible="{Binding IsDurationOk}"/>
                                                                                 <Path Classes="icon warn" Width="13" Height="13" Data="{StaticResource IconAlert}" IsVisible="{Binding IsDurationShort}"/>
                                                                                 <Path Classes="icon muted" Width="13" Height="13" Data="{StaticResource IconClock}" IsVisible="{Binding IsDurationStale}"/>
+<Path Classes="icon danger" Width="13" Height="13" Data="{StaticResource IconBan}" IsVisible="{Binding IsDurationBad}"/>
                                                                             </Panel>
                                                                             <Panel VerticalAlignment="Center">
                                                                                 <TextBlock Text="{Binding DurationText}" FontSize="12" TextTrimming="CharacterEllipsis" IsVisible="{Binding IsDurationOk}"/>
                                                                                 <TextBlock Text="{Binding DurationText}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppWarningBrush}" IsVisible="{Binding IsDurationShort}"/>
                                                                                 <TextBlock Text="{Binding DurationText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding IsDurationStale}"/>
+<TextBlock Text="{Binding DurationText}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppDangerBrush}" IsVisible="{Binding IsDurationBad}"/>
                                                                             </Panel>
+                                                                        </StackPanel>
+                                                                    </DataTemplate>
+                                                                </DataGridTemplateColumn.CellTemplate>
+                                                            </DataGridTemplateColumn>
+                                                            <DataGridTemplateColumn Header="0 byte" Width="130" MinWidth="80">
+                                                                <DataGridTemplateColumn.CellTemplate>
+                                                                    <DataTemplate x:DataType="models:CheckedFileEntry">
+                                                                        <StackPanel Classes="bi" Margin="8,0" Background="Transparent" ToolTip.Tip="{Binding ZeroDetail}" ToolTip.ShowDelay="300" IsVisible="{Binding HasZeroText}">
+                                                                            <Panel VerticalAlignment="Center">
+                                                                                <Path Classes="icon success" Width="13" Height="13" Data="{StaticResource IconCheckCircle}" IsVisible="{Binding IsZeroOk}"/>
+                                                                                <Path Classes="icon zero" Width="13" Height="13" Data="{StaticResource IconAlertCircle}" IsVisible="{Binding IsZeroBad}"/>
+                                                                            </Panel>
+                                                                            <Panel VerticalAlignment="Center">
+                                                                                <TextBlock Text="{Binding ZeroText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppSuccessBrush}" IsVisible="{Binding IsZeroOk}"/>
+                                                                                <TextBlock Text="{Binding ZeroText}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppZeroBrush}" IsVisible="{Binding IsZeroBad}"/>
+                                                                            </Panel>
+                                                                        </StackPanel>
+                                                                    </DataTemplate>
+                                                                </DataGridTemplateColumn.CellTemplate>
+                                                            </DataGridTemplateColumn>
+                                                            <DataGridTemplateColumn Header="Contenuto" Width="150" MinWidth="90">
+                                                                <DataGridTemplateColumn.CellTemplate>
+                                                                    <DataTemplate x:DataType="models:CheckedFileEntry">
+                                                                        <StackPanel Orientation="Horizontal" Spacing="14" Margin="8,0" VerticalAlignment="Center" Background="Transparent" ToolTip.Tip="{Binding ContentsDetail}" ToolTip.ShowDelay="300" IsVisible="{Binding HasContents}">
+                                                                            <StackPanel Classes="bi">
+                                                                                <Path Classes="icon" Width="13" Height="13" Data="{StaticResource IconFolder}" Stroke="{DynamicResource AppWarningBrush}"/>
+                                                                                <TextBlock Text="{Binding ContentsDirsText}" FontSize="12" VerticalAlignment="Center"/>
+                                                                            </StackPanel>
+                                                                            <StackPanel Classes="bi">
+                                                                                <Path Classes="icon" Width="13" Height="13" Data="{StaticResource IconFile}" Stroke="{DynamicResource AppTextMutedBrush}"/>
+                                                                                <TextBlock Text="{Binding ContentsFilesText}" FontSize="12" VerticalAlignment="Center"/>
+                                                                            </StackPanel>
                                                                         </StackPanel>
                                                                     </DataTemplate>
                                                                 </DataGridTemplateColumn.CellTemplate>
@@ -2687,28 +2777,30 @@
                                                             </StackPanel>
                                                             <Button Grid.Column="4" Classes="iconCircle" Click="OnRemoteNewFolderClick" Margin="0,0,6,0" ToolTip.Tip="Nuova cartella"><Path Classes="icon" Data="{StaticResource IconPlus}"/></Button>
                                                             <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="4" Margin="0,0,6,0">
-                                                                <Button Classes="iconCircle" Command="{Binding CheckZeroByteFoldersCommand}" IsEnabled="{Binding !IsCheckingZeroByte}" ToolTip.Tip="Analizza la cartella remota per trovare file vuoti (0 byte) da eliminare"><Path Classes="icon" Data="{StaticResource IconSearch}"/></Button>
-                                                                <Button Classes="iconCircle danger" Command="{Binding StopZeroByteCheckCommand}" IsVisible="{Binding IsCheckingZeroByte}" ToolTip.Tip="Ferma il check in corso"><Path Classes="icon" Data="{StaticResource IconStop}"/></Button>
-                                                                <Button Classes="iconCircle" Click="OnCheckWebStreamClick" IsEnabled="{Binding !IsCheckingWebStream}" ToolTip.Tip="Controlla i video di questa cartella e delle sottocartelle: codec per i player web, lingua dell'audio o entrambi (lo scegli nella finestra). I video già controllati e non cambiati si saltano. Tasto destro: ricontrolla tutto">
+                                                                <Button Classes="iconCircle danger" Command="{Binding StopZeroByteCheckCommand}" IsVisible="{Binding IsCheckingZeroByte}" ToolTip.Tip="Ferma l'analisi in corso"><Path Classes="icon" Data="{StaticResource IconStop}"/></Button>
+                                                                <Button Classes="iconCircle" Click="OnRemoteCheckClick" IsEnabled="{Binding !IsCheckingWebStream}" ToolTip.Tip="Controlla: cartelle (file vuoti, contenuto) e video (codec web, lingua, durata), lo scegli nella finestra. I video già controllati e non cambiati si saltano. Tasto destro: ricontrolla tutto">
                                                                     <Button.ContextMenu>
                                                                         <ContextMenu>
-                                                                            <MenuItem Header="Ricontrolla tutti i video" Click="OnRecheckAllWebStreamClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconRepeat}"/></MenuItem.Icon></MenuItem>
+                                                                            <MenuItem Header="Ricontrolla tutto (anche i video già controllati)" Click="OnRemoteRecheckAllClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconRepeat}"/></MenuItem.Icon></MenuItem>
                                                                         </ContextMenu>
                                                                     </Button.ContextMenu>
-                                                                    <Path Classes="icon" Data="{StaticResource IconFilm}"/>
+                                                                    <Path Classes="icon" Data="{StaticResource IconCheckCircle}"/>
                                                                 </Button>
                                                                 <Button Classes="iconCircle danger" Command="{Binding StopWebStreamCheckCommand}" IsVisible="{Binding IsCheckingWebStream}" ToolTip.Tip="Ferma il controllo dei video (gli esiti già trovati restano salvati)"><Path Classes="icon" Data="{StaticResource IconStop}"/></Button>
-                                                                <Button Classes="iconCircle" Classes.accent="{Binding !ShowsAllResults}" ToolTip.Tip="Esiti dei controlli da mostrare nelle tabelle (file vuoti, codec web, lingua). Evidenziato quando qualcosa è nascosto">
+                                                                <Button Classes="iconCircle" Classes.accent="{Binding !ShowsAllResults}" ToolTip.Tip="Esiti dei controlli da mostrare nelle tabelle (file vuoti, contenuto, codec web, lingua, durata). Evidenziato quando qualcosa è nascosto">
                                                                     <Path Classes="icon" Data="{StaticResource IconEye}"/>
                                                                     <Button.Flyout>
                                                                         <MenuFlyout Placement="BottomEdgeAlignedRight">
-                                                                            <MenuItem Header="File vuoti (0 byte)" ToggleType="CheckBox" IsChecked="{Binding ShowZeroByteResults, Mode=TwoWay}"/>
+                                                                            <MenuItem Header="File vuoti (colonna 0 byte)" ToggleType="CheckBox" IsChecked="{Binding ShowZeroByteResults, Mode=TwoWay}"/>
+<MenuItem Header="Contenuto (colonna Contenuto)" ToggleType="CheckBox" IsChecked="{Binding ShowContentsResults, Mode=TwoWay}"/>
                                                                             <MenuItem Header="Codec web (colonna Web)" ToggleType="CheckBox" IsChecked="{Binding ShowWebResults, Mode=TwoWay}"/>
                                                                             <MenuItem Header="Lingua (colonna Lingua)" ToggleType="CheckBox" IsChecked="{Binding ShowLanguageResults, Mode=TwoWay}"/>
                                                                             <MenuItem Header="Durata (colonna Durata)" ToggleType="CheckBox" IsChecked="{Binding ShowDurationResults, Mode=TwoWay}"/>
                                                                             <MenuItem Header="{Binding MinDurationMenuText}" Click="OnMinDurationClick" ToolTip.Tip="Video più corti di questa durata segnalati come corto"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconClock}"/></MenuItem.Icon></MenuItem>
                                                                             <Separator/>
-                                                                            <MenuItem Header="Mostra / nascondi tutti" Command="{Binding ToggleAllResultsCommand}"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconEye}"/></MenuItem.Icon></MenuItem>
+                                                                            <MenuItem Header="Evidenzia le righe con problemi" ToggleType="CheckBox" IsChecked="{Binding HighlightRows, Mode=TwoWay}" ToolTip.Tip="Colora le righe: rosso per i video con problemi, viola per i file vuoti. Spento, gli esiti restano nelle colonne"/>
+<MenuItem Header="Tutte le colonne: tasto destro sulle intestazioni della tabella" IsEnabled="False"/>
+<MenuItem Header="Mostra / nascondi tutti" Command="{Binding ToggleAllResultsCommand}"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconEye}"/></MenuItem.Icon></MenuItem>
                                                                             <MenuItem Header="Riallinea esiti ora" Command="{Binding RealignResultsCommand}" ToolTip.Tip="Confronta gli esiti salvati con i file sul server (anche nelle sottocartelle): toglie quelli di file eliminati, segue quelli rinominati, segna da ricontrollare quelli cambiati"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconRefresh}"/></MenuItem.Icon></MenuItem>
                                                                         </MenuFlyout>
                                                                     </Button.Flyout>
@@ -2744,18 +2836,21 @@
                                                                     <MultiBinding Converter="{x:Static BoolConverters.And}">
                                                                         <Binding Path="IsWebBad"/>
                                                                         <Binding Path="$parent[DataGrid].((vm:SftpTabViewModel)DataContext).ShowWebResults"/>
+                                                                        <Binding Path="$parent[DataGrid].((vm:SftpTabViewModel)DataContext).HighlightRows"/>
                                                                     </MultiBinding>
                                                                 </Setter>
                                                                 <Setter Property="Classes.langBad">
                                                                     <MultiBinding Converter="{x:Static BoolConverters.And}">
                                                                         <Binding Path="IsLangBad"/>
                                                                         <Binding Path="$parent[DataGrid].((vm:SftpTabViewModel)DataContext).ShowLanguageResults"/>
+                                                                        <Binding Path="$parent[DataGrid].((vm:SftpTabViewModel)DataContext).HighlightRows"/>
                                                                     </MultiBinding>
                                                                 </Setter>
                                                                 <Setter Property="Classes.zeroByte">
                                                                     <MultiBinding Converter="{x:Static BoolConverters.And}">
                                                                         <Binding Path="HasZeroByteIssue"/>
                                                                         <Binding Path="$parent[DataGrid].((vm:SftpTabViewModel)DataContext).ShowZeroByteResults"/>
+                                                                        <Binding Path="$parent[DataGrid].((vm:SftpTabViewModel)DataContext).HighlightRows"/>
                                                                     </MultiBinding>
                                                                 </Setter>
                                                             </Style>
@@ -2765,8 +2860,7 @@
                                                                 <MenuItem Header="Apri" Tag="dir" Click="OnRemoteOpenClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconFolder}"/></MenuItem.Icon></MenuItem>
                                                                 <MenuItem Header="Anteprima video" Tag="video" Click="OnRemotePreviewClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconPlayCircle}"/></MenuItem.Icon></MenuItem>
                                                                 <Separator/>
-                                                                <MenuItem Header="Controlla codec / lingua..." Click="OnRemoteVideoCheckClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconFilm}"/></MenuItem.Icon></MenuItem>
-                                                                <MenuItem Header="Controlla file vuoti (0 byte)" Tag="dirs" Click="OnRemoteZeroCheckClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconSearch}"/></MenuItem.Icon></MenuItem>
+                                                                <MenuItem Header="Controlla..." Click="OnRemoteCheckSelectionClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconCheckCircle}"/></MenuItem.Icon></MenuItem>
                                                                 <Separator/>
                                                                 <MenuItem Header="Rinomina" Click="OnRemoteRenameClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconEdit}"/></MenuItem.Icon></MenuItem>
                                                                 <MenuItem Header="Duplica..." Click="OnRemoteDuplicateClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconCopy}"/></MenuItem.Icon></MenuItem>
@@ -2845,17 +2939,50 @@
                                                                                 <Path Classes="icon muted" Width="13" Height="13" Data="{StaticResource IconClock}" IsVisible="{Binding IsDurationOk}"/>
                                                                                 <Path Classes="icon warn" Width="13" Height="13" Data="{StaticResource IconAlert}" IsVisible="{Binding IsDurationShort}"/>
                                                                                 <Path Classes="icon muted" Width="13" Height="13" Data="{StaticResource IconClock}" IsVisible="{Binding IsDurationStale}"/>
+<Path Classes="icon danger" Width="13" Height="13" Data="{StaticResource IconBan}" IsVisible="{Binding IsDurationBad}"/>
                                                                             </Panel>
                                                                             <Panel VerticalAlignment="Center">
                                                                                 <TextBlock Text="{Binding DurationText}" FontSize="12" TextTrimming="CharacterEllipsis" IsVisible="{Binding IsDurationOk}"/>
                                                                                 <TextBlock Text="{Binding DurationText}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppWarningBrush}" IsVisible="{Binding IsDurationShort}"/>
                                                                                 <TextBlock Text="{Binding DurationText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding IsDurationStale}"/>
+<TextBlock Text="{Binding DurationText}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppDangerBrush}" IsVisible="{Binding IsDurationBad}"/>
                                                                             </Panel>
                                                                         </StackPanel>
                                                                     </DataTemplate>
                                                                 </DataGridTemplateColumn.CellTemplate>
                                                             </DataGridTemplateColumn>
-                                                            <DataGridTextColumn Header="Contenuto" Binding="{Binding ContentsInfo}" Width="190" MinWidth="100"/>
+                                                            <DataGridTemplateColumn Header="0 byte" Width="130" MinWidth="80">
+                                                                <DataGridTemplateColumn.CellTemplate>
+                                                                    <DataTemplate x:DataType="models:CheckedFileEntry">
+                                                                        <StackPanel Classes="bi" Margin="8,0" Background="Transparent" ToolTip.Tip="{Binding ZeroDetail}" ToolTip.ShowDelay="300" IsVisible="{Binding HasZeroText}">
+                                                                            <Panel VerticalAlignment="Center">
+                                                                                <Path Classes="icon success" Width="13" Height="13" Data="{StaticResource IconCheckCircle}" IsVisible="{Binding IsZeroOk}"/>
+                                                                                <Path Classes="icon zero" Width="13" Height="13" Data="{StaticResource IconAlertCircle}" IsVisible="{Binding IsZeroBad}"/>
+                                                                            </Panel>
+                                                                            <Panel VerticalAlignment="Center">
+                                                                                <TextBlock Text="{Binding ZeroText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppSuccessBrush}" IsVisible="{Binding IsZeroOk}"/>
+                                                                                <TextBlock Text="{Binding ZeroText}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppZeroBrush}" IsVisible="{Binding IsZeroBad}"/>
+                                                                            </Panel>
+                                                                        </StackPanel>
+                                                                    </DataTemplate>
+                                                                </DataGridTemplateColumn.CellTemplate>
+                                                            </DataGridTemplateColumn>
+                                                            <DataGridTemplateColumn Header="Contenuto" Width="150" MinWidth="90">
+                                                                <DataGridTemplateColumn.CellTemplate>
+                                                                    <DataTemplate x:DataType="models:CheckedFileEntry">
+                                                                        <StackPanel Orientation="Horizontal" Spacing="14" Margin="8,0" VerticalAlignment="Center" Background="Transparent" ToolTip.Tip="{Binding ContentsDetail}" ToolTip.ShowDelay="300" IsVisible="{Binding HasContents}">
+                                                                            <StackPanel Classes="bi">
+                                                                                <Path Classes="icon" Width="13" Height="13" Data="{StaticResource IconFolder}" Stroke="{DynamicResource AppWarningBrush}"/>
+                                                                                <TextBlock Text="{Binding ContentsDirsText}" FontSize="12" VerticalAlignment="Center"/>
+                                                                            </StackPanel>
+                                                                            <StackPanel Classes="bi">
+                                                                                <Path Classes="icon" Width="13" Height="13" Data="{StaticResource IconFile}" Stroke="{DynamicResource AppTextMutedBrush}"/>
+                                                                                <TextBlock Text="{Binding ContentsFilesText}" FontSize="12" VerticalAlignment="Center"/>
+                                                                            </StackPanel>
+                                                                        </StackPanel>
+                                                                    </DataTemplate>
+                                                                </DataGridTemplateColumn.CellTemplate>
+                                                            </DataGridTemplateColumn>
                                                             <DataGridTextColumn Header="Dim." Binding="{Binding SizeText}" Width="90" MinWidth="70"/>
                                                             <DataGridTextColumn Header="Ultima modifica" Binding="{Binding Modified, Mode=OneWay, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" Width="*" MinWidth="130"/>
                                                         </DataGrid.Columns>
@@ -3167,6 +3294,30 @@
                                         </Border>
                                     </DockPanel>
                                 </Panel>
+                                <!-- Avviso "in coda": compare dal basso quando si accodano file -->
+                                <Border Classes="queueToast" Classes.show="{Binding IsQueueNoticeVisible}" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,18"
+                                        Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1" CornerRadius="12" Padding="10,8"
+                                        BoxShadow="0 8 24 0 #50000000">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <Border Width="30" Height="30" CornerRadius="15" Background="{DynamicResource AppAccentSoftBrush}">
+                                            <Panel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <Path Classes="icon accent" Width="15" Height="15" Data="{StaticResource IconUpload}" IsVisible="{Binding IsQueueNoticeUpload}"/>
+                                                <Path Classes="icon accent" Width="15" Height="15" Data="{StaticResource IconDownload}" IsVisible="{Binding IsQueueNoticeDownload}"/>
+                                                <Path Classes="icon accent" Width="15" Height="15" Data="{StaticResource IconRepeat}" IsVisible="{Binding IsQueueNoticeRelay}"/>
+                                            </Panel>
+                                        </Border>
+                                        <StackPanel VerticalAlignment="Center" Spacing="1">
+                                            <TextBlock Text="{Binding QueueNoticeText}" FontWeight="SemiBold"/>
+                                            <TextBlock Text="Partono da soli, in ordine" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                        </StackPanel>
+                                        <Button Classes="ghost" VerticalAlignment="Center" Command="{Binding OpenQueueFromNoticeCommand}" ToolTip.Tip="Apri la scheda della coda">
+                                            <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconQueue}"/><TextBlock Text="Vedi coda"/></StackPanel>
+                                        </Button>
+                                        <Button Classes="iconCircle" Width="26" Height="26" MinHeight="26" Padding="0" VerticalAlignment="Center" Command="{Binding CloseQueueNoticeCommand}" ToolTip.Tip="Chiudi">
+                                            <Path Classes="icon" Width="10" Height="10" Data="{StaticResource IconClose}"/>
+                                        </Button>
+                                    </StackPanel>
+                                </Border>
                             </Panel>
                         </DockPanel>
                     </DockPanel>
@@ -3250,7 +3401,7 @@
                         </Border>
 
                         <!-- Mappatura | Titoli TMDB -->
-                        <Border Grid.Row="3" HorizontalAlignment="Left" Background="{DynamicResource AppTabTrackBrush}" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" CornerRadius="12" Padding="3" Margin="0,0,0,10">
+                        <Border Grid.Row="3" HorizontalAlignment="Center" Background="{DynamicResource AppTabTrackBrush}" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" CornerRadius="12" Padding="3" Margin="0,0,0,10">
                             <StackPanel Orientation="Horizontal" Spacing="2">
                                 <ToggleButton Classes="modeTab" IsChecked="{Binding !IsTmdbMode, Mode=OneWay}" Command="{Binding ShowMappingCommand}"
                                               ToolTip.Tip="Mappatura dei link dei post con i file sui server SFTP">
@@ -3429,7 +3580,7 @@
                                                             <Path Classes="icon accent" Data="{StaticResource IconLayers}"/>
                                                             <TextBlock Text="Domini secondari" FontWeight="Bold" FontSize="13"/>
                                                         </StackPanel>
-                                                        <TextBlock Text="Mirror considerati validi: i link che puntano qui risultano verdi e non vengono riscritti." FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                                        <TextBlock Text="Mirror considerati validi: i link che puntano qui risultano verdi e non vengono riscritti. Con un percorso (es. https://m3u.esempio.it/schls-fast/) vale solo quella cartella del dominio, non le altre." FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource AppTextMutedBrush}"/>
                                                     </StackPanel>
                                                     <Button Grid.Column="1" Classes="info" Command="{Binding AddSecondaryDomainCommand}" VerticalAlignment="Center" ToolTip.Tip="Aggiunge una riga per un nuovo dominio valido">
                                                         <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconPlus}"/><TextBlock Text="Aggiungi dominio"/></StackPanel>
@@ -3445,7 +3596,7 @@
                                                     <ItemsControl.ItemTemplate>
                                                         <DataTemplate>
                                                             <Grid ColumnDefinitions="*, Auto" Margin="0,0,10,8">
-                                                                <TextBox Grid.Column="0" Text="{Binding Url, Mode=TwoWay}" PlaceholderText="https://mirror.example"/>
+                                                                <TextBox Grid.Column="0" Text="{Binding Url, Mode=TwoWay}" PlaceholderText="https://mirror.example (anche con un percorso)"/>
                                                                 <Button Grid.Column="1" Classes="iconCircle danger" Width="30" Height="30" Margin="6,0,0,0" ToolTip.Tip="Rimuovi dominio"
                                                                         Command="{Binding $parent[ItemsControl].((vm:VideoboxTabViewModel)DataContext).RemoveSecondaryDomainCommand}" CommandParameter="{Binding}">
                                                                     <Path Classes="icon" Data="{StaticResource IconClose}"/>

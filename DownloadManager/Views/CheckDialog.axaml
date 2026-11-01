@@ -1,8 +1,8 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        x:Class="DownloadManager.Views.VideoCheckDialog"
-        Title="Verifica video"
-        Width="500"
+        x:Class="DownloadManager.Views.CheckDialog"
+        Title="Controlla"
+        Width="520"
         SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         CanResize="False"
@@ -13,29 +13,71 @@
         <Style Selector="Border.option">
             <Setter Property="Background" Value="{DynamicResource AppSurface2Brush}"/>
             <Setter Property="CornerRadius" Value="10"/>
-            <Setter Property="Padding" Value="14,10"/>
+            <Setter Property="Padding" Value="14,9"/>
+        </Style>
+        <Style Selector="TextBlock.group">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}"/>
+            <Setter Property="Margin" Value="2,4,0,0"/>
+        </Style>
+        <Style Selector="CheckBox:disabled">
+            <Setter Property="Opacity" Value="0.45"/>
         </Style>
     </Window.Styles>
 
-    <StackPanel Margin="22" Spacing="18">
+    <StackPanel Margin="22" Spacing="14">
 
         <Grid ColumnDefinitions="Auto, *">
             <Border Width="42" Height="42" CornerRadius="21"
                     Background="{DynamicResource AppAccentSoftBrush}"
                     VerticalAlignment="Top">
-                <Path Classes="icon accent" Data="{StaticResource IconFilm}" Width="20" Height="20"/>
+                <Path Classes="icon accent" Data="{StaticResource IconCheckCircle}" Width="20" Height="20"/>
             </Border>
             <StackPanel Grid.Column="1" Margin="14,0,0,0" Spacing="6" VerticalAlignment="Center">
-                <TextBlock x:Name="TitleText" Text="Cosa vuoi controllare?" FontSize="15" FontWeight="Bold"/>
+                <TextBlock Text="Cosa vuoi controllare?" FontSize="15" FontWeight="Bold"/>
                 <TextBlock x:Name="PromptText" FontSize="13" TextWrapping="Wrap"
                            Foreground="{DynamicResource AppTextMutedBrush}"
-                           Text="I video della cartella aperta e delle sottocartelle. Quelli già controllati e non cambiati si saltano."/>
+                           Text="La cartella aperta e tutte le sottocartelle."/>
             </StackPanel>
         </Grid>
 
         <StackPanel Spacing="8">
+            <Grid ColumnDefinitions="*, Auto">
+                <TextBlock Classes="group" Text="CARTELLE" VerticalAlignment="Bottom"/>
+                <CheckBox Grid.Column="1" x:Name="AllCheck" Content="Seleziona tutto" FontSize="12"/>
+            </Grid>
             <Border Classes="option">
-                <CheckBox x:Name="WebCheck" IsChecked="True">
+                <CheckBox x:Name="ZeroCheck">
+                    <Grid ColumnDefinitions="Auto, *" Margin="4,0,0,0">
+                        <Path Classes="icon zero" Width="16" Height="16" Data="{StaticResource IconAlertCircle}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                        <StackPanel Grid.Column="1" Spacing="2">
+                            <TextBlock Text="File vuoti (0 byte)" FontWeight="SemiBold"/>
+                            <TextBlock Text="Quanti file da 0 byte ci sono nelle sottocartelle (colonna 0 byte, righe viola)" FontSize="12" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource AppTextMutedBrush}"/>
+                        </StackPanel>
+                    </Grid>
+                </CheckBox>
+            </Border>
+            <Border Classes="option">
+                <CheckBox x:Name="ContentsCheck">
+                    <Grid ColumnDefinitions="Auto, *" Margin="4,0,0,0">
+                        <Path Classes="icon accent" Width="16" Height="16" Data="{StaticResource IconFolder}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                        <StackPanel Grid.Column="1" Spacing="2">
+                            <TextBlock Text="Contenuto" FontWeight="SemiBold"/>
+                            <TextBlock Text="Numero di cartelle e di file in ogni sottocartella (colonna Contenuto)" FontSize="12" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource AppTextMutedBrush}"/>
+                        </StackPanel>
+                    </Grid>
+                </CheckBox>
+            </Border>
+            <TextBlock x:Name="NoFoldersNote" IsVisible="False" FontSize="11" TextWrapping="Wrap" Margin="2,0,0,0"
+                       Foreground="{DynamicResource AppTextMutedBrush}"
+                       Text="Qui non ci sono sottocartelle: i file vuoti si vedono già nella colonna 0 byte e il numero di file è nella riga sopra la tabella."/>
+
+            <TextBlock Classes="group" Text="VIDEO"/>
+            <Border Classes="option">
+                <CheckBox x:Name="WebCheck">
                     <Grid ColumnDefinitions="Auto, *" Margin="4,0,0,0">
                         <Path Classes="icon accent" Width="16" Height="16" Data="{StaticResource IconFilm}" VerticalAlignment="Center" Margin="0,0,12,0"/>
                         <StackPanel Grid.Column="1" Spacing="2">
@@ -47,7 +89,7 @@
                 </CheckBox>
             </Border>
             <Border Classes="option">
-                <CheckBox x:Name="LangCheck" IsChecked="True">
+                <CheckBox x:Name="LangCheck">
                     <Grid ColumnDefinitions="Auto, *" Margin="4,0,0,0">
                         <Path Classes="icon accent" Width="16" Height="16" Data="{StaticResource IconGlobe}" VerticalAlignment="Center" Margin="0,0,12,0"/>
                         <StackPanel Grid.Column="1" Spacing="2">
@@ -59,7 +101,7 @@
                 </CheckBox>
             </Border>
             <Border Classes="option">
-                <CheckBox x:Name="DurationCheck" IsChecked="True">
+                <CheckBox x:Name="DurationCheck">
                     <Grid ColumnDefinitions="Auto, *" Margin="4,0,0,0">
                         <Path Classes="icon accent" Width="16" Height="16" Data="{StaticResource IconClock}" VerticalAlignment="Center" Margin="0,0,12,0"/>
                         <StackPanel Grid.Column="1" Spacing="2">
@@ -70,8 +112,8 @@
                     </Grid>
                 </CheckBox>
             </Border>
-            <TextBlock Text="Stessa velocità con una o tutte le voci: ogni video si legge una volta sola." FontSize="11"
-                       Foreground="{DynamicResource AppTextMutedBrush}" TextWrapping="Wrap" Margin="2,2,0,0"/>
+            <TextBlock x:Name="SpeedNote" FontSize="11" TextWrapping="Wrap" Margin="2,2,0,0" Foreground="{DynamicResource AppTextMutedBrush}"
+                       Text="Prima le cartelle (veloce), poi i video. Ogni cartella e ogni video si legge una volta sola, qualunque voce scegli; i video già controllati e non cambiati si saltano."/>
         </StackPanel>
 
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">

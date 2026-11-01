@@ -16,12 +16,17 @@ namespace DownloadManager.ViewModels;
 /// - stessa dimensione e data in un altro percorso → rinominato o spostato: l'esito lo segue;
 /// - dimensione o data cambiate → "da ricontrollare";
 /// - file a 0 byte nuovi o spariti → rosso aggiornato in tutto l'albero.
-/// Parte all'apertura di una cartella (al massimo ogni 5 minuti per cartella), ogni 5 minuti per
+/// Parte all'apertura di una cartella (al massimo ogni minuto per cartella), ogni minuto per
 /// le cartelle aperte e dal menu "Esiti" (subito).
 /// </summary>
 public partial class SftpTabViewModel
 {
-    private static readonly TimeSpan SyncEvery = TimeSpan.FromMinutes(5);
+    /// <summary>Riallineamento automatico della cartella aperta (e al più ogni tanto aprendo una cartella).</summary>
+    private static readonly TimeSpan SyncEvery = TimeSpan.FromMinutes(1);
+    /// <summary>Dopo una modifica fatta dall'app: riallineamento rapido, ma non più spesso di così.</summary>
+    private static readonly TimeSpan SyncSoonMinGap = TimeSpan.FromSeconds(15);
+    private DispatcherTimer? _syncSoonTimer;
+    private DateTime _lastSyncSoon = DateTime.MinValue;
     private readonly Dictionary<string, DateTime> _lastSync = new(StringComparer.Ordinal);
     /// <summary>Server che non accettano comandi: niente allineamento (resta la pulizia all'apertura).</summary>
     private readonly HashSet<string> _noShellServers = new(StringComparer.OrdinalIgnoreCase);
@@ -37,6 +42,50 @@ public partial class SftpTabViewModel
             _ = SyncResultsAsync(left: true, force: false);
         };
         _syncTimer.Start();
+    }
+
+    /// <summary>
+    /// Modifica fatta dall'app su un server (eliminazione, upload, copia, rinomina, spostamento):
+    /// i riassunti delle cartelle sopra (Contenuto, 0 byte, Web…) si riallineano dopo 2 secondi,
+    /// senza aspettare il giro automatico. Con tanti upload di fila al massimo uno ogni 15 secondi.
+    /// </summary>
+    private void ServerChanged(SftpConfig? server)
+    {
+        if (server == null) return;
+        Dispatcher.UIThread.Post(() =>
+        {
+            var prefix = server.ServerKey + "|";
+            foreach (var k in _lastSync.Keys.Where(k => k.StartsWith(prefix, StringComparison.Ordinal)).ToList())
+                _lastSync.Remove(k);
+
+            if (_syncSoonTimer == null)
+            {
+                _syncSoonTimer = new DispatcherTimer();
+                _syncSoonTimer.Tick += (_, _) =>
+                {
+                    _syncSoonTimer.Stop();
+                    // Un'altra operazione in corso: si riprova tra poco
+                    if (_syncRunning || _webChecker?.IsChecking == true || IsDeletingRemote || IsDeletingServer2)
+                    {
+                        _syncSoonTimer.Interval = TimeSpan.FromSeconds(3);
+                        _syncSoonTimer.Start();
+                        return;
+                    }
+                    _lastSyncSoon = DateTime.Now;
+                    _ = RunSoonSyncAsync();
+                };
+            }
+            if (_syncSoonTimer.IsEnabled) return;   // già in programma
+            var wait = SyncSoonMinGap - (DateTime.Now - _lastSyncSoon);
+            _syncSoonTimer.Interval = wait > TimeSpan.FromSeconds(2) ? wait : TimeSpan.FromSeconds(2);
+            _syncSoonTimer.Start();
+        });
+    }
+
+    private async Task RunSoonSyncAsync()
+    {
+        await SyncResultsAsync(left: false, force: false);
+        if (IsServer2Mode && IsServer2Connected) await SyncResultsAsync(left: true, force: false);
     }
 
     /// <summary>Riallinea subito gli esiti delle cartelle aperte (menu "Esiti").</summary>

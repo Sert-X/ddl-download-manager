@@ -153,8 +153,6 @@ public static class SftpEntrySorter
         target.Size = source.Size;
         target.Modified = source.Modified;
         target.IsDirectory = source.IsDirectory;
-        target.HasZeroByteIssue = source.HasZeroByteIssue;
-        if (!string.IsNullOrEmpty(source.ContentsInfo)) target.ContentsInfo = source.ContentsInfo;
         target.CopyChecksFrom(source);
     }
 
@@ -163,7 +161,6 @@ public static class SftpEntrySorter
         target.Size = source.Size;
         target.Modified = source.Modified;
         target.IsDirectory = source.IsDirectory;
-        target.HasZeroByteIssue = source.HasZeroByteIssue;
         target.CopyChecksFrom(source);
     }
 }

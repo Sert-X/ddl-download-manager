@@ -292,15 +292,7 @@ public partial class SftpTabViewModel
     private void ReapplyZeroFlags(string serverKey)
     {
         if (!_checkers.TryGetValue(serverKey, out var checker)) return;
-        void Apply(IEnumerable<SftpRemoteEntry> entries)
-        {
-            foreach (var e in entries.Where(e => e.IsDirectory))
-            {
-                var key = e.FullPath.TrimEnd('/');
-                e.HasZeroByteIssue = checker.TryGetFolderFlag(key, out var flag) && flag;
-                if (checker.TryGetFolderContents(key, out var info)) e.ContentsInfo = info;
-            }
-        }
+        void Apply(IEnumerable<SftpRemoteEntry> entries) => checker.ApplyTo(entries);
         if (string.Equals(RemoteConfig?.ServerKey, serverKey, StringComparison.OrdinalIgnoreCase)) Apply(SftpRemoteEntries);
         if (IsServer2Connected && string.Equals(_server2Config?.ServerKey, serverKey, StringComparison.OrdinalIgnoreCase)) Apply(Server2Entries);
     }
@@ -365,7 +357,7 @@ public partial class SftpTabViewModel
         if (checker == null || server == null || checker.IsChecking || !checker.WasCheckedIn(path)) return;
         var now = DateTime.UtcNow;
         var missing = entries
-            .Where(e => e.IsDirectory && !checker.TryGetFolderContents(e.FullPath.TrimEnd('/'), out _))
+            .Where(e => e.IsDirectory && !checker.IsFolderKnown(e.FullPath))
             .Where(e =>
             {
                 // Una cartella che non dà esito non si ritenta a ogni lettura (al massimo ogni 30 s)

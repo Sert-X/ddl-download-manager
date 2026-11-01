@@ -97,6 +97,8 @@ public abstract partial class CheckedFileEntry : ObservableObject
     public bool IsDurationOk => DurationLevel == WebStreamLevel.Ok;
     public bool IsDurationShort => DurationLevel == WebStreamLevel.Warning;
     public bool IsDurationStale => DurationLevel == WebStreamLevel.Stale;
+    /// <summary>File danneggiato (o cartella che ne contiene): rosso.</summary>
+    public bool IsDurationBad => DurationLevel == WebStreamLevel.Bad;
 
     public void SetDuration(WebStreamLevel level, string text, string detail)
     {
@@ -110,6 +112,73 @@ public abstract partial class CheckedFileEntry : ObservableObject
         OnPropertyChanged(nameof(IsDurationOk));
         OnPropertyChanged(nameof(IsDurationShort));
         OnPropertyChanged(nameof(IsDurationStale));
+        OnPropertyChanged(nameof(IsDurationBad));
+    }
+
+    // ---- Analisi delle cartelle: file vuoti (colonna 0 byte) e contenuto (colonna Contenuto) ----
+    /// <summary>File a 0 byte, o cartella che ne contiene (anche in profondità): riga rossa.</summary>
+    [ObservableProperty] private bool _hasZeroByteIssue;
+    /// <summary>Cartelle: file vuoti trovati dentro (anche in profondità); null = mai analizzata.</summary>
+    [ObservableProperty] private int? _zeroCount;
+    /// <summary>Cartelle: "N cartelle, M file" salvato dall'analisi; vuoto = mai contata.</summary>
+    [ObservableProperty] private string _contentsInfo = string.Empty;
+
+    /// <summary>Testo della colonna 0 byte.</summary>
+    public string ZeroText =>
+        !EntryIsDirectory ? (HasZeroByteIssue ? "Vuoto (0 byte)" : "")
+        : ZeroCount is not { } n ? ""
+        : n > 0 ? (n == 1 ? "1 file vuoto" : $"{n} file vuoti")
+        : HasZeroByteIssue ? "Con file vuoti"
+        : "Nessuno";
+
+    public bool IsZeroBad => HasZeroByteIssue && !string.IsNullOrEmpty(ZeroText);
+    public bool IsZeroOk => EntryIsDirectory && ZeroCount == 0 && !HasZeroByteIssue;
+    public bool HasZeroText => !string.IsNullOrEmpty(ZeroText);
+
+    public string ZeroDetail =>
+        !EntryIsDirectory ? (HasZeroByteIssue ? "File da 0 byte: di solito un upload o un download interrotto." : "")
+        : ZeroCount is not { } n ? ""
+        : n > 0 ? $"{ZeroText} in questa cartella e nelle sottocartelle analizzate.\nDi solito sono upload o download interrotti."
+        : HasZeroByteIssue ? "Questa cartella contiene almeno un file da 0 byte."
+        : "Nessun file vuoto in questa cartella e nelle sottocartelle analizzate.";
+
+    /// <summary>Numero di cartelle e di file letti da <see cref="ContentsInfo"/> (null se non contati).</summary>
+    public int? ContentsDirs => ParseContents().Dirs;
+    public int? ContentsFiles => ParseContents().Files;
+    public bool HasContents => ContentsDirs != null;
+    public string ContentsDirsText => ContentsDirs?.ToString("N0") ?? "";
+    public string ContentsFilesText => ContentsFiles?.ToString("N0") ?? "";
+    public string ContentsDetail => ParseContents() is { Dirs: { } d, Files: { } f }
+        ? $"{(d == 1 ? "1 cartella" : $"{d:N0} cartelle")} e {(f == 1 ? "1 file" : $"{f:N0} file")} " +
+          "in questa cartella e nelle sottocartelle analizzate."
+        : "";
+
+    private (int? Dirs, int? Files) ParseContents()
+    {
+        // Formato salvato: "N cartelle, M file"
+        var m = System.Text.RegularExpressions.Regex.Match(ContentsInfo ?? "", @"^(\d+) cartelle, (\d+) file");
+        return m.Success ? (int.Parse(m.Groups[1].Value), int.Parse(m.Groups[2].Value)) : (null, null);
+    }
+
+    partial void OnHasZeroByteIssueChanged(bool value) => NotifyZero();
+    partial void OnZeroCountChanged(int? value) => NotifyZero();
+    private void NotifyZero()
+    {
+        OnPropertyChanged(nameof(ZeroText));
+        OnPropertyChanged(nameof(IsZeroBad));
+        OnPropertyChanged(nameof(IsZeroOk));
+        OnPropertyChanged(nameof(HasZeroText));
+        OnPropertyChanged(nameof(ZeroDetail));
+    }
+
+    partial void OnContentsInfoChanged(string value)
+    {
+        OnPropertyChanged(nameof(ContentsDirs));
+        OnPropertyChanged(nameof(ContentsFiles));
+        OnPropertyChanged(nameof(HasContents));
+        OnPropertyChanged(nameof(ContentsDirsText));
+        OnPropertyChanged(nameof(ContentsFilesText));
+        OnPropertyChanged(nameof(ContentsDetail));
     }
 
     /// <summary>Copia gli esiti da un'altra riga (stesso file letto di nuovo).</summary>
@@ -118,5 +187,8 @@ public abstract partial class CheckedFileEntry : ObservableObject
         SetWebStream(source.WebStreamLevel, source.WebStreamInfo, source.WebStreamDetail);
         SetLanguage(source.LangLevel, source.LangInfo, source.LangDetail);
         SetDuration(source.DurationLevel, source.DurationText, source.DurationDetail);
+        HasZeroByteIssue = source.HasZeroByteIssue;
+        ZeroCount = source.ZeroCount;
+        ContentsInfo = source.ContentsInfo;
     }
 }

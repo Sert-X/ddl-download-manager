@@ -50,14 +50,18 @@ public class ZeroByteCheckRepository
                 FullPath  TEXT NOT NULL,
                 PRIMARY KEY (ServerKey, FullPath)
             );");
+        // 0 = cartella analizzata solo per il contenuto (dei file vuoti non si sa nulla)
+        try { await conn.ExecuteAsync("ALTER TABLE ZeroByteFolders ADD COLUMN ZeroChecked INTEGER NOT NULL DEFAULT 1"); }
+        catch { /* colonna già presente */ }
     }
 
-    public sealed record Snapshot(List<string> ZeroFiles, List<(string Path, string Contents)> Folders, List<string> CheckedParents);
+    public sealed record Snapshot(List<string> ZeroFiles, List<(string Path, string Contents, bool ZeroChecked)> Folders, List<string> CheckedParents);
 
     private sealed class FolderRow
     {
         public string FullPath { get; set; } = "";
         public string ContentsInfo { get; set; } = "";
+        public long ZeroChecked { get; set; } = 1;
     }
 
     /// <summary>Tutto ciò che si sa di un server.</summary>
@@ -67,8 +71,8 @@ public class ZeroByteCheckRepository
         {
             await using var conn = new SqliteConnection(_connectionString);
             var files = (await conn.QueryAsync<string>("SELECT FullPath FROM ZeroByteFiles WHERE ServerKey = @serverKey", new { serverKey })).ToList();
-            var folders = (await conn.QueryAsync<FolderRow>("SELECT FullPath, ContentsInfo FROM ZeroByteFolders WHERE ServerKey = @serverKey", new { serverKey }))
-                .Select(r => (r.FullPath, r.ContentsInfo)).ToList();
+            var folders = (await conn.QueryAsync<FolderRow>("SELECT FullPath, ContentsInfo, ZeroChecked FROM ZeroByteFolders WHERE ServerKey = @serverKey", new { serverKey }))
+                .Select(r => (r.FullPath, r.ContentsInfo, r.ZeroChecked != 0)).ToList();
             var parents = (await conn.QueryAsync<string>("SELECT FullPath FROM ZeroByteCheckedParents WHERE ServerKey = @serverKey", new { serverKey })).ToList();
             return new Snapshot(files, folders, parents);
         }
@@ -101,7 +105,7 @@ public class ZeroByteCheckRepository
     /// lette) sostituiscono quelli salvati per le cartelle lette; le cartelle lette risultano controllate.
     /// </summary>
     public Task SaveCheckAsync(string serverKey, IReadOnlyCollection<string> scannedFolders,
-        IReadOnlyCollection<string> zeroFiles, string topFolder, string topContents, string checkedParent)
+        IReadOnlyCollection<string> zeroFiles, string topFolder, string? topContents, string checkedParent)
         => WriteAsync(async (conn, tx) =>
         {
             var at = DateTime.Now.ToString("s");
@@ -112,16 +116,42 @@ public class ZeroByteCheckRepository
                     @"DELETE FROM ZeroByteFiles WHERE ServerKey = @serverKey AND FullPath LIKE @child ESCAPE '\' AND FullPath NOT LIKE @grandchild ESCAPE '\'",
                     new { serverKey, child = Prefix(folder) + "/%", grandchild = Prefix(folder) + "/%/%" }, tx);
                 await conn.ExecuteAsync(
-                    @"INSERT INTO ZeroByteFolders (ServerKey, FullPath, ContentsInfo, CheckedAt) VALUES (@serverKey, @folder, '', @at)
-                      ON CONFLICT(ServerKey, FullPath) DO UPDATE SET CheckedAt = excluded.CheckedAt",
+                    @"INSERT INTO ZeroByteFolders (ServerKey, FullPath, ContentsInfo, CheckedAt, ZeroChecked) VALUES (@serverKey, @folder, '', @at, 1)
+                      ON CONFLICT(ServerKey, FullPath) DO UPDATE SET CheckedAt = excluded.CheckedAt, ZeroChecked = 1",
                     new { serverKey, folder = Norm(folder), at }, tx);
             }
-            await conn.ExecuteAsync("UPDATE ZeroByteFolders SET ContentsInfo = @topContents WHERE ServerKey = @serverKey AND FullPath = @top",
-                new { serverKey, topContents, top = Norm(topFolder) }, tx);
+            // null = contenuto non richiesto: resta quello salvato
+            if (topContents != null)
+                await conn.ExecuteAsync("UPDATE ZeroByteFolders SET ContentsInfo = @topContents WHERE ServerKey = @serverKey AND FullPath = @top",
+                    new { serverKey, topContents, top = Norm(topFolder) }, tx);
             foreach (var f in zeroFiles)
                 await conn.ExecuteAsync("INSERT OR IGNORE INTO ZeroByteFiles (ServerKey, FullPath) VALUES (@serverKey, @f)", new { serverKey, f }, tx);
             await conn.ExecuteAsync("INSERT OR IGNORE INTO ZeroByteCheckedParents (ServerKey, FullPath) VALUES (@serverKey, @p)",
                 new { serverKey, p = Norm(checkedParent) }, tx);
+        });
+
+    /// <summary>Analisi del solo contenuto: i file vuoti salvati della cartella non si toccano.</summary>
+    public Task SaveContentsAsync(string serverKey, string folder, string contents, string checkedParent)
+        => WriteAsync(async (conn, tx) =>
+        {
+            await conn.ExecuteAsync(
+                @"INSERT INTO ZeroByteFolders (ServerKey, FullPath, ContentsInfo, CheckedAt, ZeroChecked) VALUES (@serverKey, @folder, @contents, @at, 0)
+                  ON CONFLICT(ServerKey, FullPath) DO UPDATE SET ContentsInfo = excluded.ContentsInfo",
+                new { serverKey, folder = Norm(folder), contents, at = DateTime.Now.ToString("s") }, tx);
+            await conn.ExecuteAsync("INSERT OR IGNORE INTO ZeroByteCheckedParents (ServerKey, FullPath) VALUES (@serverKey, @p)",
+                new { serverKey, p = Norm(checkedParent) }, tx);
+        });
+
+    /// <summary>Contenuto di più cartelle (sottocartelle lette dall'analisi); i file vuoti non si toccano.</summary>
+    public Task SaveContentsManyAsync(string serverKey, IReadOnlyDictionary<string, string> contentsByFolder)
+        => WriteAsync(async (conn, tx) =>
+        {
+            var at = DateTime.Now.ToString("s");
+            foreach (var (folder, contents) in contentsByFolder)
+                await conn.ExecuteAsync(
+                    @"INSERT INTO ZeroByteFolders (ServerKey, FullPath, ContentsInfo, CheckedAt, ZeroChecked) VALUES (@serverKey, @folder, @contents, @at, 0)
+                      ON CONFLICT(ServerKey, FullPath) DO UPDATE SET ContentsInfo = excluded.ContentsInfo",
+                    new { serverKey, folder = Norm(folder), contents, at }, tx);
         });
 
     /// <summary>
@@ -167,12 +197,12 @@ public class ZeroByteCheckRepository
                 await conn.ExecuteAsync("INSERT OR IGNORE INTO ZeroByteFiles (ServerKey, FullPath) VALUES (@serverKey, @f)", new { serverKey, f }, tx);
         });
 
-    /// <summary>Riassunti della colonna Contenuto ricalcolati dall'elenco completo (solo cartelle già controllate).</summary>
+    /// <summary>Riassunti della colonna Contenuto ricalcolati dall'elenco completo (solo cartelle che ne hanno già uno).</summary>
     public Task UpdateContentsAsync(string serverKey, IReadOnlyDictionary<string, string> contentsByFolder)
         => WriteAsync(async (conn, tx) =>
         {
             foreach (var (folder, contents) in contentsByFolder)
-                await conn.ExecuteAsync("UPDATE ZeroByteFolders SET ContentsInfo = @contents WHERE ServerKey = @serverKey AND FullPath = @folder",
+                await conn.ExecuteAsync("UPDATE ZeroByteFolders SET ContentsInfo = @contents WHERE ServerKey = @serverKey AND FullPath = @folder AND ContentsInfo <> ''",
                     new { serverKey, folder = Norm(folder), contents }, tx);
         });
 

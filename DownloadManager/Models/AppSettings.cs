@@ -75,12 +75,20 @@ public class AppSettings
     public bool ShowWebResults { get; set; } = true;
     public bool ShowLanguageResults { get; set; } = true;
     public bool ShowDurationResults { get; set; } = true;
+    public bool ShowContentsResults { get; set; } = true;
+    public bool ShowSizeColumn { get; set; } = true;
+    /// <summary>Righe colorate (rosso video con problemi, viola file vuoti).</summary>
+    public bool HighlightRows { get; set; } = true;
+    public bool ShowModifiedColumn { get; set; } = true;
     /// <summary>Video più corti di così (minuti) segnalati come "corto"; 0 = nessuna segnalazione.</summary>
     public double MinVideoDurationMinutes { get; set; } = 5;
     // Ultima scelta nella finestra della verifica dei video
     public bool VideoCheckWeb { get; set; } = true;
     public bool VideoCheckLanguage { get; set; } = true;
     public bool VideoCheckDuration { get; set; } = true;
+    // Ultima scelta nella finestra dell'analisi delle cartelle
+    public bool FolderCheckZero { get; set; } = true;
+    public bool FolderCheckContents { get; set; } = true;
     public string VideoboxPublicPath { get; set; } = "Anime SUB.ITA"; 
 
     /// <summary>Sorgenti SFTP di Videobox Corrector (vuoto = si crea dalla vecchia configurazione singola).</summary>
