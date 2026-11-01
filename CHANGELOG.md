@@ -1,5 +1,53 @@
 # Changelog
 
+## [1.5.0] — 2026-11-01
+
+### 📡 SFTP — Controlli sui video
+- **Verifica codec per i player web** (pulsante con la pellicola): controlla i video della cartella e delle sottocartelle e dice se si vedono nei browser. Rosso per audio AC3, E-AC3, DTS, TrueHD, FLAC (nel browser il video resta muto), video Xvid/MPEG-2/VC-1 o H.264 a 10 bit; giallo per HEVC, tracce audio secondarie non web e MKV con estensione .mp4. Nuova colonna **Web** con icona e motivo, dettagli nel tooltip.
+- **Controllo della lingua**: nuova colonna **Lingua**. "ITA" (verde), "ITA non è la 1ª traccia" (giallo: il player web suonerebbe un'altra lingua), "Lingua non indicata / da verificare" (giallo), "Senza italiano" (rosso, con le lingue trovate nel tooltip). Conta solo ciò che è scritto nelle tracce, non il nome del file.
+- **Si sceglie cosa controllare**: una finestra chiede "Solo codec", "Solo lingua" o "Codec e lingua" (stessa velocità: ogni file si legge una volta). Tasto destro sulla pellicola: "Ricontrolla tutti i video".
+- **Veloce anche su migliaia di file**: dei video si leggono solo pochi MB (intestazione o indice MP4, anche se sta in fondo), 3 alla volta, su una connessione a parte che non blocca il browser. Riga di stato con "Web 125/4421 · nome del file" e "In lettura…" sulla riga del file o della cartella che lo contiene.
+- **Su file e cartelle scelti**: clic destro → "Controlla codec / lingua…" e "Controlla file vuoti (0 byte)" (solo cartelle), anche su più elementi selezionati.
+- **Ovunque**: pannello di destra, pannello di sinistra (server) e **file del PC** (Locale), con gli stessi pulsanti, colonne ed evidenziazioni.
+- **Cartelle con il riassunto** ("3 non idonei · 2 da verificare") e riga rossa tenue per i video non adatti o senza italiano.
+
+### 📡 SFTP — Esiti salvati e sempre aggiornati
+- **Gli esiti restano** dopo la chiusura dell'app, anche quelli del **check dei file vuoti** (prima si perdevano): riaprendo una cartella si vedono subito. Rilanciando un controllo si leggono solo i file nuovi o cambiati.
+- **Modifiche fatte da fuori** (WinSCP, altri PC): all'apertura di una cartella e ogni 5 minuti il server elenca tutti i file sotto la cartella aperta in un paio di secondi (anche migliaia). Gli esiti di file eliminati si tolgono, quelli di file rinominati o spostati li seguono, i file cambiati diventano "Da ricontrollare", i file vuoti si aggiornano in tutto l'albero. Per farlo subito: "Riallinea esiti ora".
+- **Mostra / nascondi esiti** (pulsante con l'occhio): file vuoti, codec web e lingua, singolarmente o tutti insieme, in tutte le tabelle (colonne ed evidenziazioni). La scelta resta salvata.
+
+### 📡 SFTP — File e code
+- **Eliminare cartelle enormi non blocca più l'SFTP**: prima, con tanti file, WinSCP andava in timeout e bisognava riconnettersi. Ora la cartella la elimina il server stesso su una connessione a parte; avanzamento nella riga di stato e pulsante per **fermare l'eliminazione**.
+- **"Rimuovi" nelle code**: un trasferimento in attesa rimosso non parte più di nascosto in background; uno in corso va prima annullato (l'app lo ricorda con un messaggio). Vale anche per i download di Anime e Film/Serie.
+- **Selezione multipla nelle code** (Ctrl e Maiusc): avvia, pausa, annulla e rimuovi su più trasferimenti insieme dal clic destro.
+- **Al massimo 6 trasferimenti in parallelo** per server (upload e download): le connessioni verso un server sono 8 e due restano al browser e ai controlli.
+- **Barra di scorrimento delle tabelle dei file corretta**: cambiando cartella la tabella calcolava male la lunghezza della lista e la barra non corrispondeva alla posizione (il problema c'era da sempre).
+- **Riga di stato stabile**: statistiche a sinistra, stato a destra in tutto lo spazio libero; non si allarga e non si accorcia più, testo intero nel tooltip.
+- Upload di cartelle in **ordine naturale** (1, 2, … 10, 11).
+
+### 🎞 Anteprima video
+- **Più leggera**: connessione, avvio e chiusura non bloccano più la finestra, che si chiude subito anche mentre si sta collegando.
+- **Tracce audio e sottotitoli** da scegliere (tasti A e S), con lingua per esteso, titolo e **"(forced)"** per i sottotitoli forzati (VLC da solo non lo indica).
+- **Pannello informazioni** (tasto I): codec, risoluzione, fotogrammi, bitrate, canali, sottotitoli.
+- Grafica nello stile dell'app; funziona anche con i server che usano la chiave privata.
+
+### 🎬 Videobox Corrector
+- **Titoli TMDB (beta)**: nuova vista accanto alla Mappatura. Propone il titolo di ogni post secondo TMDB (con pattern personalizzabili), controlla il numero di episodi e la stagione, segnala i post in corso, e rinomina i post selezionati con controlli prima e dopo l'invio. "Annulla ultima rinomina" rimette i titoli di prima. Richiede una chiave TMDB.
+- Invio più sicuro: la risposta del forum aggiorna solo la lista se nel frattempo hai aperto un altro post.
+
+### 🎬 Anime e Film/Serie Download
+- **Audio per i player web**: "Copia in MP4" converte in AAC l'audio AC3/E-AC3 (nel player web il video era muto) e mette l'italiano come prima traccia; il video resta copiato.
+- **Maxstream in HD**: nuove scelte per scaricare la variante "High Definition" invece dell'originale.
+- **Download che non si bloccano**: se il server smette di mandare dati senza chiudere la connessione (capitava con molti download da Maxstream), il pezzo si riprende dal punto raggiunto.
+- **Risultati della ricerca**: filtro Film/Serie e ordine per anno (più recenti o più vecchi).
+- Cb01: riconosciuti anche i link scritti male nei post.
+
+### 🗂 Organizza file
+- **Unisci**: cartelle aggiunte e ordinate in ordine naturale (Parte 1, Parte 2 … Parte 10).
+
+### 📖 Guide
+- Le "Guide rapide" diventano **Guide**; quelle di SFTP e Videobox Corrector sono riscritte e divise per argomento, con tutte le novità.
+
 ## [1.4.9] — 2026-10-28
 
 ### 🎬 Videobox Corrector

@@ -18,6 +18,7 @@ public partial class AccountTabViewModel : ViewModelBase
 
     // --- Maxstream ---
     private readonly MaxstreamAccountRepository _msRepo;
+
     private readonly MaxstreamService _maxstream;
     private readonly SettingsService _settings;
 

@@ -44,7 +44,7 @@ public partial class DownloadTabViewModel : ViewModelBase
     [ObservableProperty] private bool _isLoadingSearchResults;
     [ObservableProperty] private bool _isLoadingEpisodes;
     public string SearchResultsCountText =>
-        SearchResults.Count == 0 ? "" : $"({SearchResults.Count} serie)";
+        SearchResults.Count == 0 ? "" : $"({SearchResults.Count} serie)";   // l'ordine non toglie risultati
     public string EpisodesCountText =>
         Episodes.Count == 0 ? "" : $"{Episodes.Count} episodi";
 
@@ -437,7 +437,7 @@ public partial class DownloadTabViewModel : ViewModelBase
 
         OnPropertyChanged(nameof(SelectedProviderName));
 
-        SearchResults.Clear();
+        ClearSearchResults();
         Episodes.Clear();
         SelectedAnime = null;
         StatusMessage = $"Provider {value.Name} selezionato. Cerca un anime per iniziare.";
@@ -556,7 +556,7 @@ public partial class DownloadTabViewModel : ViewModelBase
 
         // Risultati e Dettaglio della ricerca precedente spariscono subito
         _emptySearchTerm = null;
-        SearchResults.Clear();
+        ClearSearchResults();
         ClearDetail();
         IsLoadingSearchResults = true;
         try
@@ -566,12 +566,8 @@ public partial class DownloadTabViewModel : ViewModelBase
             if (seq != _searchSeq) return;   // nel frattempo è partita un'altra ricerca
 
             _emptySearchTerm = results.Count == 0 ? term.Trim() : null;
-            SearchResults.Clear();
-            foreach (var result in results)
-            {
-                SearchResults.Add(result);
-                _ = LoadPosterAsync(result);
-            }
+            SetSearchResults(results);
+            foreach (var result in results) _ = LoadPosterAsync(result);
             NotifyPlaceholders();
 
             StatusMessage = $"Trovati {results.Count} risultati per '{term}'.";
@@ -626,7 +622,7 @@ public partial class DownloadTabViewModel : ViewModelBase
         // Le operazioni in corso diventano "superate": i loro risultati verranno ignorati
         _searchCts?.Cancel(); _searchSeq++;
         IsLoadingSearchResults = false;
-        SearchResults.Clear();
+        ClearSearchResults();
         ClearDetail();
         _emptySearchTerm = null;
         SearchQuery = string.Empty;
@@ -953,7 +949,13 @@ public partial class DownloadTabViewModel : ViewModelBase
     public void ForceItemPublic(DownloadItem item) => _queueService.ForceQueueItem(item);
     public void UnforceItemPublic(DownloadItem item) => _queueService.UnforceQueueItem(item);
     public void CancelItemPublic(DownloadItem item) => _queueService.CancelItem(item);
-    public Task RemoveItemPublicAsync(DownloadItem item) => _queueService.RemoveItemAsync(item);
+    /// <summary>Toglie l'episodio dalla lista. Se il download è in corso non lo toglie (false): va annullato prima.</summary>
+    public async Task<bool> RemoveItemPublicAsync(DownloadItem item)
+    {
+        if (item.Status == DownloadStatus.Downloading) return false;
+        await _queueService.RemoveItemAsync(item);
+        return true;
+    }
 
     public void PauseGroupPublic(SeriesGroup group) { foreach (var item in group.Items.ToList()) _queueService.PauseItem(item); }
     public void ResumeGroupPublic(SeriesGroup group) { foreach (var item in group.Items.ToList()) _queueService.ResumeItem(item); }
@@ -969,14 +971,20 @@ public partial class DownloadTabViewModel : ViewModelBase
         StatusMessage = $"Annullata la serie: {group.SeriesName}";
     }
 
-    public async Task RemoveGroupPublicAsync(SeriesGroup group)
+    /// <summary>Toglie la serie dalla lista. Se un episodio è in download non toglie nulla (false).</summary>
+    public async Task<bool> RemoveGroupPublicAsync(SeriesGroup group)
     {
         // Prendi tutti gli item della serie
         var items = group.Items.ToList();
-        if (items.Count == 0) return;
+        if (items.Count == 0) return true;
+        if (items.Any(i => i.Status == DownloadStatus.Downloading)) return false;
 
-        // Usa il nuovo metodo ottimizzato
+        // Il gruppo sparisce subito dalla lista: altrimenti si svuotava un episodio alla volta,
+        // ridisegnando la serie a ogni rimozione
+        foreach (var i in items) i.PropertyChanged -= OnDownloadItemPropertyChanged;
+        SeriesGroups.Remove(group);
         await _queueService.RemoveManyAsync(items);
+        return true;
     }
 
     // ============================================================
@@ -1064,4 +1072,58 @@ public partial class DownloadTabViewModel : ViewModelBase
                 SeriesGroups.Remove(group);
         }
     }
+
+    // ============================================================
+    //  FILTRI E ORDINE DEI RISULTATI DELLA RICERCA
+    // ============================================================
+
+    /// <summary>Tutti i risultati dell'ultima ricerca; <see cref="SearchResults"/> mostra quelli filtrati e ordinati.</summary>
+    private readonly List<AnimeSearchResult> _allSearchResults = new();
+
+    /// <summary>Ordine: Rel (come li dà il sito), YearDesc, YearAsc. Si vede solo se i risultati hanno un anno.</summary>
+    [ObservableProperty] private string _resultSort = "Rel";
+    public bool HasResultYears => _allSearchResults.Count(r => YearOf(r) != null) > 1;
+    public bool IsResultSortRel => ResultSort == "Rel";
+    public bool IsResultSortYearDesc => ResultSort == "YearDesc";
+    public bool IsResultSortYearAsc => ResultSort == "YearAsc";
+    public bool HasResultFilters => _allSearchResults.Count > 1;
+    [RelayCommand] private void SetResultSort(string value) => ResultSort = value;
+    partial void OnResultSortChanged(string value) => RebuildSearchResults();
+
+    private static int? YearOf(AnimeSearchResult r) => r.Year;
+
+    private void SetSearchResults(IEnumerable<AnimeSearchResult> results)
+    {
+        _allSearchResults.Clear();
+        _allSearchResults.AddRange(results);
+        RebuildSearchResults();
+    }
+
+    private void ClearSearchResults()
+    {
+        _allSearchResults.Clear();
+        RebuildSearchResults();
+    }
+
+    private void RebuildSearchResults()
+    {
+        var shown = _allSearchResults.AsEnumerable();
+        // Senza anno in fondo; a parità d'anno resta l'ordine del sito
+        shown = ResultSort switch
+        {
+            "YearDesc" => shown.OrderBy(r => YearOf(r) == null).ThenByDescending(r => YearOf(r) ?? 0),
+            "YearAsc" => shown.OrderBy(r => YearOf(r) == null).ThenBy(r => YearOf(r) ?? 0),
+            _ => shown
+        };
+        var list = shown.ToList();
+        if (!list.SequenceEqual(SearchResults))
+        {
+            SearchResults.Clear();
+            foreach (var r in list) SearchResults.Add(r);
+        }
+        foreach (var n in new[] { nameof(HasResultYears), nameof(IsResultSortRel), nameof(IsResultSortYearDesc), nameof(IsResultSortYearAsc),
+                                  nameof(HasResultFilters), nameof(SearchResultsCountText) })
+            OnPropertyChanged(n);
+    }
+
 }

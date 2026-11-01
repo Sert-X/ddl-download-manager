@@ -377,25 +377,40 @@ public abstract class SftpQueueServiceBase<TJob> where TJob : TransferJobBase
         QueueChanged?.Invoke();
     }
 
-    public void RemoveJob(TJob job)
+    /// <summary>Il trasferimento è in corso (o sta partendo).</summary>
+    public bool IsJobActive(TJob job)
     {
-        if (_active.TryGetValue(job.Id, out var cts))
+        lock (_queueLock) return _active.ContainsKey(job.Id) || job.Status == ActiveStatus;
+    }
+
+    /// <summary>
+    /// Toglie il job dalla lista. Un job in corso NON si rimuove (restituisce false): va annullato
+    /// prima. Un job in attesa esce anche dalla coda interna: prima restava lì e partiva lo stesso
+    /// più tardi, in background, pur non comparendo più nella lista.
+    /// </summary>
+    public bool RemoveJob(TJob job)
+    {
+        lock (_queueLock)
         {
-            if (_activeSessions.TryGetValue(job.Id, out var session))
-            {
-                try { session.Abort(); } catch { }
-            }
-            try { cts.Cancel(); } catch { }
+            if (_active.ContainsKey(job.Id) || job.Status == ActiveStatus) return false;
+            _pendingIds.Remove(job.Id);
+            _pending.RemoveAll(j => j.Id == job.Id);
         }
 
-        lock (_queueLock) { _pendingIds.Remove(job.Id); }
+        job.PauseRequested = false;
+        if (job.Status is SftpJobStatus.Pending or SftpJobStatus.Paused)
+            job.Status = SftpJobStatus.Cancelled;
 
         Dispatcher.UIThread.Post(() =>
         {
             AllJobs.Remove(job);
             QueueChanged?.Invoke();
         });
+        return true;
     }
+
+    /// <summary>Rimuove i job non in corso; restituisce quanti sono rimasti perché in corso.</summary>
+    public int RemoveJobs(IEnumerable<TJob> jobs) => jobs.ToList().Count(j => !RemoveJob(j));
 
     // ============================================================
     //  DISPATCH

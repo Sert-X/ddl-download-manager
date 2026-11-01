@@ -22,7 +22,7 @@ public class PatternLegendButton : Button
     public static readonly StyledProperty<Control?> TargetProperty =
         AvaloniaProperty.Register<PatternLegendButton, Control?>(nameof(Target));
 
-    /// <summary>Anime, Movie, Series, SeasonFolder, Organize, SplitFolder.</summary>
+    /// <summary>Anime, Movie, Series, SeasonFolder, Organize, SplitFolder, TmdbSeries, TmdbMovie.</summary>
     public string Kind
     {
         get => GetValue(KindProperty);
@@ -92,6 +92,28 @@ public class PatternLegendButton : Button
         new("{Series}", "Nome della serie, ricavato dai file (o dalla cartella)", "Frieren"),
     };
 
+    private static readonly Token[] TmdbSeriesTokens =
+    {
+        new("{Titolo}", "Nome su TMDB in italiano (se manca, in inglese)", "Frieren"),
+        new("{Titolo Originale}", "Nome originale su TMDB", "葬送のフリーレン"),
+        new("{Episodi}", "Numero di link nel post", "12"),
+        new("{Totale}", "Episodi della stagione su TMDB", "28"),
+        new("{Anno}", "Anno della stagione (se manca, della serie)", "2023"),
+        new("{Stagione}", "Stagione con il suo nome, se ne ha uno", "Stagione 2 - Il viaggio"),
+        new("{Stagione N}", "Stagione senza nome, anche se ne ha uno", "Stagione 2"),
+        new("{Numero Stagione}", "Solo il numero della stagione", "2"),
+        new("{Lingua}", "Dal titolo attuale del post", "Sub ITA"),
+        new("{In Corso}", "\"In Corso\" solo se la stagione è in corso", "In Corso"),
+    };
+
+    private static readonly Token[] TmdbMovieTokens =
+    {
+        new("{Titolo}", "Titolo su TMDB in italiano (se manca, in inglese)", "Inception"),
+        new("{Titolo Originale}", "Titolo originale su TMDB", "Inception"),
+        new("{Anno}", "Anno di uscita", "2010"),
+        new("{Lingua}", "Dal titolo attuale del post", "ITA"),
+    };
+
     public PatternLegendButton()
     {
         Classes.Add("iconCircle");
@@ -131,6 +153,15 @@ public class PatternLegendButton : Button
                 "Esempio: Episodi {Start}-{End} → Episodi 26-50",
                 "Una \"/\" crea più livelli: {Series}/Parte {Number} → Frieren\\Parte 2",
                 "\":D3\" vale anche qui: {Start:D3}-{End:D3} → 026-050",
+            }),
+            "TmdbSeries" => ("Segnaposto per il titolo di anime e serie", TmdbSeriesTokens, new[]
+            {
+                "I pezzi vuoti spariscono insieme alle parentesi: senza «In Corso», «({In Corso})» non lascia «()».",
+                "Speciali (stagione 0 di TMDB): {Stagione} e {Stagione N} diventano «Speciali».",
+            }),
+            "TmdbMovie" => ("Segnaposto per il titolo dei film", TmdbMovieTokens, new[]
+            {
+                "Esempio: {Titolo} ({Anno}) {Lingua} Streaming → Inception (2010) ITA Streaming",
             }),
             _ => ("Segnaposto per il nome dei file", AnimeTokens, new[] { "Esempio: {Series} - {Episode:D3} → Frieren - 005" }),
         };
@@ -190,7 +221,7 @@ public class PatternLegendButton : Button
         flyout.ShowAt(this);
     }
 
-    /// <summary>Aggiunge il segnaposto in fondo al pattern del campo collegato.</summary>
+    /// <summary>Aggiunge il segnaposto al pattern del campo collegato (nella casella di testo, dove c'è il cursore).</summary>
     private void Insert(string token)
     {
         switch (Target)
@@ -199,8 +230,10 @@ public class PatternLegendButton : Button
                 combo.Text = (combo.Text ?? "") + token;
                 break;
             case TextBox box:
-                box.Text = (box.Text ?? "") + token;
-                box.CaretIndex = box.Text.Length;
+                var text = box.Text ?? "";
+                int at = Math.Clamp(box.CaretIndex, 0, text.Length);
+                box.Text = text.Insert(at, token);
+                box.CaretIndex = at + token.Length;
                 box.Focus();
                 break;
         }

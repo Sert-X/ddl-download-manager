@@ -639,6 +639,27 @@ public partial class OrganizerTabViewModel : ViewModelBase
         RenumberPriorities();
     }
 
+    /// <summary>Aggiunge più cartelle in ordine di nome "naturale" (Parte 1, Parte 2 ... Parte 10).</summary>
+    public void AddMergeFolders(IEnumerable<string> folders)
+    {
+        foreach (var f in folders.OrderBy(f => Path.GetFileName(f.TrimEnd('/', '\\')), Comparer<string>.Create(DownloadManager.Helpers.NaturalComparer.Compare)))
+            AddMergeFolder(f);
+    }
+
+    /// <summary>Riordina l'elenco per nome della cartella, in ordine "naturale".</summary>
+    public void SortMergeFoldersByName()
+    {
+        var sorted = MergeSourceFolders
+            .OrderBy(f => Path.GetFileName(f.Path.TrimEnd('/', '\\')), Comparer<string>.Create(DownloadManager.Helpers.NaturalComparer.Compare))
+            .ToList();
+        for (int i = 0; i < sorted.Count; i++)
+        {
+            int at = MergeSourceFolders.IndexOf(sorted[i]);
+            if (at != i) MergeSourceFolders.Move(at, i);
+        }
+        RenumberPriorities();
+    }
+
     public void ClearMergeFolders()
     {
         MergeSourceFolders.Clear();

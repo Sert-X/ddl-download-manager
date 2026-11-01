@@ -15,10 +15,25 @@ public static class Mp4Remuxer
     private static readonly HashSet<string> Mp4FriendlyAudio = new(StringComparer.OrdinalIgnoreCase)
         { "aac", "ac3", "eac3", "mp3", "alac" };
 
+    /// <summary>
+    /// Audio che i browser (Chrome, Firefox, Edge) riproducono in un .mp4. AC3/E-AC3 vanno bene per
+    /// Windows e TV ma nei player web il video resta muto.
+    /// </summary>
+    internal static readonly HashSet<string> WebFriendlyAudio = new(StringComparer.OrdinalIgnoreCase)
+        { "aac", "mp3", "opus" };
+
     private static readonly string[] AacAudio = { "-c:a", "aac", "-b:a", "384k" };
 
+    /// <summary>True se almeno una traccia audio non si sente nei browser (es. AC3, E-AC3, DTS).</summary>
+    public static async Task<bool> NeedsWebAudioAsync(string ffmpegPath, string file, CancellationToken ct = default)
+    {
+        var (_, audio) = await ProbeCodecsAsync(ffmpegPath, file, ct);
+        return audio.Any(a => !WebFriendlyAudio.Contains(a));
+    }
+
     /// <summary>Restituisce il percorso del .mp4 creato, oppure null (il file originale resta intatto).</summary>
-    public static async Task<string?> ConvertAsync(string ffmpegPath, string source, ILogger logger, CancellationToken ct = default)
+    /// <param name="webAudio">Per i player web: anche AC3/E-AC3 diventano AAC (il video resta copiato).</param>
+    public static async Task<string?> ConvertAsync(string ffmpegPath, string source, ILogger logger, CancellationToken ct = default, bool webAudio = false)
     {
         var target = Path.ChangeExtension(source, ".mp4");
         var temp = target + ".converting";
@@ -27,7 +42,7 @@ public static class Mp4Remuxer
         var audioMap = AudioTracks.MapArgs(await AudioTracks.ItalianFirstOrderAsync(ffmpegPath, source, ct));
 
         // DTS, TrueHD, Vorbis, FLAC, PCM...: ffmpeg li mette nell'MP4 ma molti lettori non li riproducono
-        bool copyAudio = audioCodecs.All(Mp4FriendlyAudio.Contains);
+        bool copyAudio = audioCodecs.All((webAudio ? WebFriendlyAudio : Mp4FriendlyAudio).Contains);
         var audio = copyAudio ? new[] { "-c:a", "copy" } : AacAudio;
         if (!copyAudio)
             logger.LogInformation("[MP4] Audio {Codecs} non adatto all'MP4: verrà convertito in AAC", string.Join(", ", audioCodecs));
@@ -76,13 +91,15 @@ public static class Mp4Remuxer
     /// Riscrive un .mp4 sul posto copiando le tracce (nessuna ricodifica): indice in testa
     /// (faststart), tag hvc1 per l'HEVC e audio italiano per primo. True se riuscito; altrimenti il file resta com'era.
     /// </summary>
-    public static async Task<bool> RewriteAsync(string ffmpegPath, string file, ILogger logger, CancellationToken ct = default)
+    /// <param name="aacAudio">L'audio viene ricodificato in AAC (stessi canali) per i player web; il video resta copiato.</param>
+    public static async Task<bool> RewriteAsync(string ffmpegPath, string file, ILogger logger, CancellationToken ct = default, bool aacAudio = false)
     {
         var temp = file + ".rewrite.mp4";
         var (videoCodec, _) = await ProbeCodecsAsync(ffmpegPath, file, ct);
         var args = new List<string> { "-hide_banner", "-nostdin", "-y", "-i", file, "-map", "0:V" };
         args.AddRange(AudioTracks.MapArgs(await AudioTracks.ItalianFirstOrderAsync(ffmpegPath, file, ct)));
         args.AddRange(new[] { "-map", "0:s?", "-c", "copy", "-c:s", "mov_text" });
+        if (aacAudio) args.AddRange(AacAudio);
         if (videoCodec.Equals("hevc", StringComparison.OrdinalIgnoreCase)) args.AddRange(new[] { "-tag:v", "hvc1" });
         args.AddRange(new[] { "-map_metadata", "0", "-movflags", "+faststart", "-f", "mp4", temp });
 

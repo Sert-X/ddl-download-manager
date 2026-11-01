@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using DownloadManager.Models;
+using DownloadManager.Persistence;
 
 namespace DownloadManager.Services.Sftp;
 
@@ -46,6 +47,72 @@ public sealed class ZeroByteCheckerService
     }
 
     private CancellationTokenSource? _cts;
+
+    // ---- Salvataggio nel database (i risultati restano dopo la chiusura dell'app) ----
+    private ZeroByteCheckRepository? _store;
+    private string? _serverKey;
+    /// <summary>Cartelle lette dal check in corso (per salvarne i risultati).</summary>
+    private HashSet<string>? _scanCollector;
+
+    /// <summary>I risultati salvati sono stati caricati (le righe mostrate vanno ricolorate).</summary>
+    public event EventHandler? StoreLoaded;
+
+    /// <summary>Collega il database e carica i risultati salvati di questo server.</summary>
+    public async Task AttachStoreAsync(ZeroByteCheckRepository store, string serverKey)
+    {
+        _store = store;
+        _serverKey = serverKey;
+        await ReloadFromStoreAsync();
+    }
+
+    /// <summary>Ricostruisce la memoria dai dati salvati (dopo il caricamento o un allineamento).</summary>
+    public async Task ReloadFromStoreAsync()
+    {
+        if (_store == null || _serverKey == null) return;
+        var snap = await _store.LoadAsync(_serverKey);
+        lock (_cacheLock)
+        {
+            _flagCache.Clear();
+            _contentsCache.Clear();
+            _zeroFilesByFolder.Clear();
+            _flaggedSubsByFolder.Clear();
+            _checkedParents.Clear();
+
+            foreach (var p in snap.CheckedParents) _checkedParents.Add(Normalize(p));
+            var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (path, contents) in snap.Folders)
+            {
+                var key = Normalize(path);
+                known.Add(key);
+                _flagCache[key] = false;
+                _zeroFilesByFolder.TryAdd(key, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+                if (!string.IsNullOrEmpty(contents)) _contentsCache[key] = contents;
+            }
+            foreach (var p in _checkedParents) known.Add(p);
+
+            // Ogni file a 0 byte accende il rosso della sua cartella e di quelle sopra
+            foreach (var file in snap.ZeroFiles)
+            {
+                var child = Normalize(GetParent(file));
+                if (!_zeroFilesByFolder.TryGetValue(child, out var set))
+                    _zeroFilesByFolder[child] = set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                set.Add(GetLeaf(file));
+                if (known.Contains(child)) _flagCache[child] = true;
+
+                while (child.Length > 0)
+                {
+                    var parent = Normalize(GetParent(child));
+                    if (!_flaggedSubsByFolder.TryGetValue(parent, out var subs))
+                        _flaggedSubsByFolder[parent] = subs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    subs.Add(GetLeaf(child));
+                    if (known.Contains(parent)) _flagCache[parent] = true;
+                    if (parent == child || parent.Length == 0) break;
+                    child = parent;
+                }
+            }
+        }
+        StoreLoaded?.Invoke(this, EventArgs.Empty);
+    }
 
     public bool IsChecking { get; private set; }
     public string ProgressStatus { get; private set; } = string.Empty;
@@ -197,6 +264,7 @@ public sealed class ZeroByteCheckerService
             // Senza l'elenco dei file a 0 byte della cartella non si può dire che sia
             // "pulita": prima la si considerava tale e il rosso spariva anche con altri
             // file a 0 byte ancora dentro. La rilettura della cartella sistemerà tutto.
+            if (_store != null && _serverKey != null) _ = _store.RemoveFileAsync(_serverKey, remoteFilePath);
             if (!_zeroFilesByFolder.TryGetValue(parentKey, out var files))
                 return changed;
             files.Remove(fileName);
@@ -262,6 +330,11 @@ public sealed class ZeroByteCheckerService
         if (string.IsNullOrEmpty(folderPath)) return;
         var key = Normalize(folderPath);
         var list = entries.ToList();
+
+        if (_store != null && _serverKey != null)
+            _ = _store.SyncListingAsync(_serverKey, folderPath,
+                list.Where(e => !e.IsDirectory && e.Size == 0).Select(e => e.Name).ToList(),
+                list.Where(e => e.IsDirectory).Select(e => e.Name).ToList());
 
         lock (_cacheLock)
         {
@@ -425,8 +498,11 @@ public sealed class ZeroByteCheckerService
 
                 var sw = Stopwatch.StartNew();
 
+                var scannedFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                _scanCollector = scannedFolders;
                 var (outcome, hasZero, fileCount, dirCount) = await ScanWithWatchdogAsync(
                     folder.FullPath, token, folder.FullPath);
+                _scanCollector = null;
 
                 sw.Stop();
 
@@ -466,6 +542,16 @@ public sealed class ZeroByteCheckerService
                 var summary = $"{dirCount} cartelle, {fileCount} file";
                 SetFolderFlag(folder.FullPath, hasZero);
                 SetFolderContents(folder.FullPath, summary);
+
+                // Salvataggio: cartelle lette e i loro file a 0 byte
+                if (_store != null && _serverKey != null)
+                {
+                    List<string> zeroFiles;
+                    lock (_cacheLock)
+                        zeroFiles = scannedFolders.SelectMany(f => _zeroFilesByFolder.TryGetValue(f, out var z)
+                            ? z.Select(n => f + "/" + n) : Enumerable.Empty<string>()).ToList();
+                    await _store.SaveCheckAsync(_serverKey, scannedFolders, zeroFiles, folder.FullPath, summary, GetParent(folder.FullPath));
+                }
                 FolderScanned?.Invoke(this, new ZeroByteFolderResult(folder.FullPath, hasZero, summary));
 
                 if (hasZero) flagged++;
@@ -604,7 +690,10 @@ public sealed class ZeroByteCheckerService
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         lock (_cacheLock)
+        {
             _zeroFilesByFolder[folderKey] = zeroFiles;
+            _scanCollector?.Add(folderKey);
+        }
 
         bool hasZero = zeroFiles.Count > 0;
         int fileCount = subEntries.Count(e => !e.IsDirectory);

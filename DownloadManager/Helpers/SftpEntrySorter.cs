@@ -94,6 +94,29 @@ public static class SftpEntrySorter
     {
         var sourceKeys = new HashSet<string>(source.Select(keySelector));
 
+        // Tanti cambi (di solito un cambio di cartella): una sola sostituzione invece di migliaia
+        // di inserimenti/rimozioni, che fanno sbagliare la barra di scorrimento alla DataGrid.
+        if (target is BulkObservableCollection<T> bulk)
+        {
+            var targetKeys = new HashSet<string>(target.Select(keySelector));
+            int kept = source.Count(s => targetKeys.Contains(keySelector(s)));
+            int changes = (target.Count - kept) + (source.Count - kept);
+            if (changes > 20)
+            {
+                // Le righe già mostrate restano gli stessi oggetti (aggiornati), le altre sono nuove
+                var existing = target.ToDictionary(keySelector);
+                var merged = source.Select(s =>
+                {
+                    if (!existing.TryGetValue(keySelector(s), out var old)) return s;
+                    updateExisting?.Invoke(old, s);
+                    return old;
+                }).ToList();
+                // Cartella diversa (quasi nulla in comune): si riparte dall'alto
+                bulk.ReplaceAll(merged, scrollToTop: kept * 2 < source.Count);
+                return;
+            }
+        }
+
         for (int i = target.Count - 1; i >= 0; i--)
         {
             if (!sourceKeys.Contains(keySelector(target[i])))
@@ -132,6 +155,7 @@ public static class SftpEntrySorter
         target.IsDirectory = source.IsDirectory;
         target.HasZeroByteIssue = source.HasZeroByteIssue;
         if (!string.IsNullOrEmpty(source.ContentsInfo)) target.ContentsInfo = source.ContentsInfo;
+        target.CopyChecksFrom(source);
     }
 
     public static void UpdateLocalEntryFromSource(LocalFileEntry target, LocalFileEntry source)
@@ -139,5 +163,7 @@ public static class SftpEntrySorter
         target.Size = source.Size;
         target.Modified = source.Modified;
         target.IsDirectory = source.IsDirectory;
+        target.HasZeroByteIssue = source.HasZeroByteIssue;
+        target.CopyChecksFrom(source);
     }
 }

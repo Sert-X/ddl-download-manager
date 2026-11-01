@@ -392,9 +392,23 @@ public partial class VideoboxTabViewModel : ObservableObject
         TreeProgressText = "Interruzione...";
     }
 
+    /// <summary>Vista "Titoli TMDB" (accanto alla mappatura).</summary>
+    public TmdbTitlesViewModel Tmdb { get; }
+
+    /// <summary>true = si vede la vista "Titoli TMDB", false = la mappatura.</summary>
+    [ObservableProperty] private bool _isTmdbMode;
+
+    [RelayCommand] private void ShowMapping() => IsTmdbMode = false;
+    [RelayCommand] private void ShowTmdb() { IsTmdbMode = true; Tmdb.OnPostsChanged(); _ = Tmdb.RefreshUndoAsync(); }
+
     public VideoboxTabViewModel(VideoboxApiService apiService, ISftpService sftpService, SettingsService settingsService,
-        SftpUploadQueueService uploadQueue, VideoboxSftpPool pool)
+        SftpUploadQueueService uploadQueue, VideoboxSftpPool pool,
+        TmdbKeyRepository? tmdbKeys = null, TmdbCacheRepository? tmdbCache = null)
     {
+        var cache = tmdbCache ?? new TmdbCacheRepository(Microsoft.Extensions.Logging.Abstractions.NullLogger<TmdbCacheRepository>.Instance);
+        Tmdb = new TmdbTitlesViewModel(() => _allPosts, settingsService,
+            tmdbKeys ?? new TmdbKeyRepository(Microsoft.Extensions.Logging.Abstractions.NullLogger<TmdbKeyRepository>.Instance),
+            cache, new DownloadManager.Services.Tmdb.TmdbRenamer(apiService, cache));
         _apiService = apiService;
         _sftpService = sftpService;
         _settingsService = settingsService;
@@ -803,6 +817,7 @@ public partial class VideoboxTabViewModel : ObservableObject
 
         int hiddenCount = _allPosts.Count - filteredList.Count;
         TotalPostsText = $"Mostrati: {filteredList.Count} | Nascosti: {hiddenCount} | Totale: {_allPosts.Count}";
+        Tmdb?.OnPostsChanged();
         UpdateStatusCounts();
     }
 
@@ -2000,11 +2015,18 @@ public partial class VideoboxTabViewModel : ObservableObject
     }
 
     /// <summary>Link oltre i quali il forum, con le impostazioni PHP predefinite, inizia a scartarne.</summary>
-    private const int MaxLinksPerRequest = 996;
+    // max_input_vars = 5000 nel php.ini del forum: titolo, categoria, autore e un campo per link
+    private const int MaxLinksPerRequest = 4990;
 
     [RelayCommand]
     public async Task ApplyUpdatesAsync()
     {
+        // Il post su cui si lavora: se durante l'invio se ne apre un altro, la risposta del forum
+        // aggiorna solo la lista, non la tabella (che ormai mostra l'altro post)
+        int postId = CurrentPostId, seq = _postLoadSeq, authorId = _currentPostAuthorId;
+        string serverId = _currentServerId;
+        string postTitle = CurrentPostTitle;
+        bool StillOpen() => seq == _postLoadSeq && CurrentPostId == postId;
         try
         {
             IsBusy = true; StatusMessage = "Invio a Videobox...";
@@ -2030,14 +2052,23 @@ public partial class VideoboxTabViewModel : ObservableObject
                 .GroupBy(m => m.NewUrl!).ToDictionary(g => g.Key, g => g.First().SftpFileName!);
 
             var title = string.IsNullOrWhiteSpace(EditablePostTitle) ? CurrentPostTitle : EditablePostTitle.Trim();
-            await _apiService.UpdateVideoUrlsAsync(CurrentPostId, _currentServerId, title, catId, _currentPostAuthorId, finalUrls);
+            await _apiService.UpdateVideoUrlsAsync(postId, serverId, title, catId, authorId, finalUrls);
 
             // Il post appena modificato si aggiorna subito nella lista, e la tabella mostra i link
             // come li ha salvati il forum. Se la risposta non li contiene (server del post appena
             // creato, risposta non ancora aggiornata) si riprova una volta e, in ultimo, la tabella
             // mostra i link appena inviati: non deve mai svuotarsi dopo "Applica".
-            var (updatedPost, savedServer) = await ReadSavedLinksAsync(finalUrls);
+            var (updatedPost, savedServer) = await ReadSavedLinksAsync(postId, serverId, finalUrls);
             ApplyFreshPostData(updatedPost, recolor: false);
+            if (!StillOpen())
+            {
+                int savedElsewhere = savedServer?.online?.Count ?? 0;
+                UpdateSftpTreeColors(repaginate: false);
+                StatusMessage = savedElsewhere < finalUrls.Count
+                    ? $"ATTENZIONE: «{updatedPost.title ?? postTitle}»: il forum ha salvato solo {savedElsewhere} link su {finalUrls.Count}."
+                    : $"«{updatedPost.title ?? postTitle}» aggiornato: {Plural(finalUrls.Count, "link salvato", "link salvati")} sul forum (nel frattempo hai aperto un altro post).";
+                return;
+            }
             if (!string.IsNullOrEmpty(updatedPost.title))
             {
                 CurrentPostTitle = updatedPost.title;
@@ -2085,7 +2116,7 @@ public partial class VideoboxTabViewModel : ObservableObject
         }
         catch (Exception ex) 
         { 
-            StatusMessage = $"ERRORE: {ex.Message}"; 
+            StatusMessage = StillOpen() ? $"ERRORE: {ex.Message}" : $"ERRORE nell'invio di «{postTitle}»: {ex.Message}";
         }
         finally { IsBusy = false; }
     }
@@ -2094,16 +2125,16 @@ public partial class VideoboxTabViewModel : ObservableObject
     /// Rilegge il post dopo "Applica" e trova il server con i link salvati: quello usato, poi
     /// "Link Remoto", poi il primo con link. Se i link inviati non ci sono ancora, riprova una volta.
     /// </summary>
-    private async Task<(VideoboxDto Post, VideoboxServerDto? Server)> ReadSavedLinksAsync(List<string> sent)
+    private async Task<(VideoboxDto Post, VideoboxServerDto? Server)> ReadSavedLinksAsync(int postId, string serverId, List<string> sent)
     {
         VideoboxDto post = new();
         VideoboxServerDto? server = null;
         for (int attempt = 0; attempt < 2; attempt++)
         {
             if (attempt > 0) await Task.Delay(1500);
-            post = await _apiService.GetVideoByIdAsync(CurrentPostId);
+            post = await _apiService.GetVideoByIdAsync(postId);
             var servers = post.videos?.Values;
-            server = servers?.FirstOrDefault(v => v.id.ToString() == _currentServerId && v.online is { Count: > 0 })
+            server = servers?.FirstOrDefault(v => v.id.ToString() == serverId && v.online is { Count: > 0 })
                      ?? servers?.FirstOrDefault(v => v.vbs_name != null && v.vbs_name.Contains("Link Remoto", StringComparison.OrdinalIgnoreCase) && v.online is { Count: > 0 })
                      ?? servers?.FirstOrDefault(v => v.online is { Count: > 0 });
             if (sent.Count == 0) break;
@@ -2124,26 +2155,32 @@ public partial class VideoboxTabViewModel : ObservableObject
         if (CurrentPostId == 0) { StatusMessage = "Seleziona prima un post."; return; }
         if (title.Length == 0) { StatusMessage = "Il titolo non può essere vuoto."; return; }
         if (title == CurrentPostTitle) { StatusMessage = "Il titolo è già questo."; return; }
+        int postId = CurrentPostId, seq = _postLoadSeq, authorId = _currentPostAuthorId, origCat = _currentPostOriginalCategoryId;
+        string serverId = _currentServerId;
+        bool StillOpen() => seq == _postLoadSeq && CurrentPostId == postId;
         try
         {
             IsBusy = true; StatusMessage = "Rinomina del post...";
-            var post = await _apiService.GetVideoByIdAsync(CurrentPostId);
-            var server = post.videos?.Values.FirstOrDefault(v => v.id.ToString() == _currentServerId);
+            var post = await _apiService.GetVideoByIdAsync(postId);
+            var server = post.videos?.Values.FirstOrDefault(v => v.id.ToString() == serverId);
             var links = server?.online?.Values.OrderBy(e => e.vbo_id).Select(e => e.vbo_url).ToList() ?? new List<string>();
             if (links.Count > MaxLinksPerRequest)
             {
                 StatusMessage = $"Rinomina non eseguita: il post ha {links.Count} link e il forum potrebbe salvarne solo ~{MaxLinksPerRequest} (limite max_input_vars di PHP).";
                 return;
             }
-            int catId = _currentPostOriginalCategoryId > 0 ? _currentPostOriginalCategoryId : SelectedCategory?.Id ?? 0;
+            int catId = origCat > 0 ? origCat : SelectedCategory?.Id ?? 0;
+            var old = post.title;
 
-            await _apiService.UpdateVideoUrlsAsync(CurrentPostId, _currentServerId, title, catId, _currentPostAuthorId, links);
+            await _apiService.UpdateVideoUrlsAsync(postId, serverId, title, catId, authorId, links);
 
-            var updated = await _apiService.GetVideoByIdAsync(CurrentPostId);
+            var updated = await _apiService.GetVideoByIdAsync(postId);
             ApplyFreshPostData(updated, recolor: false);
-            var old = CurrentPostTitle;
-            CurrentPostTitle = updated.title;
-            EditablePostTitle = updated.title;
+            if (StillOpen())
+            {
+                CurrentPostTitle = updated.title;
+                EditablePostTitle = updated.title;
+            }
             StatusMessage = $"Post rinominato: \"{old}\" → \"{updated.title}\".";
         }
         catch (Exception ex) { StatusMessage = $"ERRORE nella rinomina: {ex.Message}"; }

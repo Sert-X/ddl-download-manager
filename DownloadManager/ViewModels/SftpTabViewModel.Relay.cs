@@ -55,10 +55,16 @@ public partial class SftpTabViewModel
     [ObservableProperty] private string _server2ZeroByteStatus = "";
     [ObservableProperty] private bool _isServer2Reading;
 
-    public string Server2StatusText => IsServer2CheckingZeroByte
+    public string Server2StatusText => IsDeletingServer2
+        ? (string.IsNullOrEmpty(Server2DeleteStatus) ? "Eliminazione in corso..." : Server2DeleteStatus)
+        : IsCheckingWebStream && VideoCheckPanel == CheckPanel.Left
+        ? (string.IsNullOrEmpty(WebStreamCheckStatus) ? "Controllo video in corso..." : WebStreamCheckStatus)
+        : IsServer2CheckingZeroByte
         ? (string.IsNullOrEmpty(Server2ZeroByteStatus) ? "Avvio check 0-byte in corso..." : Server2ZeroByteStatus)
         : IsServer2Reading ? "Lettura cartella in corso..." : "";
     public bool HasServer2Status => Server2StatusText.Length > 0;
+    public bool ShowServer2ZeroByteIcon => !IsDeletingServer2 && IsServer2CheckingZeroByte;
+    public bool ShowServer2RefreshIcon => !IsDeletingServer2 && !IsServer2CheckingZeroByte && !ShowServer2VideoIcon;
     partial void OnIsServer2CheckingZeroByteChanged(bool value) => NotifyServer2Status();
     partial void OnServer2ZeroByteStatusChanged(string value) => NotifyServer2Status();
     partial void OnIsServer2ReadingChanged(bool value) => NotifyServer2Status();
@@ -66,6 +72,8 @@ public partial class SftpTabViewModel
     {
         OnPropertyChanged(nameof(Server2StatusText));
         OnPropertyChanged(nameof(HasServer2Status));
+        OnPropertyChanged(nameof(ShowServer2ZeroByteIcon));
+        OnPropertyChanged(nameof(ShowServer2RefreshIcon));
     }
 
     private void SyncServer2ZeroByteState()
@@ -89,6 +97,32 @@ public partial class SftpTabViewModel
 
     [RelayCommand] private void StopServer2ZeroByte() => _server2Checker?.Stop();
 
+    /// <summary>Controllo dei file vuoti solo sulle cartelle selezionate.</summary>
+    /// <param name="left">Pannello di sinistra (altrimenti quello di destra).</param>
+    public void CheckZeroByteOnSelection(bool left, IReadOnlyList<SftpRemoteEntry> selection)
+    {
+        var folders = selection.Where(e => e.IsDirectory).ToList();
+        if (folders.Count == 0) { SftpStatusMessage = "Seleziona una o più cartelle."; return; }
+        if (left)
+        {
+            if (!IsServer2Connected || _server2Checker == null) { SftpStatusMessage = "Collega prima il secondo server."; return; }
+            if (_server2Checker.IsChecking) { SftpStatusMessage = $"Un check 0-byte su '{Server2Name}' è già in corso."; return; }
+            _server2Checker.UseConnection(_server2, () => _server2.IsConnected);
+            SftpStatusMessage = $"Check 0-byte di {folders.Count} cartelle su '{Server2Name}'...";
+            _ = _server2Checker.RunCheckAsync(folders);
+        }
+        else
+        {
+            if (!IsRemoteConnected) { SftpStatusMessage = "Nessun server aperto: connettine uno nel pannello di destra."; return; }
+            var checker = ActiveChecker;
+            var service = Remote;
+            checker.UseConnection(service, () => service.IsConnected);
+            if (checker.IsChecking) { SftpStatusMessage = "Un check 0-byte è già in corso: fermalo prima di avviarne un altro."; return; }
+            SftpStatusMessage = $"Check 0-byte di {folders.Count} cartelle...";
+            _ = checker.RunCheckAsync(folders);
+        }
+    }
+
     /// <summary>Clic su un profilo nel riquadro del secondo server: si collega subito.</summary>
     [RelayCommand]
     private async Task Server2ConnectProfileAsync(SftpConfig? profile)
@@ -110,12 +144,11 @@ public partial class SftpTabViewModel
         if (Server2SortOption == null || Server2Entries.Count == 0) return;
         var sorted = SftpEntrySorter.SortRemoteEntries(Server2Entries.ToList(), Server2SortOption.Mode, Server2SortAscending);
         var selected = SelectedServer2Entry;
-        Server2Entries.Clear();
-        foreach (var e in sorted) Server2Entries.Add(e);
+        Server2Entries.ReplaceAll(sorted, scrollToTop: false);
         if (selected != null && Server2Entries.Contains(selected)) SelectedServer2Entry = selected;
     }
 
-    public ObservableCollection<SftpRemoteEntry> Server2Entries { get; } = new();
+    public BulkObservableCollection<SftpRemoteEntry> Server2Entries { get; } = new();
     public ObservableCollection<SftpRemoteEntry> SelectedServer2Entries { get; } = new();
     public ObservableCollection<SftpRelayJob> SftpRelayJobs => _relayQueue.AllJobs;
 
@@ -402,6 +435,10 @@ public partial class SftpTabViewModel
                 e.HasZeroByteIssue = checker != null && checker.TryGetFolderFlag(normalized, out var flag) && flag;
                 if (checker != null && checker.TryGetFolderContents(normalized, out var info)) e.ContentsInfo = info;
             }
+            // Esiti salvati della verifica dei video (colonne Web e Lingua)
+            await ApplyWebStreamAsync(entries, path, tab.Config.ServerKey, cleanup: true);
+            _ = SyncResultsAsync(left: true, force: false);
+            if (!ReferenceEquals(tab, ActiveLeftTab) || !SamePath(Server2Path, path)) return;
             var sorted = SftpEntrySorter.SortRemoteEntries(entries, Server2SortOption.Mode, Server2SortAscending);
             SftpEntrySorter.SyncCollection(Server2Entries, sorted, e => e.FullPath, SftpEntrySorter.UpdateRemoteEntryFromSource);
             AutoCheckNewFolders(checker, tab.Service, tab.Config, path, entries);
@@ -512,33 +549,6 @@ public partial class SftpTabViewModel
         }
         catch (Exception ex) { SftpStatusMessage = $"Duplicazione non riuscita: {ex.Message}"; }
         finally { IsServer2Busy = false; }
-    }
-
-    public async Task Server2DeleteManyAsync(IReadOnlyList<SftpRemoteEntry> entries)
-    {
-        if (!IsServer2Connected || entries.Count == 0) return;
-
-        int ok = 0, done = 0;
-        var errors = new List<string>();
-        IsServer2Busy = true;
-        foreach (var entry in entries)
-        {
-            SftpStatusMessage = $"Eliminazione in corso su '{Server2Name}' ({++done}/{entries.Count}): {entry.Name}";
-            try
-            {
-                if (entry.IsDirectory) await _server2.DeleteDirectoryAsync(entry.FullPath);
-                else await _server2.DeleteFileAsync(entry.FullPath);
-                ok++;
-            }
-            catch (Exception ex) { errors.Add($"{entry.Name}: {ex.Message}"); }
-        }
-        IsServer2Busy = false;
-        _relayQueue.ForgetCreatedFolders();
-        await Server2RefreshInternalAsync(silent: true);
-
-        SftpStatusMessage = errors.Count == 0
-            ? $"{ok} elementi eliminati da '{Server2Name}'."
-            : $"Eliminati {ok}, falliti {errors.Count}. Primo errore: {errors[0]}";
     }
 
     // ============================================================
@@ -680,7 +690,8 @@ public partial class SftpTabViewModel
     public void PauseRelayJob(SftpRelayJob job) => _relayQueue.PauseJob(job);
     public void ResumeRelayJob(SftpRelayJob job) => _relayQueue.ResumeJob(job);
     public void CancelRelayJob(SftpRelayJob job) => _relayQueue.CancelJob(job);
-    public void RemoveRelayJob(SftpRelayJob job) => _relayQueue.RemoveJob(job);
+    /// <summary>Rimuove le copie non in corso; restituisce quante sono rimaste perché in corso.</summary>
+    public int RemoveRelayJobs(IEnumerable<SftpRelayJob> jobs) => _relayQueue.RemoveJobs(jobs);
 
     private void DisposeRelay()
     {

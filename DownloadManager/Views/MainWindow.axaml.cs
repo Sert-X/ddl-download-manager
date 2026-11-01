@@ -97,6 +97,15 @@ public partial class MainWindow : Window
             viewModel.Activity.IsUserLooking = () => IsActive && WindowState != WindowState.Minimized;
         };
         Closed += (_, _) => _notifier?.Dispose();
+
+        // Colonne Web e Lingua delle tabelle remote: si vedono solo se l'esito è mostrato
+        // (le colonne della DataGrid non sono nell'albero visivo, non si possono legare in XAML)
+        viewModel.Sftp.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(SftpTabViewModel.ShowWebResults) or nameof(SftpTabViewModel.ShowLanguageResults))
+                UpdateResultColumns();
+        };
+        Opened += (_, _) => UpdateResultColumns();
         DownloadManager.Services.Download.EnqueueGuard.Ask = (title, prompt, ok, cancel) =>
             ConfirmDialog.ShowAsync(this, prompt, title, safeDefault: true, okText: ok, cancelText: cancel);
 
@@ -242,6 +251,14 @@ public partial class MainWindow : Window
     private void OnAnimeHistoryClick(object? sender, RoutedEventArgs e) => ShowHistory("anime");
     private void OnStreamingHistoryClick(object? sender, RoutedEventArgs e) => ShowHistory("streaming");
 
+    /// <summary>Titoli TMDB: la locandina di una riga si carica quando la riga compare.</summary>
+    private void OnTmdbRowPrepared(object? sender, ContainerPreparedEventArgs e)
+    {
+        // Il DataContext della riga non è ancora impostato: l'elemento si prende dall'elenco
+        var item = sender is ItemsControl list && e.Index >= 0 && e.Index < list.ItemCount ? list.Items[e.Index] : e.Container.DataContext;
+        if (item is TmdbRowViewModel row && (sender as Control)?.DataContext is TmdbTitlesViewModel tmdb) tmdb.EnsureRowPoster(row);
+    }
+
     private void OnToggleNotificationsClick(object? sender, RoutedEventArgs e)
     {
         if (Vm?.Activity is { } a) a.NotificationsEnabled = !a.NotificationsEnabled;
@@ -284,6 +301,21 @@ public partial class MainWindow : Window
         var one = ResolveItem<T>(sender);
         return one != null ? new List<T> { one } : new List<T>();
     }
+
+    /// <summary>
+    /// Elementi su cui agisce un comando delle code: dal menu del clic destro tutta la selezione
+    /// (Ctrl/Shift per sceglierne più di uno), dal pulsante in una riga solo quella riga.
+    /// </summary>
+    private List<T> QueueTargets<T>(object? sender) where T : class
+        => sender is MenuItem ? ResolveItems<T>(sender) : (ResolveItem<T>(sender) is { } one ? new List<T> { one } : new List<T>());
+
+    /// <summary>Messaggio quando si prova a rimuovere qualcosa ancora in corso.</summary>
+    private Task ShowRemoveBlockedAsync(int blocked, string what) =>
+        InfoDialog.ShowAsync(this,
+            blocked == 1
+                ? $"Un {what} è ancora in corso e non è stato rimosso. Annullalo prima, poi rimuovilo dalla lista."
+                : $"{blocked} {what} sono ancora in corso e non sono stati rimossi. Annullali prima, poi rimuovili dalla lista.",
+            "Rimozione non possibile");
 
     /// <summary>
     /// Clic destro su una riga: la ricorda per il menu e, se non fa già parte della
@@ -538,11 +570,8 @@ public partial class MainWindow : Window
 
             if (folders == null) return;
 
-            foreach (var f in folders)
-            {
-                var path = f.TryGetLocalPath();
-                if (!string.IsNullOrEmpty(path)) Vm.Organizer.AddMergeFolder(path);
-            }
+            // Windows le restituisce in un ordine qualsiasi (non quello dei clic): si aggiungono per nome
+            Vm.Organizer.AddMergeFolders(folders.Select(f => f.TryGetLocalPath()).Where(p => !string.IsNullOrEmpty(p))!);
         }
         else
         {
@@ -551,6 +580,8 @@ public partial class MainWindow : Window
             if (!string.IsNullOrEmpty(folder)) Vm.Organizer.AddMergeFolder(folder);
         }
     }
+
+    private void OnMergeSortByNameClick(object? sender, RoutedEventArgs e) => Vm?.Organizer.SortMergeFoldersByName();
 
     private void OnMergeRemoveClick(object? sender, RoutedEventArgs e)
     {
@@ -780,10 +811,15 @@ public partial class MainWindow : Window
         if (ok) await Vm.Sftp.Server2DeleteManyAsync(entries);
     }
 
-    private void OnRelayJobResumeClick(object? sender, RoutedEventArgs e) { if (ResolveItem<SftpRelayJob>(sender) is { } j) Vm?.Sftp.ResumeRelayJob(j); }
-    private void OnRelayJobPauseClick(object? sender, RoutedEventArgs e) { if (ResolveItem<SftpRelayJob>(sender) is { } j) Vm?.Sftp.PauseRelayJob(j); }
-    private void OnRelayJobCancelClick(object? sender, RoutedEventArgs e) { if (ResolveItem<SftpRelayJob>(sender) is { } j) Vm?.Sftp.CancelRelayJob(j); }
-    private void OnRelayJobRemoveClick(object? sender, RoutedEventArgs e) { if (ResolveItem<SftpRelayJob>(sender) is { } j) Vm?.Sftp.RemoveRelayJob(j); }
+    private void OnRelayJobResumeClick(object? sender, RoutedEventArgs e) { foreach (var j in QueueTargets<SftpRelayJob>(sender)) Vm?.Sftp.ResumeRelayJob(j); }
+    private void OnRelayJobPauseClick(object? sender, RoutedEventArgs e) { foreach (var j in QueueTargets<SftpRelayJob>(sender)) Vm?.Sftp.PauseRelayJob(j); }
+    private void OnRelayJobCancelClick(object? sender, RoutedEventArgs e) { foreach (var j in QueueTargets<SftpRelayJob>(sender)) Vm?.Sftp.CancelRelayJob(j); }
+    private async void OnRelayJobRemoveClick(object? sender, RoutedEventArgs e)
+    {
+        if (Vm == null) return;
+        var blocked = Vm.Sftp.RemoveRelayJobs(QueueTargets<SftpRelayJob>(sender));
+        if (blocked > 0) await ShowRemoveBlockedAsync(blocked, "trasferimento");
+    }
 
     private async void OnRemoteGridKeyDown(object? sender, KeyEventArgs e)
     {
@@ -1109,15 +1145,25 @@ public partial class MainWindow : Window
     //  SFTP UPLOAD/DOWNLOAD JOB
     // ============================================================
 
-    private void OnSftpJobResumeClick(object? sender, RoutedEventArgs e) { var j = ResolveItem<SftpUploadJob>(sender); if (j != null) Vm?.Sftp.ResumeSftpJobPublic(j); }
-    private void OnSftpJobPauseClick(object? sender, RoutedEventArgs e) { var j = ResolveItem<SftpUploadJob>(sender); if (j != null) Vm?.Sftp.PauseSftpJobPublic(j); }
-    private void OnSftpJobCancelClick(object? sender, RoutedEventArgs e) { var j = ResolveItem<SftpUploadJob>(sender); if (j != null) Vm?.Sftp.CancelSftpJobPublic(j); }
-    private void OnSftpJobRemoveClick(object? sender, RoutedEventArgs e) { var j = ResolveItem<SftpUploadJob>(sender); if (j != null) Vm?.Sftp.RemoveSftpJobPublic(j); }
+    private void OnSftpJobResumeClick(object? sender, RoutedEventArgs e) { foreach (var j in QueueTargets<SftpUploadJob>(sender)) Vm?.Sftp.ResumeSftpJobPublic(j); }
+    private void OnSftpJobPauseClick(object? sender, RoutedEventArgs e) { foreach (var j in QueueTargets<SftpUploadJob>(sender)) Vm?.Sftp.PauseSftpJobPublic(j); }
+    private void OnSftpJobCancelClick(object? sender, RoutedEventArgs e) { foreach (var j in QueueTargets<SftpUploadJob>(sender)) Vm?.Sftp.CancelSftpJobPublic(j); }
+    private async void OnSftpJobRemoveClick(object? sender, RoutedEventArgs e)
+    {
+        if (Vm == null) return;
+        var blocked = Vm.Sftp.RemoveSftpJobs(QueueTargets<SftpUploadJob>(sender));
+        if (blocked > 0) await ShowRemoveBlockedAsync(blocked, "upload");
+    }
 
-    private void OnSftpDownloadJobResumeClick(object? sender, RoutedEventArgs e) { var j = ResolveItem<SftpDownloadJob>(sender); if (j != null) Vm?.Sftp.ResumeSftpDownloadJobPublic(j); }
-    private void OnSftpDownloadJobPauseClick(object? sender, RoutedEventArgs e) { var j = ResolveItem<SftpDownloadJob>(sender); if (j != null) Vm?.Sftp.PauseSftpDownloadJobPublic(j); }
-    private void OnSftpDownloadJobCancelClick(object? sender, RoutedEventArgs e) { var j = ResolveItem<SftpDownloadJob>(sender); if (j != null) Vm?.Sftp.CancelSftpDownloadJobPublic(j); }
-    private void OnSftpDownloadJobRemoveClick(object? sender, RoutedEventArgs e) { var j = ResolveItem<SftpDownloadJob>(sender); if (j != null) Vm?.Sftp.RemoveSftpDownloadJobPublic(j); }
+    private void OnSftpDownloadJobResumeClick(object? sender, RoutedEventArgs e) { foreach (var j in QueueTargets<SftpDownloadJob>(sender)) Vm?.Sftp.ResumeSftpDownloadJobPublic(j); }
+    private void OnSftpDownloadJobPauseClick(object? sender, RoutedEventArgs e) { foreach (var j in QueueTargets<SftpDownloadJob>(sender)) Vm?.Sftp.PauseSftpDownloadJobPublic(j); }
+    private void OnSftpDownloadJobCancelClick(object? sender, RoutedEventArgs e) { foreach (var j in QueueTargets<SftpDownloadJob>(sender)) Vm?.Sftp.CancelSftpDownloadJobPublic(j); }
+    private async void OnSftpDownloadJobRemoveClick(object? sender, RoutedEventArgs e)
+    {
+        if (Vm == null) return;
+        var blocked = Vm.Sftp.RemoveSftpDownloadJobs(QueueTargets<SftpDownloadJob>(sender));
+        if (blocked > 0) await ShowRemoveBlockedAsync(blocked, "download");
+    }
 
     // ============================================================
     //  DOPPIO CLICK DOWNLOAD TAB
@@ -1207,7 +1253,7 @@ public partial class MainWindow : Window
     private async void OnDownloadItemRemoveClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button b && b.DataContext is DownloadItem item && Vm != null)
-            await Vm.AnimeDownload.RemoveItemPublicAsync(item);
+            if (!await Vm.AnimeDownload.RemoveItemPublicAsync(item)) await ShowRemoveBlockedAsync(1, "download");
     }
 
     // ============================================================
@@ -1229,7 +1275,7 @@ public partial class MainWindow : Window
     private async void OnRemoveDownloadClick(object? sender, RoutedEventArgs e)
     {
         var i = ResolveItem<DownloadItem>(sender);
-        if (i != null && Vm != null) await Vm.AnimeDownload.RemoveItemPublicAsync(i);
+        if (i != null && Vm != null && !await Vm.AnimeDownload.RemoveItemPublicAsync(i)) await ShowRemoveBlockedAsync(1, "download");
     }
 
     // ============================================================
@@ -1247,7 +1293,8 @@ public partial class MainWindow : Window
         if (sender is not Button b) return;
         if (b.DataContext is not SeriesGroup g) return;
         if (Vm == null) return;
-        await Vm.AnimeDownload.RemoveGroupPublicAsync(g);
+        if (!await Vm.AnimeDownload.RemoveGroupPublicAsync(g))
+            await InfoDialog.ShowAsync(this, "Alcuni episodi di questa serie sono ancora in download. Annullali prima (o annulla la serie), poi rimuovila dalla lista.", "Rimozione non possibile");
     }
 
     // ============================================================
@@ -1626,7 +1673,8 @@ public partial class MainWindow : Window
     private async void OnStreamingRemoveGroupClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button b && b.DataContext is SeriesGroup g && Vm != null)
-            await Vm.Streaming.RemoveGroupPublicAsync(g);
+            if (!await Vm.Streaming.RemoveGroupPublicAsync(g))
+                await InfoDialog.ShowAsync(this, "Alcuni episodi di questa serie sono ancora in download. Annullali prima (o annulla la serie), poi rimuovila dalla lista.", "Rimozione non possibile");
     }
 
     private async void OnStreamingRetryFailedGroupClick(object? sender, RoutedEventArgs e)
@@ -1662,7 +1710,7 @@ public partial class MainWindow : Window
     private async void OnStreamingDownloadItemRemoveClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Button b && b.DataContext is DownloadItem it && Vm != null)
-            await Vm.Streaming.RemoveItemPublicAsync(it);
+            if (!await Vm.Streaming.RemoveItemPublicAsync(it)) await ShowRemoveBlockedAsync(1, "download");
     }
 
     // ============================================================
@@ -1700,6 +1748,11 @@ public partial class MainWindow : Window
             {
                 case "dir": mi.IsVisible = !multiple && item is { isDir: true }; break;
                 case "video": mi.IsVisible = !multiple && item is { isDir: false } it && IsVideoFile(it.name); break;
+                case "dirs":
+                    mi.IsVisible = multiple
+                        ? _contextGrid!.SelectedItems.OfType<CheckedFileEntry>().All(r => r.EntryIsDirectory)
+                        : item is { isDir: true };
+                    break;
             }
         }
 
@@ -1761,5 +1814,100 @@ public partial class MainWindow : Window
             return;
         }
         Vm.Sftp.PlayRemoteFile(entry);
+    }
+
+    // ───── Verifica dei video: prima si sceglie se controllare anche la lingua ─────
+
+    private void OnCheckWebStreamClick(object? sender, RoutedEventArgs e) => _ = StartVideoCheckWithChoiceAsync(recheckAll: false);
+
+    private void OnRecheckAllWebStreamClick(object? sender, RoutedEventArgs e) => _ = StartVideoCheckWithChoiceAsync(recheckAll: true);
+
+    private async Task StartVideoCheckWithChoiceAsync(bool recheckAll)
+    {
+        if (Vm == null || !Vm.Sftp.CanStartVideoCheck()) return;
+        var choice = await VideoCheckDialog.ShowAsync(this, recheckAll);
+        if (choice == VideoCheckDialog.Choice.Cancel) return;
+        Vm.Sftp.StartVideoCheck(
+            web: choice != VideoCheckDialog.Choice.LanguageOnly,
+            lang: choice != VideoCheckDialog.Choice.CodecOnly,
+            recheckAll);
+    }
+
+    // ───── Esiti dei controlli e controlli sugli elementi selezionati ─────
+
+    private void UpdateResultColumns()
+    {
+        if (Vm == null) return;
+        foreach (var grid in new[] { RemoteFilesGrid, Server2FilesGrid, LocalFilesGrid })
+        {
+            if (grid == null) continue;
+            foreach (var col in grid.Columns)
+            {
+                switch (col.Header as string)
+                {
+                    case "Web": col.IsVisible = Vm.Sftp.ShowWebResults; break;
+                    case "Lingua": col.IsVisible = Vm.Sftp.ShowLanguageResults; break;
+                }
+            }
+        }
+    }
+
+    private void OnRemoteVideoCheckClick(object? sender, RoutedEventArgs e) => _ = VideoCheckOnSelectionAsync(sender, left: false);
+    private void OnServer2VideoCheckClick(object? sender, RoutedEventArgs e) => _ = VideoCheckOnSelectionAsync(sender, left: true);
+
+    private async Task VideoCheckOnSelectionAsync(object? sender, bool left)
+    {
+        if (Vm == null) return;
+        var targets = ResolveItems<SftpRemoteEntry>(sender);
+        if (targets.Count == 0) return;
+        var prompt = targets.Count == 1
+            ? $"«{targets[0].Name}»{(targets[0].IsDirectory ? " e tutto quello che contiene" : "")}. Si rilegge anche se già controllato."
+            : $"I {targets.Count} elementi selezionati (con le loro sottocartelle). Si rileggono anche se già controllati.";
+        var choice = await VideoCheckDialog.ShowAsync(this, prompt: prompt);
+        if (choice == VideoCheckDialog.Choice.Cancel) return;
+        Vm.Sftp.StartVideoCheckOnSelection(left, targets,
+            web: choice != VideoCheckDialog.Choice.LanguageOnly,
+            lang: choice != VideoCheckDialog.Choice.CodecOnly);
+    }
+
+    private void OnRemoteZeroCheckClick(object? sender, RoutedEventArgs e) => Vm?.Sftp.CheckZeroByteOnSelection(false, ResolveItems<SftpRemoteEntry>(sender));
+    private void OnServer2ZeroCheckClick(object? sender, RoutedEventArgs e) => Vm?.Sftp.CheckZeroByteOnSelection(true, ResolveItems<SftpRemoteEntry>(sender));
+
+    // ───── Verifica dei video nel pannello di sinistra (server) e sui file del PC ─────
+
+    private void OnServer2CheckWebStreamClick(object? sender, RoutedEventArgs e) => _ = LeftVideoCheckAsync(recheckAll: false);
+    private void OnServer2RecheckAllWebStreamClick(object? sender, RoutedEventArgs e) => _ = LeftVideoCheckAsync(recheckAll: true);
+
+    private async Task LeftVideoCheckAsync(bool recheckAll)
+    {
+        if (Vm == null || !Vm.Sftp.CanStartVideoCheckAnywhere()) return;
+        var choice = await VideoCheckDialog.ShowAsync(this, recheckAll);
+        if (choice == VideoCheckDialog.Choice.Cancel) return;
+        Vm.Sftp.StartVideoCheckLeft(choice != VideoCheckDialog.Choice.LanguageOnly, choice != VideoCheckDialog.Choice.CodecOnly, recheckAll);
+    }
+
+    private void OnLocalCheckWebStreamClick(object? sender, RoutedEventArgs e) => _ = LocalVideoCheckAsync(recheckAll: false, targets: null);
+    private void OnLocalRecheckAllWebStreamClick(object? sender, RoutedEventArgs e) => _ = LocalVideoCheckAsync(recheckAll: true, targets: null);
+    private void OnLocalVideoCheckClick(object? sender, RoutedEventArgs e)
+    {
+        var targets = ResolveItems<LocalFileEntry>(sender);
+        if (targets.Count > 0) _ = LocalVideoCheckAsync(recheckAll: true, targets);
+    }
+
+    private async Task LocalVideoCheckAsync(bool recheckAll, List<LocalFileEntry>? targets)
+    {
+        if (Vm == null || !Vm.Sftp.CanStartVideoCheckAnywhere()) return;
+        string? prompt = targets == null ? null
+            : targets.Count == 1
+                ? $"«{targets[0].Name}»{(targets[0].IsDirectory ? " e tutto quello che contiene" : "")}, sul PC. Si rilegge anche se già controllato."
+                : $"I {targets.Count} elementi selezionati del PC (con le loro sottocartelle). Si rileggono anche se già controllati.";
+        var choice = await VideoCheckDialog.ShowAsync(this, recheckAll, prompt);
+        if (choice == VideoCheckDialog.Choice.Cancel) return;
+        Vm.Sftp.StartVideoCheckLocal(choice != VideoCheckDialog.Choice.LanguageOnly, choice != VideoCheckDialog.Choice.CodecOnly, recheckAll, targets);
+    }
+
+    private void OnLocalZeroCheckClick(object? sender, RoutedEventArgs e)
+    {
+        if (Vm != null) _ = Vm.Sftp.CheckLocalZeroOnSelectionAsync(ResolveItems<LocalFileEntry>(sender));
     }
 }

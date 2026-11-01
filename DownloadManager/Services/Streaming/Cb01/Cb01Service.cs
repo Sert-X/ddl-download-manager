@@ -43,8 +43,10 @@ public class Cb01Service : ICb01Service
     private static readonly Regex RxSectionHeader = new(
         @"\b(Streaming|Download)\s*(HD|3D)?\s*:",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    // Anche href scritti male nel post: senza virgolette o con solo quella finale
+    // (Master Mosquiton: href=https://uprot.net/msfld/...")
     private static readonly Regex RxAnchor = new(
-        @"<a\s+[^>]*?href=""([^""]+)""[^>]*>\s*([^<]*?)\s*</a>",
+        @"<a\s+[^>]*?href=[""']?([^""'\s>]+)[""']?[^>]*>\s*([^<]*?)\s*</a>",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     // Serie TV: un accordion "sp-wrap" per sezione (intestazione sp-head + corpo sp-body)
@@ -733,7 +735,8 @@ public class Cb01Service : ICb01Service
     /// (pagina, stagione, episodio), così funziona anche dopo un riavvio dell'app.
     /// </summary>
     public async Task<MaxstreamDownload?> ResolveBestAsync(
-        string contentLink, bool isSeries, int season, int episode, bool subIta = false, string group = "", CancellationToken ct = default)
+        string contentLink, bool isSeries, int season, int episode, bool subIta = false, string group = "", CancellationToken ct = default,
+        bool preferHd = false)
     {
         List<Cb01Link> candidates;
         if (isSeries)
@@ -767,7 +770,7 @@ public class Cb01Service : ICb01Service
             }
             if (!seen.Add(entry)) continue;
 
-            var d = await _maxstream.ResolveDownloadAsync(entry, ct);
+            var d = await _maxstream.ResolveDownloadAsync(entry, ct, preferHd);
             if (d == null) continue;
 
             var score = (HeightOf(d.FileName), d.SizeBytes ?? 0);
@@ -808,7 +811,8 @@ public class Cb01Service : ICb01Service
         item.CookieExtractor = null;
         item.UrlExtractor = async ct =>
         {
-            var d = await ResolveBestAsync(link, isSeries, season, episode, subIta, group, ct);
+            // Letta al via (non all'accodamento): vale la scelta attuale del download
+            var d = await ResolveBestAsync(link, isSeries, season, episode, subIta, group, ct, item.Conversion.PrefersMaxstreamHd());
             // Nella coda si vede il motivo vero (es. proxy bloccato da Cloudflare), non "UrlExtractor vuoto"
             if (d == null)
                 throw new InvalidOperationException(_maxstream.LastProblem ?? "Nessun link Maxstream funzionante per questo titolo.");
@@ -825,6 +829,6 @@ public interface ICb01Service
     Task<List<MovieSearchResult>> SearchAsync(string query, CancellationToken ct = default);
     Task<List<Season>> GetSeasonsAsync(string seriesLink, CancellationToken ct = default);
     Task<List<StreamingEpisode>> GetEpisodesAsync(string contentLink, int seasonNumber, string variant = "", string group = "", CancellationToken ct = default);
-    Task<MaxstreamDownload?> ResolveBestAsync(string contentLink, bool isSeries, int season, int episode, bool subIta = false, string group = "", CancellationToken ct = default);
+    Task<MaxstreamDownload?> ResolveBestAsync(string contentLink, bool isSeries, int season, int episode, bool subIta = false, string group = "", CancellationToken ct = default, bool preferHd = false);
     void AttachExtractor(DownloadItem item);
 }

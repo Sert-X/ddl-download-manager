@@ -96,6 +96,8 @@ public partial class App : Application
             sp.GetRequiredService<IStreamingCommunityService>());
         services.AddSingleton<DownloadManager.Persistence.AccountRepository>();
         services.AddSingleton<DownloadManager.Persistence.MaxstreamAccountRepository>();
+        services.AddSingleton<DownloadManager.Persistence.TmdbKeyRepository>();
+        services.AddSingleton<DownloadManager.Persistence.TmdbCacheRepository>();
         services.AddSingleton<DownloadManager.Services.Streaming.StreamingCommunity.StreamingCommunityAuthService>();
         services.AddSingleton<DownloadManager.ViewModels.AccountTabViewModel>();
         services.AddSingleton<IStreamingCommunityService, StreamingCommunityService>();
@@ -111,6 +113,9 @@ public partial class App : Application
         services.AddSingleton<SftpUploadQueueService>();
         services.AddSingleton<SftpDownloadQueueService>();
         services.AddSingleton<SftpRelayQueueService>();
+        services.AddSingleton<DownloadManager.Persistence.WebStreamCheckRepository>();
+        services.AddSingleton<DownloadManager.Persistence.ZeroByteCheckRepository>();
+        services.AddSingleton<WebStreamCheckerService>();
 
         services.AddSingleton<ProxyConfigRepository>();
         services.AddSingleton<ProxyService>();
@@ -170,6 +175,10 @@ public partial class App : Application
 
             var proxyRepo = Services!.GetRequiredService<ProxyConfigRepository>();
             await proxyRepo.InitializeAsync();
+
+            await Services!.GetRequiredService<TmdbCacheRepository>().InitializeAsync();
+            await Services!.GetRequiredService<DownloadManager.Persistence.WebStreamCheckRepository>().InitializeAsync();
+            await Services!.GetRequiredService<DownloadManager.Persistence.ZeroByteCheckRepository>().InitializeAsync();
         }).GetAwaiter().GetResult();
 
         // ============================================================

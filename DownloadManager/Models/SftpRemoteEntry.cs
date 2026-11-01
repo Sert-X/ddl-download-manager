@@ -1,9 +1,15 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using DownloadManager.Services.Sftp;
 
 namespace DownloadManager.Models;
 
-public partial class SftpRemoteEntry : ObservableObject
+public partial class SftpRemoteEntry : CheckedFileEntry
 {
+    public override string EntryPath => FullPath;
+    public override bool EntryIsDirectory => IsDirectory;
+    public override long EntrySize => Size;
+    public override DateTime EntryModified => Modified;
+
     public string Name { get; set; } = string.Empty;
     public string FullPath { get; set; } = string.Empty;
     // Notificano la UI: sostituendo un file (es. upload con lo stesso nome) dimensione e data

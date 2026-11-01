@@ -63,7 +63,7 @@ public partial class StreamingTabViewModel : ViewModelBase
         // Le operazioni in corso diventano "superate": i loro risultati verranno ignorati
         _searchSeq++;
         IsLoadingSearchResults = false;
-        SearchResults.Clear();
+        ClearSearchResults();
         SelectedResult = null;
         ClearDetailContent();
         _emptySearchTerm = null;
@@ -167,7 +167,9 @@ public partial class StreamingTabViewModel : ViewModelBase
     //  COMPUTED
     // ============================================================
 
-    public string SearchResultsCountText => SearchResults.Count == 0 ? "" : $"({SearchResults.Count} risultati)";
+    public string SearchResultsCountText => SearchResults.Count == 0 && _allSearchResults.Count == 0 ? ""
+        : SearchResults.Count == _allSearchResults.Count ? $"({SearchResults.Count} risultati)"
+        : $"({SearchResults.Count} di {_allSearchResults.Count} risultati)";
     public string EpisodesCountText => Episodes.Count == 0 ? "" : $"{Episodes.Count} episodi";
     public string EpisodesSelectedCountText => Episodes.Count == 0 ? "" : $"{Episodes.Count(e => e.IsSelected)} selezionati";
     public string SelectedResultName => SelectedResult?.Title ?? string.Empty;
@@ -664,7 +666,7 @@ public partial class StreamingTabViewModel : ViewModelBase
 
     partial void OnSelectedProviderChanged(string value)
     {
-        SearchResults.Clear();
+        ClearSearchResults();
         Episodes.Clear();
         Seasons.Clear();
         SelectedResult = null;
@@ -785,7 +787,7 @@ public partial class StreamingTabViewModel : ViewModelBase
         int seq = ++_searchSeq;
         // Risultati e Dettaglio della ricerca precedente spariscono subito
         _emptySearchTerm = null;
-        SearchResults.Clear();
+        ClearSearchResults();
         SelectedResult = null;
         ClearDetailContent();
         IsLoadingSearchResults = true;
@@ -802,12 +804,9 @@ public partial class StreamingTabViewModel : ViewModelBase
             if (seq != _searchSeq) return;
 
             _emptySearchTerm = results.Count == 0 ? term.Trim() : null;
-            SearchResults.Clear();
-            foreach (var r in results)
-            {
-                SearchResults.Add(r);
-                _ = LoadPosterAsync(r);
-            }
+            ResultTypeFilter = "All";   // nuova ricerca: si riparte da "Tutti" (l'ordine scelto resta)
+            SetSearchResults(results);
+            foreach (var r in results) _ = LoadPosterAsync(r);
             NotifyPlaceholders();
 
             StatusMessage = $"Trovati {results.Count} risultati per '{term}'.";
@@ -1606,7 +1605,13 @@ public partial class StreamingTabViewModel : ViewModelBase
     public void ForceItemPublic(DownloadItem item) => _queueService.ForceQueueItem(item);
     public void UnforceItemPublic(DownloadItem item) => _queueService.UnforceQueueItem(item);
     public void CancelItemPublic(DownloadItem item) => _queueService.CancelItem(item);
-    public Task RemoveItemPublicAsync(DownloadItem item) => _queueService.RemoveItemAsync(item);
+    /// <summary>Toglie l'episodio dalla lista. Se il download è in corso non lo toglie (false): va annullato prima.</summary>
+    public async Task<bool> RemoveItemPublicAsync(DownloadItem item)
+    {
+        if (item.Status == DownloadStatus.Downloading) return false;
+        await _queueService.RemoveItemAsync(item);
+        return true;
+    }
     public Task RetryItemPublicAsync(DownloadItem item) => _queueService.RetryItemAsync(item);
 
     public void ResumeGroupPublic(SeriesGroup g)
@@ -1618,10 +1623,20 @@ public partial class StreamingTabViewModel : ViewModelBase
     public void UnforceGroupPublic(SeriesGroup g) => _queueService.UnforceQueueGroup(g);
     public void CancelGroupPublic(SeriesGroup g) => _queueService.CancelGroup(g);
 
-    public async Task RemoveGroupPublicAsync(SeriesGroup g)
+    /// <summary>Toglie la serie dalla lista. Se un episodio è in download non toglie nulla (false).</summary>
+    public async Task<bool> RemoveGroupPublicAsync(SeriesGroup g)
     {
-        foreach (var i in g.Items.ToList())
-            await _queueService.RemoveItemAsync(i);
+        // Tutta la serie in un colpo (una query e un solo aggiornamento della lista), come nella tab
+        // Anime: uno alla volta ogni episodio aspettava database e interfaccia, e sotto carico si sentiva
+        var items = g.Items.ToList();
+        if (items.Count == 0) return true;
+        if (items.Any(i => i.Status == DownloadStatus.Downloading)) return false;
+        // Il gruppo sparisce subito dalla lista: altrimenti si svuotava un episodio alla volta,
+        // ridisegnando la serie a ogni rimozione
+        foreach (var i in items) i.PropertyChanged -= OnDownloadItemPropertyChanged;
+        SeriesGroups.Remove(g);
+        await _queueService.RemoveManyAsync(items);
+        return true;
     }
 
     public Task RetryFailedGroupPublicAsync(SeriesGroup g)
@@ -1654,4 +1669,72 @@ public partial class StreamingTabViewModel : ViewModelBase
         OnPropertyChanged(nameof(BaseDownloadFolder));
         UpdateMoviePreview();
     }
+
+    // ============================================================
+    //  FILTRI E ORDINE DEI RISULTATI DELLA RICERCA
+    // ============================================================
+
+    /// <summary>Tutti i risultati dell'ultima ricerca; <see cref="SearchResults"/> mostra quelli filtrati e ordinati.</summary>
+    private readonly List<MovieSearchResult> _allSearchResults = new();
+
+    /// <summary>Filtro per tipo: All, Film, Serie (si vede solo se ci sono entrambi).</summary>
+    [ObservableProperty] private string _resultTypeFilter = "All";
+    public bool HasMixedResultTypes => _allSearchResults.Any(r => r.IsSeries) && _allSearchResults.Any(r => !r.IsSeries);
+    public int CountAllResults => _allSearchResults.Count;
+    public int CountFilmResults => _allSearchResults.Count(r => !r.IsSeries);
+    public int CountSeriesResults => _allSearchResults.Count(r => r.IsSeries);
+    public bool IsResultTypeAll => ResultTypeFilter == "All";
+    public bool IsResultTypeFilm => ResultTypeFilter == "Film";
+    public bool IsResultTypeSeries => ResultTypeFilter == "Serie";
+    [RelayCommand] private void SetResultTypeFilter(string value) => ResultTypeFilter = value;
+    partial void OnResultTypeFilterChanged(string value) => RebuildSearchResults();
+
+    /// <summary>Ordine: Rel (come li dà il sito), YearDesc, YearAsc. Si vede solo se i risultati hanno un anno.</summary>
+    [ObservableProperty] private string _resultSort = "Rel";
+    public bool HasResultYears => _allSearchResults.Count(r => YearOf(r) != null) > 1;
+    public bool IsResultSortRel => ResultSort == "Rel";
+    public bool IsResultSortYearDesc => ResultSort == "YearDesc";
+    public bool IsResultSortYearAsc => ResultSort == "YearAsc";
+    public bool HasResultFilters => _allSearchResults.Count > 1;
+    [RelayCommand] private void SetResultSort(string value) => ResultSort = value;
+    partial void OnResultSortChanged(string value) => RebuildSearchResults();
+
+    private static int? YearOf(MovieSearchResult r) => int.TryParse(r.Year, out var y) ? y : null;
+
+    private void SetSearchResults(IEnumerable<MovieSearchResult> results)
+    {
+        _allSearchResults.Clear();
+        _allSearchResults.AddRange(results);
+        RebuildSearchResults();
+    }
+
+    private void ClearSearchResults()
+    {
+        _allSearchResults.Clear();
+        RebuildSearchResults();
+    }
+
+    private void RebuildSearchResults()
+    {
+        var shown = _allSearchResults.AsEnumerable()
+            .Where(r => ResultTypeFilter switch { "Film" => !r.IsSeries, "Serie" => r.IsSeries, _ => true });
+        // Senza anno in fondo; a parità d'anno resta l'ordine del sito
+        shown = ResultSort switch
+        {
+            "YearDesc" => shown.OrderBy(r => YearOf(r) == null).ThenByDescending(r => YearOf(r) ?? 0),
+            "YearAsc" => shown.OrderBy(r => YearOf(r) == null).ThenBy(r => YearOf(r) ?? 0),
+            _ => shown
+        };
+        var list = shown.ToList();
+        if (!list.SequenceEqual(SearchResults))
+        {
+            SearchResults.Clear();
+            foreach (var r in list) SearchResults.Add(r);
+        }
+        foreach (var n in new[] { nameof(HasResultYears), nameof(IsResultSortRel), nameof(IsResultSortYearDesc), nameof(IsResultSortYearAsc),
+                                  nameof(HasResultFilters), nameof(SearchResultsCountText), nameof(HasMixedResultTypes), nameof(CountAllResults), nameof(CountFilmResults), nameof(CountSeriesResults),
+                                  nameof(IsResultTypeAll), nameof(IsResultTypeFilm), nameof(IsResultTypeSeries) })
+            OnPropertyChanged(n);
+    }
+
 }

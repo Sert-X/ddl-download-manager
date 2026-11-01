@@ -455,33 +455,16 @@ public class SftpWinScpService : ISftpService, IDisposable
                 if (info.IsDirectory)
                     throw new InvalidOperationException($"'{remotePath}' è una cartella. Usa DeleteDirectoryAsync.");
 
+                // Solo il nome del file è una "maschera" ([ * ? vanno protetti); il successo si
+                // controlla guardando se il file c'è ancora, non dal numero di rimozioni
                 var escaped = RemotePath.EscapeFileMask(remotePath);
                 var result = _session!.RemoveFiles(escaped);
+                if (!_session.FileExists(remotePath)) return;
 
-                if (result.IsSuccess && result.Removals.Count > 0)
-                    return;
-
-                var result2 = _session!.RemoveFiles(remotePath);
-
-                if (result2.IsSuccess && result2.Removals.Count > 0)
-                    return;
-
-                var parent = GetParentPath(remotePath);
-                var fileName = remotePath.Substring(remotePath.LastIndexOf('/') + 1);
-                var mask = $"{RemotePath.EscapeFileMask(parent)}/{RemotePath.EscapeFileMask(fileName)}";
-
-                var result3 = _session!.RemoveFiles(mask);
-
-                if (result3.IsSuccess && result3.Removals.Count > 0)
-                    return;
-
-                var errors = new List<string>();
-                if (result.Failures.Count > 0)
-                    errors.Add($"escaped: {string.Join("; ", result.Failures.Select(f => f.Message))}");
-                if (result2.Failures.Count > 0)
-                    errors.Add($"raw: {string.Join("; ", result2.Failures.Select(f => f.Message))}");
-
-                var detail = errors.Count > 0 ? string.Join(" | ", errors) : "nessun dettaglio dal server";
+                // (Niente seconda prova col nome "grezzo": un * o ? nel nome selezionerebbe anche altri file)
+                var detail = result.Failures.Count > 0
+                    ? string.Join("; ", result.Failures.Select(f => f.Message))
+                    : "il server non ha dato errori ma il file è ancora lì";
                 throw new InvalidOperationException(
                     $"Eliminazione non riuscita per '{remotePath}'. Dettagli: {detail}");
             }, ct);
@@ -522,26 +505,23 @@ public class SftpWinScpService : ISftpService, IDisposable
                     throw new InvalidOperationException($"'{remotePath}' non è una cartella. Usa DeleteFileAsync.");
 
                 var normalized = remotePath.TrimEnd('/');
-
-                var escaped = RemotePath.EscapeFileMask(normalized) + "/";
-                var result = _session!.RemoveFiles(escaped);
-
-                if (result.IsSuccess && result.Removals.Count > 0)
-                    return;
-
-                var raw = normalized + "/";
-                var result2 = _session!.RemoveFiles(raw);
-
-                if (result2.IsSuccess && result2.Removals.Count > 0)
-                    return;
-
                 var errs = new List<string>();
-                if (result.Failures.Count > 0)
-                    errs.Add(string.Join("; ", result.Failures.Select(f => f.Message)));
-                if (result2.Failures.Count > 0)
-                    errs.Add(string.Join("; ", result2.Failures.Select(f => f.Message)));
 
-                var detail = errs.Count > 0 ? string.Join(" | ", errs) : "nessun dettaglio dal server";
+                // 1) Il modo documentato da WinSCP per eliminare una cartella: il suo percorso, senza
+                //    "/" finale. Solo l'ultimo pezzo è una "maschera": [ * ? nel nome vanno protetti
+                //    con EscapeFileMask. Il successo si controlla guardando se la cartella c'è ancora.
+                var result = _session!.RemoveFiles(RemotePath.EscapeFileMask(normalized));
+                errs.AddRange(result.Failures.Select(f => f.Message));
+                if (!_session.FileExists(normalized)) return;
+
+                // 2) Ancora lì: si svuota a mano (file per file, cartelle dentro cartelle) e si riprova
+                _logger.LogWarning("[DEL-DIR] La cartella esiste ancora dopo la rimozione, la svuoto a mano: {Path}", normalized);
+                RemoveDirectoryContents(normalized, errs);
+                var again = _session.RemoveFiles(RemotePath.EscapeFileMask(normalized));
+                errs.AddRange(again.Failures.Select(f => f.Message));
+                if (!_session.FileExists(normalized)) return;
+
+                var detail = errs.Count > 0 ? string.Join(" | ", errs.Distinct().Take(5)) : "il server non ha dato errori ma la cartella è ancora lì";
                 throw new InvalidOperationException(
                     $"Eliminazione cartella non riuscita per '{remotePath}'. Dettagli: {detail}");
             }, ct);
@@ -552,6 +532,26 @@ public class SftpWinScpService : ISftpService, IDisposable
         }
 
         RaiseChanged(new SftpRemoteChange(GetParentPath(remotePath)));
+    }
+
+    /// <summary>Svuota una cartella remota elemento per elemento (percorsi esatti, nessuna maschera).</summary>
+    private void RemoveDirectoryContents(string dir, List<string> errors)
+    {
+        RemoteDirectoryInfo listing;
+        try { listing = _session!.ListDirectory(dir); }
+        catch (Exception ex) { errors.Add(ex.Message); return; }
+        foreach (RemoteFileInfo f in listing.Files)
+        {
+            if (f.IsThisDirectory || f.IsParentDirectory) continue;
+            var path = dir.TrimEnd('/') + "/" + f.Name;
+            if (f.IsDirectory) RemoveDirectoryContents(path, errors);
+            try
+            {
+                var r = _session!.RemoveFiles(RemotePath.EscapeFileMask(path));
+                errors.AddRange(r.Failures.Select(x => x.Message));
+            }
+            catch (Exception ex) { errors.Add(ex.Message); }
+        }
     }
 
     private static string GetParentPath(string fullPath)
@@ -706,7 +706,7 @@ public class SftpWinScpService : ISftpService, IDisposable
         try
         {
             var result = await Task.Run(() =>
-                _session!.GetFiles(remotePath, localPath, false, transferOptions), ct);
+                _session!.GetFiles(RemotePath.EscapeFileMask(remotePath), localPath, false, transferOptions), ct);   // [ * ? nel nome: maschera
 
             if (!result.IsSuccess)
             {

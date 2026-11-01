@@ -37,6 +37,12 @@ public class AppSettings
 
     /// <summary>Notifiche di Windows a fine lavoro (serie, code SFTP, errori, disco pieno).</summary>
     public bool NotificationsEnabled { get; set; } = true;
+
+    /// <summary>Pattern dei titoli proposti da TMDB in Videobox Corrector ("" = predefinito).</summary>
+    public string TmdbSeriesPattern { get; set; } = "";
+    public string TmdbMoviePattern { get; set; } = "";
+    /// <summary>Rinominando, aggiorna anche le immagini del post con quelle di TMDB.</summary>
+    public bool TmdbUpdateImages { get; set; }
     /// <summary>Ogni quanti minuti ricontrollare i domini in background (0 = solo all'avvio).</summary>
     public int DomainCheckIntervalMinutes { get; set; } = 10;
     /// <summary>Conversione proposta per i download CB01 (si può cambiare per ogni download).</summary>
@@ -63,6 +69,11 @@ public class AppSettings
     public string PrimaryStorageUrl { get; set; } = "https://ichigolink.top";
     public string SecondaryStorageUrlsRaw { get; set; } = "https://data2ddl.ichigotv.net";
     public string SftpBasePath { get; set; } = "/var/www/html/media";
+
+    // Esiti dei controlli mostrati nelle tabelle dei file remoti (colonne ed evidenziazioni)
+    public bool ShowZeroByteResults { get; set; } = true;
+    public bool ShowWebResults { get; set; } = true;
+    public bool ShowLanguageResults { get; set; } = true;
     public string VideoboxPublicPath { get; set; } = "Anime SUB.ITA"; 
 
     /// <summary>Sorgenti SFTP di Videobox Corrector (vuoto = si crea dalla vecchia configurazione singola).</summary>

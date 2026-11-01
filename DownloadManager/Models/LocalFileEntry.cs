@@ -2,8 +2,14 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace DownloadManager.Models;
 
-public partial class LocalFileEntry : ObservableObject
+public partial class LocalFileEntry : CheckedFileEntry
 {
+    /// <summary>Percorso con "/" (come nel database degli esiti, chiave "local").</summary>
+    public override string EntryPath => FullPath.Replace('\\', '/');
+    public override bool EntryIsDirectory => IsDirectory;
+    public override long EntrySize => Size;
+    public override DateTime EntryModified => Modified;
+
     public string Name { get; set; } = string.Empty;
     public string FullPath { get; set; } = string.Empty;
 
@@ -11,8 +17,8 @@ public partial class LocalFileEntry : ObservableObject
     [ObservableProperty] private long _size;
     [ObservableProperty] private DateTime _modified;
 
-    // Property mai usata in locale, ma presente per uniformità con SftpRemoteEntry
-    public bool HasZeroByteIssue { get; set; } = false;
+    /// <summary>File a 0 byte, o cartella che ne contiene (dopo il check dei file vuoti in locale).</summary>
+    [ObservableProperty] private bool _hasZeroByteIssue;
 
     public string SizeText => IsDirectory
         ? "-"

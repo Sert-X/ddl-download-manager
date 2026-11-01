@@ -497,7 +497,8 @@ public class MaxstreamService : IAsyncDisposable
     /// Da un link uprot (msf/msfi) o Maxstream restituisce il file migliore tra le varianti premium.
     /// Null se il file non esiste più o non è raggiungibile.
     /// </summary>
-    public async Task<MaxstreamDownload?> ResolveDownloadAsync(string link, CancellationToken ct = default)
+    /// <param name="preferHd">Variante "High Definition" (la migliore dopo l'originale) invece dell'originale.</param>
+    public async Task<MaxstreamDownload?> ResolveDownloadAsync(string link, CancellationToken ct = default, bool preferHd = false)
     {
         await _gate.WaitAsync(ct);
         try
@@ -527,7 +528,7 @@ public class MaxstreamService : IAsyncDisposable
 
                 var problem = DiagnosePage(html, out bool retryable);
                 if (problem == null)
-                    return await ExtractDownloadAsync(html!, finalUrl ?? link, loginBase, ct);
+                    return await ExtractDownloadAsync(html!, finalUrl ?? link, loginBase, ct, preferHd);
                 lastProblem = problem;
                 lastCloudflare = IsCloudflareBlock(html);
 
@@ -568,7 +569,7 @@ public class MaxstreamService : IAsyncDisposable
         return null;
     }
 
-    private async Task<MaxstreamDownload?> ExtractDownloadAsync(string html, string pageUrl, string baseUrl, CancellationToken ct)
+    private async Task<MaxstreamDownload?> ExtractDownloadAsync(string html, string pageUrl, string baseUrl, CancellationToken ct, bool preferHd = false)
     {
         var pageName = RxFileName.Match(html) is { Success: true } fm ? WebUtility.HtmlDecode(fm.Groups[1].Value).Trim() : null;
 
@@ -592,7 +593,7 @@ public class MaxstreamService : IAsyncDisposable
                 (ajax, _) = await GetPageAsync($"{baseUrl}/download/insidepremiumx.php?hyl={hyl}",
                     $"{baseUrl}/dpremium/{fileId}", ct, ajax: true);
             }
-            var best = ajax != null ? PickBestVariant(ajax) : null;
+            var best = ajax != null ? PickBestVariant(ajax, preferHd) : null;
             if (best != null)
             {
                 _logger.LogInformation("[MAXSTREAM] {Name}: {Variant} ({Size}) → {Url}", best.FileName, best.Variant,
@@ -619,8 +620,10 @@ public class MaxstreamService : IAsyncDisposable
     /// <summary>
     /// Ordine: Mirror Original (ms-*, file originale) → Download Original (orig.host-cdn) →
     /// High Definition → Standard Quality. "Watch in streaming" non è un file.
+    /// Con <paramref name="preferHd"/>: High Definition, se manca Standard Quality; l'originale solo
+    /// se non c'è nessuna delle due. La "Mobile Version" non si sceglie mai prima di queste.
     /// </summary>
-    private MaxstreamDownload? PickBestVariant(string html)
+    private MaxstreamDownload? PickBestVariant(string html, bool preferHd = false)
     {
         var options = new List<(int Rank, MaxstreamDownload D)>();
         foreach (Match b in RxDownloadButton.Matches(html))
@@ -634,6 +637,8 @@ public class MaxstreamService : IAsyncDisposable
                 label.Contains("Original", StringComparison.OrdinalIgnoreCase) ? 1 :
                 label.Contains("High Definition", StringComparison.OrdinalIgnoreCase) ? 2 :
                 label.Contains("Standard", StringComparison.OrdinalIgnoreCase) ? 3 : 4;
+            if (preferHd)
+                rank = rank switch { 2 => -2, 3 => -1, _ => rank };   // HD, poi Standard, poi gli originali
 
             options.Add((rank, new MaxstreamDownload(url, FileNameFromUrl(url), ParseSize(label), label)));
         }

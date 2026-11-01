@@ -43,8 +43,11 @@ public static class AudioTracks
         return args.ToArray();
     }
 
-    private static bool IsItalian((string Language, string Title) t) =>
-        t.Language is "ita" or "it" or "italian" || RxItalianTitle.IsMatch(t.Title);
+    private static bool IsItalian((string Language, string Title) t) => IsItalian(t.Language, t.Title);
+
+    /// <summary>Traccia italiana: codice lingua ita/it/italian, oppure "ita"/"italiano" nel titolo della traccia.</summary>
+    internal static bool IsItalian(string language, string title) =>
+        (language ?? "").ToLowerInvariant() is "ita" or "it" or "italian" || RxItalianTitle.IsMatch(title ?? "");
 
     private static async Task<List<(string Language, string Title)>> ProbeAsync(string ffmpegPath, string file, CancellationToken ct)
     {

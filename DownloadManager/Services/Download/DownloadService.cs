@@ -261,10 +261,12 @@ public partial class DownloadService : IDownloadService
 
         if (File.Exists(tempPath) && File.Exists(item.DestinationPath))
         {
+            var existingSize = new FileInfo(item.DestinationPath).Length;   // può essere già convertito
             SetUi(() =>
             {
+                item.TotalBytes = existingSize;
                 item.Status = DownloadStatus.Completed;
-                item.DownloadedBytes = totalSize;
+                item.DownloadedBytes = existingSize;
                 item.SpeedBytesPerSecond = 0;
             });
             await _repository.ClearChunksAsync(item.Id);
@@ -289,7 +291,8 @@ public partial class DownloadService : IDownloadService
 
         // CB01: "Originale" consegna il file così com'è; tutte le altre scelte partono da un .mp4
         var finalPath = item.DestinationPath;
-        var processCb01 = item.ProviderKey == "CB01" && item.Conversion != VideoConversion.Original;
+        var conversion = item.Conversion.FileProcessing();   // Maxstream HD → come Copia in MP4 / audio AAC
+        var processCb01 = item.ProviderKey == "CB01" && conversion != VideoConversion.Original;
         var rewritten = false;   // file già riscritto da ffmpeg (audio italiano già per primo)
         if (processCb01 &&
             !finalPath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
@@ -302,7 +305,8 @@ public partial class DownloadService : IDownloadService
             else
             {
                 SetUi(() => item.ErrorMessage = "Copia in MP4...");
-                var mp4 = await Mp4Remuxer.ConvertAsync(ffmpeg, finalPath, _logger, ct);
+                var mp4 = await Mp4Remuxer.ConvertAsync(ffmpeg, finalPath, _logger, ct,
+                    webAudio: conversion == VideoConversion.Mp4Copy);
                 if (mp4 != null)
                 {
                     finalPath = mp4;
@@ -331,35 +335,45 @@ public partial class DownloadService : IDownloadService
                 }
             }
 
-            // "Copia in MP4" su un .mp4 del sito: se l'italiano non è la prima traccia audio, si riscrive
-            // (le conversioni AAC/H.264 qui sotto lo mettono già per primo)
+            // "Copia in MP4" su un .mp4: si riscrive se l'italiano non è la prima traccia audio, o se
+            // l'audio non si sente nei browser (AC3/E-AC3: nel player web il video era muto) e va in AAC.
+            // Il video resta copiato. Le conversioni AAC/H.264 qui sotto fanno già entrambe le cose.
             var ffmpegForOrder = _ffmpegLocator.GetFfmpegPath();
-            if (!rewritten && item.Conversion == VideoConversion.Mp4Copy && !string.IsNullOrEmpty(ffmpegForOrder) &&
-                await AudioTracks.NeedsReorderAsync(ffmpegForOrder, pathToCheck, ct))
+            if (conversion == VideoConversion.Mp4Copy && !string.IsNullOrEmpty(ffmpegForOrder))
             {
-                SetUi(() => item.ErrorMessage = "Audio italiano per primo...");
-                await Mp4Remuxer.RewriteAsync(ffmpegForOrder, pathToCheck, _logger, ct);
+                bool needsWebAudio = await Mp4Remuxer.NeedsWebAudioAsync(ffmpegForOrder, pathToCheck, ct);
+                bool needsOrder = !rewritten && await AudioTracks.NeedsReorderAsync(ffmpegForOrder, pathToCheck, ct);
+                if (needsWebAudio || needsOrder)
+                {
+                    SetUi(() => item.ErrorMessage = needsWebAudio ? "Audio per i player web (AAC)..." : "Audio italiano per primo...");
+                    await Mp4Remuxer.RewriteAsync(ffmpegForOrder, pathToCheck, _logger, ct, aacAudio: needsWebAudio);
+                }
             }
             SetUi(() => item.ErrorMessage = string.Empty);
         }
 
         // CB01: conversione scelta dall'utente (audio AAC o H.264 per i player web), anche per i .mp4
-        if (processCb01 && item.Conversion != VideoConversion.Mp4Copy &&
+        if (processCb01 && conversion != VideoConversion.Mp4Copy &&
             finalPath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
         {
             var ffmpegPath = _ffmpegLocator.GetFfmpegPath();
             if (string.IsNullOrEmpty(ffmpegPath))
                 _logger.LogWarning("[CONVERSIONE] ffmpeg non trovato: {File} resta com'è", finalPath);
             else
-                await VideoTranscoder.ConvertAsync(ffmpegPath, finalPath, item.Conversion, _logger,
+                await VideoTranscoder.ConvertAsync(ffmpegPath, finalPath, conversion, _logger,
                     msg => SetUi(() => item.ErrorMessage = msg), ct);
             SetUi(() => item.ErrorMessage = string.Empty);
         }
 
+        // Dimensione vera del file finito: conversioni e riscritture (audio italiano per primo,
+        // AAC/H.264) la cambiano rispetto a quella scaricata
+        long finalSize = totalSize;
+        try { if (File.Exists(finalPath)) finalSize = new FileInfo(finalPath).Length; } catch { }
         SetUi(() =>
         {
+            item.TotalBytes = finalSize;
             item.Status = DownloadStatus.Completed;
-            item.DownloadedBytes = totalSize;
+            item.DownloadedBytes = finalSize;
             item.SpeedBytesPerSecond = 0;
         });
         await _repository.ClearChunksAsync(item.Id);
@@ -551,46 +565,94 @@ public partial class DownloadService : IDownloadService
         SetUi(() => item.DownloadedBytes = finalBytes);
     }
 
+    /// <summary>Un pezzo senza dati per questo tempo si considera bloccato e si riprende.</summary>
+    private static readonly TimeSpan ChunkIdleTimeout = TimeSpan.FromSeconds(60);
+    private const int ChunkAttempts = 4;
+
+    /// <summary>
+    /// Scarica un pezzo del file. Se la connessione si blocca (il server smette di mandare dati senza
+    /// chiuderla: con molti download insieme da Maxstream capitava e il download restava fermo per
+    /// sempre) o si interrompe, si riprende dal punto raggiunto, fino a <see cref="ChunkAttempts"/> volte.
+    /// </summary>
     private async Task DownloadChunkAsync(string url, FileStream fs,
         (long Start, long End) range, Action<long> onBytes, CancellationToken ct)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.Range = new RangeHeaderValue(range.Start, range.End);
-
-        using var response = await _http.SendAsync(request,
-            HttpCompletionOption.ResponseHeadersRead, ct);
-
-        // Serve proprio il tratto chiesto (206): un 200 è il file intero dall'inizio, che scritto
-        // a metà file lo rovinerebbe. Si accetta solo se il pezzo parte da 0.
-        if (response.StatusCode != HttpStatusCode.PartialContent &&
-            !(response.StatusCode == HttpStatusCode.OK && range.Start == 0))
-            throw new InvalidOperationException(
-                $"Server ha risposto {response.StatusCode}, previsto 206.");
-        if (response.StatusCode == HttpStatusCode.PartialContent &&
-            response.Content.Headers.ContentRange is { From: { } from } && from != range.Start)
-            throw new InvalidOperationException($"Il server ha mandato il tratto da {from} invece che da {range.Start}.");
-
-        await using var source = await response.Content.ReadAsStreamAsync(ct);
-
-        var buffer = new byte[81920];
-        int read;
-        long offset = range.Start;
-        long wanted = range.End - range.Start + 1;
-
-        while (offset - range.Start < wanted && (read = await source.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, wanted - (offset - range.Start))), ct)) > 0)
+        // Primo byte non ancora scritto: lo aggiorna ogni lettura, anche se poi il tentativo fallisce
+        var pos = new System.Runtime.CompilerServices.StrongBox<long>(range.Start);
+        for (int attempt = 1; ; attempt++)
         {
-            lock (fs)
+            try
             {
-                fs.Seek(offset, SeekOrigin.Begin);
-                fs.Write(buffer, 0, read);
+                await DownloadRangeOnceAsync(url, fs, pos, range.End, onBytes, ct);
+                if (pos.Value > range.End) return;
+                throw new IOException($"Pezzo incompleto: ricevuti {pos.Value - range.Start} byte su {range.End - range.Start + 1}.");
             }
-            offset += read;
-            onBytes(read);
+            catch (Exception ex) when (!ct.IsCancellationRequested && attempt < ChunkAttempts && IsTransientChunkError(ex))
+            {
+                _logger.LogInformation("[DOWNLOAD] Pezzo {Start}-{End}: {Msg}. Riprendo da {Offset} (tentativo {N}/{Max})",
+                    range.Start, range.End, ex.Message, pos.Value, attempt + 1, ChunkAttempts);
+                await Task.Delay(TimeSpan.FromSeconds(2 * attempt), ct);
+            }
         }
+    }
 
-        // Connessione chiusa prima della fine del pezzo: non va segnato come completato
-        if (offset - range.Start < wanted)
-            throw new IOException($"Pezzo incompleto: ricevuti {offset - range.Start} byte su {wanted}.");
+    private static bool IsTransientChunkError(Exception ex) => ex switch
+    {
+        TimeoutException or IOException => true,
+        HttpRequestException h => h.StatusCode is null or HttpStatusCode.TooManyRequests or HttpStatusCode.RequestTimeout
+                                  || (int)h.StatusCode >= 500,
+        _ => false
+    };
+
+    /// <summary>Una richiesta per il tratto [pos, end]; pos avanza con ogni blocco scritto.</summary>
+    private async Task DownloadRangeOnceAsync(string url, FileStream fs, System.Runtime.CompilerServices.StrongBox<long> pos, long end,
+        Action<long> onBytes, CancellationToken ct)
+    {
+        long from = pos.Value;
+        // Annullato dall'utente oppure dal "cane da guardia": nessun dato per ChunkIdleTimeout
+        using var idle = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        idle.CancelAfter(ChunkIdleTimeout);
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Range = new RangeHeaderValue(from, end);
+
+            using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, idle.Token);
+
+            // Serve proprio il tratto chiesto (206): un 200 è il file intero dall'inizio, che scritto
+            // a metà file lo rovinerebbe. Si accetta solo se il tratto parte da 0.
+            if (response.StatusCode is HttpStatusCode.TooManyRequests or HttpStatusCode.RequestTimeout || (int)response.StatusCode >= 500)
+                throw new HttpRequestException($"Server ha risposto {(int)response.StatusCode} {response.StatusCode}.", null, response.StatusCode);
+            if (response.StatusCode != HttpStatusCode.PartialContent &&
+                !(response.StatusCode == HttpStatusCode.OK && from == 0))
+                throw new InvalidOperationException(
+                    $"Server ha risposto {response.StatusCode}, previsto 206.");
+            if (response.StatusCode == HttpStatusCode.PartialContent &&
+                response.Content.Headers.ContentRange is { From: { } start } && start != from)
+                throw new InvalidOperationException($"Il server ha mandato il tratto da {start} invece che da {from}.");
+
+            await using var source = await response.Content.ReadAsStreamAsync(idle.Token);
+
+            var buffer = new byte[81920];
+            int read;
+            while (pos.Value <= end &&
+                   (read = await source.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, end - pos.Value + 1)), idle.Token)) > 0)
+            {
+                lock (fs)
+                {
+                    fs.Seek(pos.Value, SeekOrigin.Begin);
+                    fs.Write(buffer, 0, read);
+                }
+                pos.Value += read;
+                onBytes(read);
+                idle.CancelAfter(ChunkIdleTimeout);   // arrivano dati: il conto riparte
+            }
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // Non l'ha chiesto l'utente: la connessione è rimasta ferma troppo a lungo
+            throw new TimeoutException($"nessun dato da {ChunkIdleTimeout.TotalSeconds:0} s");
+        }
     }
 
     private static List<(long Start, long End)> CalculateRanges(long totalSize)

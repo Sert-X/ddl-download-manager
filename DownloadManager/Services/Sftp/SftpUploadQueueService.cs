@@ -40,7 +40,10 @@ public class SftpUploadQueueService : SftpQueueServiceBase<SftpUploadJob>
         if (!Directory.Exists(localFolder))
             throw new DirectoryNotFoundException($"Cartella non trovata: {localFolder}");
 
-        var allFiles = Directory.GetFiles(localFolder, "*", SearchOption.AllDirectories);
+        // In ordine "naturale" (1, 2, ... 10, 11): Windows li restituisce come testo (1, 10, 11, 2)
+        var allFiles = Directory.GetFiles(localFolder, "*", SearchOption.AllDirectories)
+            .OrderBy(f => Path.GetRelativePath(localFolder, f), Comparer<string>.Create(DownloadManager.Helpers.NaturalComparer.Compare))
+            .ToArray();
         var localFolderName = Path.GetFileName(localFolder.TrimEnd(Path.DirectorySeparatorChar));
         var remoteTarget = CombineRemote(remoteBaseFolder, localFolderName);
 

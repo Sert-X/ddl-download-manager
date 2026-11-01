@@ -1,0 +1,67 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="DownloadManager.Views.VideoCheckDialog"
+        Title="Verifica video"
+        Width="500"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        ShowInTaskbar="False"
+        Background="{DynamicResource AppBackgroundBrush}">
+
+    <StackPanel Margin="22" Spacing="18">
+
+        <Grid ColumnDefinitions="Auto, *">
+            <Border Width="42" Height="42" CornerRadius="21"
+                    Background="{DynamicResource AppAccentSoftBrush}"
+                    VerticalAlignment="Top">
+                <Path Classes="icon accent" Data="{StaticResource IconFilm}" Width="20" Height="20"/>
+            </Border>
+            <StackPanel Grid.Column="1" Margin="14,0,0,0" Spacing="6" VerticalAlignment="Center">
+                <TextBlock x:Name="TitleText" Text="Cosa vuoi controllare?" FontSize="15" FontWeight="Bold"/>
+                <TextBlock x:Name="PromptText" FontSize="13" TextWrapping="Wrap"
+                           Foreground="{DynamicResource AppTextMutedBrush}"
+                           Text="I video della cartella aperta e delle sottocartelle. Quelli già controllati e non cambiati si saltano."/>
+            </StackPanel>
+        </Grid>
+
+        <StackPanel Spacing="10">
+            <Button x:Name="CodecOnlyButton" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="14,12" Click="OnCodecOnlyClick">
+                <Grid ColumnDefinitions="Auto, *">
+                    <Path Classes="icon accent" Width="18" Height="18" Data="{StaticResource IconFilm}" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                    <StackPanel Grid.Column="1" Spacing="2">
+                        <TextBlock Text="Solo codec" FontWeight="SemiBold"/>
+                        <TextBlock Text="Audio e video adatti ai player web (colonna Web)" FontSize="12" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource AppTextMutedBrush}"/>
+                    </StackPanel>
+                </Grid>
+            </Button>
+            <Button x:Name="LanguageOnlyButton" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="14,12" Click="OnLanguageOnlyClick">
+                <Grid ColumnDefinitions="Auto, *">
+                    <Path Classes="icon accent" Width="18" Height="18" Data="{StaticResource IconGlobe}" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                    <StackPanel Grid.Column="1" Spacing="2">
+                        <TextBlock Text="Solo lingua" FontWeight="SemiBold"/>
+                        <TextBlock Text="Audio in italiano, come unica traccia o tra le tracce (colonna Lingua)" FontSize="12" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource AppTextMutedBrush}"/>
+                    </StackPanel>
+                </Grid>
+            </Button>
+            <Button x:Name="BothButton" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="14,12" Click="OnBothClick">
+                <Grid ColumnDefinitions="Auto, *">
+                    <Path Classes="icon accent" Width="18" Height="18" Data="{StaticResource IconLayers}" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                    <StackPanel Grid.Column="1" Spacing="2">
+                        <TextBlock Text="Codec e lingua" FontWeight="SemiBold"/>
+                        <TextBlock Text="Entrambi (colonne Web e Lingua). Stessa velocità: ogni file si legge una volta sola" FontSize="12" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource AppTextMutedBrush}"/>
+                    </StackPanel>
+                </Grid>
+            </Button>
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Classes="ghost" MinWidth="100" IsCancel="True" Click="OnCancelClick">
+                <TextBlock Text="Annulla"/>
+            </Button>
+        </StackPanel>
+    </StackPanel>
+</Window>

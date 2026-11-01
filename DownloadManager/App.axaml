@@ -319,6 +319,8 @@
             <StreamGeometry x:Key="IconList">M 8,6 L 21,6 M 8,12 L 21,12 M 8,18 L 21,18 M 3,6 L 3.01,6 M 3,12 L 3.01,12 M 3,18 L 3.01,18</StreamGeometry>
             <StreamGeometry x:Key="IconCopy">M 11,9 L 20,9 A 2,2 0 0 1 22,11 L 22,20 A 2,2 0 0 1 20,22 L 11,22 A 2,2 0 0 1 9,20 L 9,11 A 2,2 0 0 1 11,9 Z M 5,15 L 4,15 A 2,2 0 0 1 2,13 L 2,4 A 2,2 0 0 1 4,2 L 13,2 A 2,2 0 0 1 15,4 L 15,5</StreamGeometry>
             <StreamGeometry x:Key="IconSettings">M 4,6 L 20,6 M 4,12 L 20,12 M 4,18 L 20,18 M 9,3.5 L 9,8.5 M 15,9.5 L 15,14.5 M 8,15.5 L 8,20.5</StreamGeometry>
+            <StreamGeometry x:Key="IconVolume">M 11,5 L 6,9 L 2,9 L 2,15 L 6,15 L 11,19 Z M 15.5,8.5 A 5,5 0 0 1 15.5,15.5 M 18.5,5.5 A 9,9 0 0 1 18.5,18.5</StreamGeometry>
+            <StreamGeometry x:Key="IconSubtitles">M 4,5 L 20,5 A 2,2 0 0 1 22,7 L 22,17 A 2,2 0 0 1 20,19 L 4,19 A 2,2 0 0 1 2,17 L 2,7 A 2,2 0 0 1 4,5 Z M 6,12 L 10,12 M 13,12 L 18,12 M 6,15.5 L 14,15.5 M 16.5,15.5 L 18,15.5</StreamGeometry>
 
             <!-- ============================================================ -->
             <!--  SCROLLBAR sottile: nessun "ingrandimento" al passaggio mouse  -->
@@ -911,6 +913,16 @@
             <Setter Property="Opacity" Value="1"/>
         </Style>
 
+        <!-- Verifica streaming web: video che nei browser restano muti o non partono (classe .webBad).
+             Tinta più leggera del rosso 0-byte, che viene dopo e quindi ha la precedenza. -->
+        <Style Selector="DataGridRow.webBad, DataGridRow.langBad">
+            <Setter Property="Background" Value="{DynamicResource AppDangerSoftBrush}"/>
+        </Style>
+        <Style Selector="DataGridRow.webBad:pointerover /template/ Rectangle#BackgroundRectangle, DataGridRow.langBad:pointerover /template/ Rectangle#BackgroundRectangle">
+            <Setter Property="Fill" Value="{DynamicResource AppDangerSoftHoverBrush}"/>
+            <Setter Property="Opacity" Value="1"/>
+        </Style>
+
         <!-- Zero-Byte Checker: file a 0 byte e cartelle che li contengono (classe .zeroByte
              impostata dalla riga in base a HasZeroByteIssue). Il rosso resta visibile anche
              al passaggio del mouse e da selezionata. -->
@@ -1019,6 +1031,9 @@
         </Style>
         <Style Selector="Path.icon.accent"><Setter Property="Stroke" Value="{DynamicResource AppAccentBrush}"/></Style>
         <Style Selector="Path.icon.warn"><Setter Property="Stroke" Value="{DynamicResource AppWarningBrush}"/></Style>
+        <Style Selector="Path.icon.success"><Setter Property="Stroke" Value="{DynamicResource AppSuccessBrush}"/></Style>
+        <Style Selector="Path.icon.danger"><Setter Property="Stroke" Value="{DynamicResource AppDangerBrush}"/></Style>
+        <Style Selector="Path.icon.muted"><Setter Property="Stroke" Value="{DynamicResource AppTextMutedBrush}"/></Style>
         <Style Selector="TabItem:selected Path.icon.accent"><Setter Property="Stroke" Value="{DynamicResource AppAccentBrush}"/></Style>
         <Style Selector="TabItem Path.icon"><Setter Property="Stroke" Value="{DynamicResource AppTextMutedBrush}"/></Style>
         <Style Selector="TabItem:selected Path.icon"><Setter Property="Stroke" Value="{DynamicResource AppAccentBrush}"/></Style>
@@ -1171,12 +1186,10 @@
             <Setter Property="Opacity" Value="1"/>
             <Setter Property="RenderTransform" Value="scale(1)"/>
         </Style>
+        <!-- Al passaggio del mouse: la capsula resta scura (niente azzurro pieno), con il bordo colorato -->
         <Style Selector="Button.posterAnalyze:pointerover /template/ Border#Pill">
-            <Setter Property="Background" Value="{DynamicResource AppAccentBrush}"/>
-            <Setter Property="BorderBrush" Value="Transparent"/>
-        </Style>
-        <Style Selector="Button.posterAnalyze:pointerover /template/ Border#Dot">
-            <Setter Property="Background" Value="#2EFFFFFF"/>
+            <Setter Property="Background" Value="#F21E293B"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}"/>
         </Style>
         <Style Selector="Button.posterAnalyze:pressed">
             <Setter Property="RenderTransform" Value="scale(0.95)"/>
@@ -1475,6 +1488,123 @@
             <Setter Property="FontStyle" Value="Normal"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Foreground" Value="{DynamicResource AppWarningBrush}"/>
+        </Style>
+
+        <!-- Videobox: selettore Mappatura | Titoli TMDB -->
+        <Style Selector="ToggleButton.modeTab">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="14,6"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}"/>
+        </Style>
+        <Style Selector="ToggleButton.modeTab Path.icon">
+            <Setter Property="Stroke" Value="{DynamicResource AppTextMutedBrush}"/>
+        </Style>
+        <!-- Scelta selezionata: come le schede della barra principale (niente blu pieno) -->
+        <Style Selector="ToggleButton.modeTab /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+        </Style>
+        <Style Selector="ToggleButton.modeTab:checked /template/ ContentPresenter#PART_ContentPresenter,
+                         ToggleButton.modeTab:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppTabSelectedBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppTabSelectedBorderBrush}"/>
+        </Style>
+        <Style Selector="ToggleButton.modeTab:checked TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="ToggleButton.modeTab:checked Path.icon">
+            <Setter Property="Stroke" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
+
+        <!-- Titoli TMDB: filtri, episodi, stato, stagioni -->
+        <Style Selector="ToggleButton.filterPill">
+            <Setter Property="Background" Value="{DynamicResource AppSurface2Brush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="999"/>
+            <Setter Property="Padding" Value="10,3"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="MinHeight" Value="0"/>
+        </Style>
+        <Style Selector="ToggleButton.filterPill TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+        <Style Selector="ToggleButton.filterPill Path.icon">
+            <Setter Property="Width" Value="12"/>
+            <Setter Property="Height" Value="12"/>
+        </Style>
+        <Style Selector="ToggleButton.filterPill.danger"><Setter Property="BorderBrush" Value="{DynamicResource AppDangerBrush}"/></Style>
+        <Style Selector="ToggleButton.filterPill.danger Path.icon"><Setter Property="Stroke" Value="{DynamicResource AppDangerBrush}"/></Style>
+        <Style Selector="ToggleButton.filterPill.warning"><Setter Property="BorderBrush" Value="{DynamicResource AppWarningBrush}"/></Style>
+        <Style Selector="ToggleButton.filterPill.warning Path.icon"><Setter Property="Stroke" Value="{DynamicResource AppWarningBrush}"/></Style>
+        <Style Selector="ToggleButton.filterPill.success"><Setter Property="BorderBrush" Value="{DynamicResource AppSuccessBrush}"/></Style>
+        <Style Selector="ToggleButton.filterPill.success Path.icon"><Setter Property="Stroke" Value="{DynamicResource AppSuccessBrush}"/></Style>
+        <Style Selector="ToggleButton.filterPill:checked /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AppAccentSoftBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
+        <Style Selector="Border.moviePill.epOk"><Setter Property="BorderBrush" Value="{DynamicResource AppSuccessBrush}"/></Style>
+        <Style Selector="Border.moviePill.epOk Path.icon"><Setter Property="Stroke" Value="{DynamicResource AppSuccessBrush}"/></Style>
+        <Style Selector="Border.moviePill.epWarn"><Setter Property="BorderBrush" Value="{DynamicResource AppWarningBrush}"/></Style>
+        <Style Selector="Border.moviePill.epWarn Path.icon"><Setter Property="Stroke" Value="{DynamicResource AppWarningBrush}"/></Style>
+        <Style Selector="Border.moviePill.epBad"><Setter Property="BorderBrush" Value="{DynamicResource AppDangerBrush}"/></Style>
+        <Style Selector="Border.moviePill.epBad Path.icon"><Setter Property="Stroke" Value="{DynamicResource AppDangerBrush}"/></Style>
+        <Style Selector="TextBlock.tmdbState">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="MaxLines" Value="2"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+        </Style>
+        <Style Selector="TextBlock.tmdbState.rename"><Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}"/></Style>
+        <Style Selector="TextBlock.tmdbState.ok"><Setter Property="Foreground" Value="{DynamicResource AppSuccessBrush}"/></Style>
+        <Style Selector="TextBlock.tmdbState.confirm"><Setter Property="Foreground" Value="{DynamicResource AppWarningBrush}"/></Style>
+        <Style Selector="TextBlock.tmdbState.missing"><Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}"/></Style>
+        <Style Selector="Border.seasonRow"><Setter Property="Background" Value="{DynamicResource AppSurface2Brush}"/></Style>
+        <Style Selector="Border.seasonRow.current">
+            <Setter Property="Background" Value="{DynamicResource AppAccentSoftBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+        <!-- Numero di un passo guidato (1, 2, 3): grigio, blu se è il passo da fare, verde se fatto -->
+        <Style Selector="Border.step">
+            <Setter Property="Width" Value="24"/>
+            <Setter Property="Height" Value="24"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Background" Value="{DynamicResource AppSurface2Brush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="Border.step TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}"/>
+        </Style>
+        <Style Selector="Border.step.current">
+            <Setter Property="Background" Value="{DynamicResource AppAccentBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}"/>
+        </Style>
+        <Style Selector="Border.step.current TextBlock"><Setter Property="Foreground" Value="White"/></Style>
+        <Style Selector="Border.step.done">
+            <Setter Property="Background" Value="{DynamicResource AppSuccessSoftBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AppSuccessBrush}"/>
+        </Style>
+        <Style Selector="Border.step.done TextBlock"><Setter Property="Foreground" Value="{DynamicResource AppSuccessBrush}"/></Style>
+        <Style Selector="TextBlock.stepLabel">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="8,0,12,0"/>
+        </Style>
+
+        <Style Selector="ListBox.tmdbRows ListBoxItem">
+            <Setter Property="Padding" Value="12,4"/>
+            <Setter Property="CornerRadius" Value="0"/>
         </Style>
 
         <!-- Voce di menu distruttiva ("Elimina tutto…") -->

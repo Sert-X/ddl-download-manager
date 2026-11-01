@@ -248,7 +248,7 @@
                                     <Grid ColumnDefinitions="*, Auto">
                                         <StackPanel Classes="bi" VerticalAlignment="Center">
                                             <Path Classes="icon accent" Data="{StaticResource IconBulb}"/>
-                                            <TextBlock Text="Guida rapida - Anime Download" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AppTextBrush}"/>
+                                            <TextBlock Text="Guida - Anime Download" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AppTextBrush}"/>
                                         </StackPanel>
                                         <Path Grid.Column="1" Classes="chevron"/>
                                     </Grid>
@@ -275,6 +275,7 @@
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Notifiche e barra di stato:</Run> con l'app in secondo piano Windows avvisa a fine serie, per i download falliti e se il disco è pieno (campanella in alto per spegnerle). In basso, accanto al Log, si vede sempre cosa sta scaricando, da qualsiasi tab. Le scorciatoie da tastiera sono nel pulsante con la tastiera in alto.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Colori delle barre:</Run> verde completato, blu in download, arancione in pausa, rosso errore, grigio-azzurro in coda, grigio spento annullato. Le colonne restano allineate qualunque sia lo stato; dimensione, velocità e tempo rimanente stanno in un'unica colonna. Ogni serie dice quanti episodi sono in download e quanti in conversione (già scaricati, mentre l'app unisce le tracce o converte il file).<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Pulisci lista:</Run> toglie dalla lista completati, annullati o falliti (i file restano su disco). "Elimina tutto…" è in fondo al menu e chiede sempre conferma.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Rimuovi:</Run> toglie dalla lista un episodio (o una serie) in coda, in pausa, finito o annullato. Un download in corso va prima annullato: l'app lo ricorda con un messaggio.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Download simultanei:</Run> il cursore della coda regola quanti episodi scaricare insieme.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Problemi:</Run> se un provider non risponde controlla la tab Domini (indirizzo aggiornato) e la tab Proxy. Gli errori compaiono anche nel Log globale, che si può filtrare per sezione.
                                     </TextBlock>
@@ -359,6 +360,20 @@
                                             <TextBlock Text="Ricerca in corso..." FontSize="11" FontStyle="Italic" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Grid>
+                                    <WrapPanel DockPanel.Dock="Top" Orientation="Horizontal" ItemSpacing="14" LineSpacing="6" Margin="0,0,0,8" IsVisible="{Binding HasResultFilters}">
+                                        <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding HasResultYears}">
+                                            <TextBlock Text="Ordina:" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center"/>
+                                            <ToggleButton Classes="filterPill" IsChecked="{Binding IsResultSortRel, Mode=OneWay}" Command="{Binding SetResultSortCommand}" CommandParameter="Rel" ToolTip.Tip="Nell'ordine dato dal sito">
+                                                <TextBlock Text="Pertinenza"/>
+                                            </ToggleButton>
+                                            <ToggleButton Classes="filterPill" IsChecked="{Binding IsResultSortYearDesc, Mode=OneWay}" Command="{Binding SetResultSortCommand}" CommandParameter="YearDesc" ToolTip.Tip="Dal più recente (senza anno in fondo)">
+                                                <TextBlock Text="Anno ↓"/>
+                                            </ToggleButton>
+                                            <ToggleButton Classes="filterPill" IsChecked="{Binding IsResultSortYearAsc, Mode=OneWay}" Command="{Binding SetResultSortCommand}" CommandParameter="YearAsc" ToolTip.Tip="Dal più vecchio (senza anno in fondo)">
+                                                <TextBlock Text="Anno ↑"/>
+                                            </ToggleButton>
+                                        </StackPanel>
+                                    </WrapPanel>
                                     <Panel>
                                     <ListBox Classes="posterGrid" ItemsSource="{Binding SearchResults}" DoubleTapped="OnSearchResultDoubleTapped" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                         <ListBox.ItemsPanel>
@@ -661,7 +676,7 @@
                                     <Grid ColumnDefinitions="*, Auto">
                                         <StackPanel Classes="bi" VerticalAlignment="Center">
                                             <Path Classes="icon accent" Data="{StaticResource IconBulb}"/>
-                                            <TextBlock Text="Guida rapida - Film e Serie TV" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AppTextBrush}"/>
+                                            <TextBlock Text="Guida - Film e Serie TV" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AppTextBrush}"/>
                                         </StackPanel>
                                         <Path Grid.Column="1" Classes="chevron"/>
                                     </Grid>
@@ -680,6 +695,7 @@
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Notifiche e barra di stato:</Run> con l'app in secondo piano Windows avvisa a fine serie, per i download falliti e se il disco è pieno (campanella in alto per spegnerle). In basso, accanto al Log, si vede sempre cosa sta scaricando, da qualsiasi tab. Le scorciatoie da tastiera sono nel pulsante con la tastiera in alto.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Colori delle barre:</Run> verde completato, blu in download, arancione in pausa, rosso errore, grigio-azzurro in coda, grigio spento annullato. Le colonne restano allineate qualunque sia lo stato; dimensione, velocità e tempo rimanente stanno in un'unica colonna. Ogni serie dice quanti episodi sono in download e quanti in conversione (già scaricati, mentre l'app unisce le tracce o converte il file).<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Pulisci lista:</Run> toglie dalla lista completati, annullati o falliti (i file restano su disco). "Elimina tutto…" è in fondo al menu e chiede sempre conferma.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Rimuovi:</Run> toglie dalla lista un episodio (o una serie) in coda, in pausa, finito o annullato. Un download in corso va prima annullato: l'app lo ricorda con un messaggio.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Pulisci:</Run> svuota risultati, Dettaglio e campo di ricerca, come all'apertura dell'app. I download in coda e in corso continuano. La cronologia delle ricerche resta (per svuotarla c'è il cestino).<LineBreak/>
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">StreamingCommunity</Run><LineBreak/>
@@ -817,6 +833,31 @@
                                             <TextBlock Text="Ricerca..." FontSize="11" FontStyle="Italic" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Grid>
+                                    <WrapPanel DockPanel.Dock="Top" Orientation="Horizontal" ItemSpacing="14" LineSpacing="6" Margin="0,0,0,8" IsVisible="{Binding HasResultFilters}">
+                                        <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding HasMixedResultTypes}">
+                                            <ToggleButton Classes="filterPill" IsChecked="{Binding IsResultTypeAll, Mode=OneWay}" Command="{Binding SetResultTypeFilterCommand}" CommandParameter="All">
+                                                <TextBlock><Run Text="Tutti "/><Run Text="{Binding CountAllResults}" FontWeight="Bold"/></TextBlock>
+                                            </ToggleButton>
+                                            <ToggleButton Classes="filterPill" IsChecked="{Binding IsResultTypeFilm, Mode=OneWay}" Command="{Binding SetResultTypeFilterCommand}" CommandParameter="Film">
+                                                <TextBlock><Run Text="Solo film "/><Run Text="{Binding CountFilmResults}" FontWeight="Bold"/></TextBlock>
+                                            </ToggleButton>
+                                            <ToggleButton Classes="filterPill" IsChecked="{Binding IsResultTypeSeries, Mode=OneWay}" Command="{Binding SetResultTypeFilterCommand}" CommandParameter="Serie">
+                                                <TextBlock><Run Text="Solo serie "/><Run Text="{Binding CountSeriesResults}" FontWeight="Bold"/></TextBlock>
+                                            </ToggleButton>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding HasResultYears}">
+                                            <TextBlock Text="Ordina:" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center"/>
+                                            <ToggleButton Classes="filterPill" IsChecked="{Binding IsResultSortRel, Mode=OneWay}" Command="{Binding SetResultSortCommand}" CommandParameter="Rel" ToolTip.Tip="Nell'ordine dato dal sito">
+                                                <TextBlock Text="Pertinenza"/>
+                                            </ToggleButton>
+                                            <ToggleButton Classes="filterPill" IsChecked="{Binding IsResultSortYearDesc, Mode=OneWay}" Command="{Binding SetResultSortCommand}" CommandParameter="YearDesc" ToolTip.Tip="Dal più recente (senza anno in fondo)">
+                                                <TextBlock Text="Anno ↓"/>
+                                            </ToggleButton>
+                                            <ToggleButton Classes="filterPill" IsChecked="{Binding IsResultSortYearAsc, Mode=OneWay}" Command="{Binding SetResultSortCommand}" CommandParameter="YearAsc" ToolTip.Tip="Dal più vecchio (senza anno in fondo)">
+                                                <TextBlock Text="Anno ↑"/>
+                                            </ToggleButton>
+                                        </StackPanel>
+                                    </WrapPanel>
                                     <Panel>
                                     <ListBox Name="StreamingSearchResultsGrid" Classes="posterGrid" ItemsSource="{Binding SearchResults}" SelectedItem="{Binding SelectedResult, Mode=TwoWay}" DoubleTapped="OnStreamingSearchResultDoubleTapped" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                         <ListBox.ItemsPanel>
@@ -1306,7 +1347,7 @@
                                         <Grid ColumnDefinitions="*, Auto">
                                             <StackPanel Classes="bi" VerticalAlignment="Center">
                                                 <Path Classes="icon accent" Data="{StaticResource IconBulb}"/>
-                                                <TextBlock Text="Guida rapida - Account" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AppTextBrush}"/>
+                                                <TextBlock Text="Guida - Account" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AppTextBrush}"/>
                                             </StackPanel>
                                             <Path Grid.Column="1" Classes="chevron"/>
                                         </Grid>
@@ -1473,7 +1514,7 @@
                                     <Grid ColumnDefinitions="*, Auto">
                                         <StackPanel Classes="bi" VerticalAlignment="Center">
                                             <Path Classes="icon accent" Data="{StaticResource IconBulb}"/>
-                                            <TextBlock Text="Guida rapida - Organizza File" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AppTextBrush}"/>
+                                            <TextBlock Text="Guida - Organizza File" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AppTextBrush}"/>
                                         </StackPanel>
                                         <Path Grid.Column="1" Classes="chevron"/>
                                     </Grid>
@@ -1612,7 +1653,7 @@
                                                     <h:FillSlot MinFill="160">
                                                     <DataGrid ItemsSource="{Binding OperationHistory}" AutoGenerateColumns="False" IsReadOnly="True" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False">
                                                         <DataGrid.Columns>
-                                                            <DataGridTextColumn Header="Data" Binding="{Binding Timestamp, StringFormat='{}{0:dd/MM/yyyy HH:mm:ss}'}" Width="180"/>
+                                                            <DataGridTextColumn Header="Data" Binding="{Binding Timestamp, Mode=OneWay, StringFormat='{}{0:dd/MM/yyyy HH:mm:ss}'}" Width="180"/>
                                                             <DataGridTextColumn Header="Tipo" Binding="{Binding Type}" Width="100"/>
                                                             <DataGridTextColumn Header="Descrizione" Binding="{Binding Description}" Width="*"/>
                                                         </DataGrid.Columns>
@@ -1645,6 +1686,7 @@
                                                     <StackPanel Grid.Column="1" Spacing="6" Margin="10,0">
                                                         <Button Classes="iconCircle" Click="OnMergeMoveUpClick" ToolTip.Tip="Sposta su"><Path Classes="icon" Data="{StaticResource IconArrowUp}"/></Button>
                                                         <Button Classes="iconCircle" Click="OnMergeMoveDownClick" ToolTip.Tip="Sposta giù"><Path Classes="icon" Data="{StaticResource IconArrowDown}"/></Button>
+                                                        <Button Classes="iconCircle" Click="OnMergeSortByNameClick" ToolTip.Tip="Ordina per nome (Parte 1, Parte 2 ... Parte 10): l'ordine dell'elenco è quello dell'unione"><TextBlock Text="A-Z" FontSize="10" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Button>
                                                         <Button Classes="iconCircle danger" Click="OnMergeRemoveClick" ToolTip.Tip="Rimuovi"><Path Classes="icon" Data="{StaticResource IconClose}"/></Button>
                                                     </StackPanel>
                                                     <StackPanel Grid.Column="2" Spacing="6">
@@ -1720,7 +1762,7 @@
                                                     <h:FillSlot MinFill="160">
                                                     <DataGrid ItemsSource="{Binding OperationHistory}" AutoGenerateColumns="False" IsReadOnly="True" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False">
                                                         <DataGrid.Columns>
-                                                            <DataGridTextColumn Header="Data" Binding="{Binding Timestamp, StringFormat='{}{0:dd/MM/yyyy HH:mm:ss}'}" Width="180"/>
+                                                            <DataGridTextColumn Header="Data" Binding="{Binding Timestamp, Mode=OneWay, StringFormat='{}{0:dd/MM/yyyy HH:mm:ss}'}" Width="180"/>
                                                             <DataGridTextColumn Header="Tipo" Binding="{Binding Type}" Width="100"/>
                                                             <DataGridTextColumn Header="Descrizione" Binding="{Binding Description}" Width="*"/>
                                                         </DataGrid.Columns>
@@ -1856,7 +1898,7 @@
                                                     <h:FillSlot MinFill="160">
                                                     <DataGrid ItemsSource="{Binding OperationHistory}" AutoGenerateColumns="False" IsReadOnly="True" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False">
                                                         <DataGrid.Columns>
-                                                            <DataGridTextColumn Header="Data" Binding="{Binding Timestamp, StringFormat='{}{0:dd/MM/yyyy HH:mm:ss}'}" Width="180"/>
+                                                            <DataGridTextColumn Header="Data" Binding="{Binding Timestamp, Mode=OneWay, StringFormat='{}{0:dd/MM/yyyy HH:mm:ss}'}" Width="180"/>
                                                             <DataGridTextColumn Header="Tipo" Binding="{Binding Type}" Width="100"/>
                                                             <DataGridTextColumn Header="Descrizione" Binding="{Binding Description}" Width="*"/>
                                                         </DataGrid.Columns>
@@ -1894,44 +1936,80 @@
                                     <Grid ColumnDefinitions="*, Auto">
                                         <StackPanel Classes="bi">
                                             <Path Classes="icon accent" Data="{StaticResource IconBulb}"/>
-                                            <TextBlock Text="Guida rapida - SFTP" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AppTextBrush}"/>
+                                            <TextBlock Text="Guida - SFTP" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AppTextBrush}"/>
                                         </StackPanel>
                                         <Path Grid.Column="1" Classes="chevron"/>
                                     </Grid>
                                 </ToggleButton>
                                 <Border IsVisible="{Binding #ToggleGuideSftp.IsChecked}" Background="Transparent" Margin="16,0,16,16" Padding="12,12,4,12">
-                                    <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
+                                    <ScrollViewer MaxHeight="420" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
                                     <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}">
-                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Profili</Run><LineBreak/>
-                                        In "Configurazione connessione SFTP" crei un profilo per ogni server: nome, host, porta, utente e password (o chiave privata SSH), più la cartella da cui partire. "Test" prova i dati senza restare collegato. I profili restano salvati e la password è cifrata.<LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">In breve</Run><LineBreak/>
+                                        La tab SFTP gestisce i file sui tuoi server: li carichi, li scarichi, li copi da un server all'altro, li guardi in anteprima e controlli che siano a posto (file vuoti, codec adatti ai player web, audio in italiano).<LineBreak/>
                                         <LineBreak/>
-                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Connettersi: le schede</Run><LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Due pannelli, tutti e due a schede:</Run> a destra i server, a sinistra <Run FontWeight="SemiBold">Locale</Run> (i file del PC) più i server che vuoi. Un pannello vuoto mostra i profili: un clic su "Connetti" e il server diventa una scheda.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Altri server:</Run> "+ Connetti server" apre un altro server in una nuova scheda; un clic sul nome della scheda per passarci. Ogni scheda ha la sua connessione e ricorda la sua cartella. Lo stesso server può stare a destra e a sinistra: i due pannelli si aggiornano a vicenda.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Disconnettere:</Run> il simbolo rosso dentro la scheda, accanto al nome, disconnette quel server; quello grande in fondo alla barra disconnette il server della scheda aperta. Upload, download e copie già in coda continuano comunque.<LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">1. Profili e connessione</Run><LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Profili:</Run> in "Configurazione connessione SFTP" crei un profilo per server (nome, host, porta, utente, password o chiave privata SSH, cartella di partenza). "Test" prova i dati senza collegarsi; la password resta cifrata sul PC.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Pannelli:</Run> a destra i server, a sinistra "Locale" (i file del PC) oppure altri server. Un pannello vuoto mostra i profili: "Connetti" e il server diventa una scheda.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Schede:</Run> "+ Connetti server" apre un altro server in una nuova scheda. Ogni scheda ha la sua connessione e ricorda la sua cartella; lo stesso server può stare in tutti e due i pannelli, che si aggiornano a vicenda.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Disconnettere:</Run> il simbolo rosso nella scheda chiude quel server; quello grande in fondo alla barra chiude la scheda aperta. Le code già avviate continuano.<LineBreak/>
                                         <LineBreak/>
-                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Lavorare sui file</Run><LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Upload:</Run> con "Locale" a sinistra, trascina file o cartelle a destra oppure usa la freccia "Upload": vanno nella cartella aperta della <Run FontWeight="SemiBold">scheda di destra</Run>. Per mandare file diversi su server diversi, passa all'altra scheda e carica lì.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Download:</Run> trascina da destra a sinistra (o "Download"): i file finiscono nella cartella locale aperta.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Copia tra server:</Run> con un server a sinistra le frecce al centro diventano "Copia": i file selezionati vanno nella cartella aperta dall'altra parte, cartelle comprese. I dati passano dal PC in streaming, senza file temporanei.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Gestione:</Run> clic destro per aprire, rinominare, duplicare (fatto dal server stesso), spostare ("Sposta in…") o eliminare; doppio clic su una cartella per entrarci. Ogni tabella ha il suo ordinamento (nome, dimensione, data, tipo).<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Anteprima video:</Run> clic destro su un video, "Anteprima video": lo riproduce subito, quelli sui server in streaming senza scaricarli (Spazio play/pausa, frecce per spostarti e per il volume, F schermo intero).<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Stato:</Run> sotto i pulsanti di ogni tabella, a destra del conteggio, compaiono "Lettura cartella in corso…" e l'avanzamento dei controlli, senza spostare la tabella.<LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">2. Lavorare sui file</Run><LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Upload e download:</Run> trascina da un pannello all'altro, oppure usa le frecce al centro. Si usa sempre la cartella aperta dall'altra parte.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Copia tra server:</Run> con un server anche a sinistra, le frecce diventano "Copia" (cartelle comprese). I dati passano dal PC in streaming, senza file temporanei.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Gestione:</Run> clic destro per aprire, rinominare, duplicare (lo fa il server), spostare ("Sposta in…") o eliminare; doppio clic per entrare in una cartella. Ogni tabella ha il suo ordinamento.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Selezione:</Run> Ctrl per scegliere più righe sparse, Maiusc per un intervallo. Le azioni del menu valgono per tutte le righe selezionate.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Eliminazione:</Run> avanza nella riga di stato con il pulsante ■ per fermarla. Le cartelle le elimina il server stesso, su una connessione a parte: anche con migliaia di file la sessione del browser non va più in timeout.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Riga di stato:</Run> sotto i pulsanti, a sinistra il conteggio e a destra quello che sta succedendo (lettura, controlli, eliminazioni). Non sposta la tabella; il testo intero è nel tooltip.<LineBreak/>
                                         <LineBreak/>
-                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Code: Upload, Download, Server ↔ Server</Run><LineBreak/>
-                                        Ogni trasferimento va in coda con avanzamento, velocità e tempo rimanente; la colonna "Server" dice su quale server. Pausa, ripresa (riparte da dove era arrivato) e annulla sono sia in alto, per tutti, sia sulla riga, per uno solo. Il numero di trasferimenti simultanei vale <Run FontWeight="SemiBold">per ogni server</Run>: con 6 sono 6 su un server e 6 sull'altro. Una copia tra server messa in pausa riparte dall'inizio del file. "Pulisci lista" toglie completati, annullati o falliti; "Elimina tutto…" è in fondo al menu e chiede conferma. Le barre hanno i colori dello stato (verde completato, blu in corso, arancione in pausa, rosso errore, grigio-azzurro in coda, grigio annullato) e in basso, accanto al Log, la barra di stato mostra upload (↑), download (↓) e copie (⇄) in corso da qualsiasi tab; a fine coda, con l'app in secondo piano, arriva una notifica di Windows.<LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">3. Anteprima video</Run><LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Apri:</Run> clic destro su un video, "Anteprima video". I file dei server si guardano in streaming, senza scaricarli.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Tracce:</Run> tendine per audio e sottotitoli, con lingua per esteso, titolo e "(forced)" per i sottotitoli forzati. Tasti A e S per passare alla traccia successiva.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Informazioni:</Run> il pulsante "i" (tasto I) mostra codec, risoluzione, fotogrammi, bitrate, canali audio e sottotitoli.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Tasti:</Run> Spazio play/pausa, frecce ←/→ ±10 s, ↑/↓ volume, F schermo intero, ESC esci. La finestra si chiude subito anche mentre si sta collegando.<LineBreak/>
                                         <LineBreak/>
-                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Controllo dei file a 0 byte</Run><LineBreak/>
-                                        La lente nella barra di una scheda controlla le sottocartelle della cartella aperta e cerca file vuoti (0 byte), di solito upload interrotti: le cartelle che ne contengono diventano rosse e la colonna "Contenuto" ne riassume il contenuto.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Più server insieme:</Run> ogni server ha il suo controllo, quindi puoi avviarlo su più schede e vanno in contemporanea; lo Stop ferma solo quello della scheda su cui lo premi.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Stesso server in due pannelli:</Run> esiti e avanzamento compaiono in tempo reale in entrambi.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Sempre aggiornato:</Run> dopo un controllo, in quella cartella le sottocartelle nuove, rinominate o arrivate con un upload vengono controllate da sole, senza rifarlo a mano.<LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">4. Code: Upload, Download, Server ↔ Server</Run><LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Avanzamento:</Run> ogni trasferimento mostra stato, percentuale, velocità e tempo rimanente; la colonna "Server" dice su quale server.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Comandi:</Run> avvia, pausa e annulla in alto valgono per tutti; sulla riga o dal clic destro per quelli selezionati (Ctrl/Maiusc per sceglierne più di uno).<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Rimuovi:</Run> toglie dalla lista i trasferimenti in attesa, in pausa, finiti o annullati. Quelli in corso vanno prima annullati: l'app lo ricorda con un messaggio.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• In parallelo:</Run> al massimo 6 per server. Le connessioni verso un server sono 8 in tutto e due restano al browser dei file e ai controlli.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Pulizia:</Run> "Pulisci lista" toglie completati, annullati o falliti; "Elimina tutto…" (in fondo al menu) chiede conferma.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Barra di stato:</Run> in basso, accanto al Log, upload (↑), download (↓) e copie (⇄) in corso; a fine coda, con l'app in secondo piano, arriva una notifica di Windows.<LineBreak/>
                                         <LineBreak/>
-                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Altre tab</Run><LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Organizza file:</Run> in modalità Remoto lavora su uno qualsiasi dei server aperti qui (menu "Server"), senza disconnettersi.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Videobox Corrector:</Run> ogni modifica fatta qui, su qualsiasi server e da qualsiasi pannello, aggiorna in pochi istanti gli alberi delle sorgenti di quel server.<LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">5. Controlli sui file</Run><LineBreak/>
+                                        Funzionano nel pannello di destra, in quello di sinistra (server o Locale) e sui singoli elementi.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Lente:</Run> cerca file vuoti (0 byte), di solito upload interrotti, nelle sottocartelle della cartella aperta. I file vuoti e le cartelle che li contengono diventano rossi; la colonna "Contenuto" ne riassume il contenuto.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Pellicola:</Run> controlla i video della cartella e delle sottocartelle. Una finestra chiede cosa controllare: "Solo codec", "Solo lingua" oppure "Codec e lingua" (stessa velocità: ogni file si legge una volta). Tasto destro sulla pellicola: "Ricontrolla tutti i video".<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Singoli elementi:</Run> clic destro su file o cartelle, "Controlla codec / lingua…" oppure "Controlla file vuoti (0 byte)" (solo cartelle). Si rileggono anche se già controllati.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Velocità:</Run> dei video si leggono solo pochi MB (l'intestazione o l'indice), 3 alla volta; la riga di stato dice "Web 125/4421 · nome del file" e la riga del file (o della cartella che lo contiene) mostra "In lettura…".<LineBreak/>
                                         <LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Problemi:</Run> se una connessione cade, disconnetti la scheda e riaprila. I dettagli sono nel Log globale, sezione "SFTP".
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Colonna Web: si vede nei browser?</Run><LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Non adatto (rosso):</Run> audio AC3, E-AC3, DTS, TrueHD, FLAC… (nel browser il video resta muto), oppure video vecchio (Xvid, MPEG-2, VC-1) o H.264 a 10 bit / 4:2:2 / 4:4:4.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Da verificare (giallo):</Run> video HEVC (va su Safari e su Chrome/Edge con accelerazione hardware, non su Firefox), una traccia audio secondaria non web, oppure un MKV con estensione .mp4.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• OK (verde):</Run> H.264, VP9 o AV1 con audio AAC, MP3 o Opus.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Tooltip:</Run> passa il mouse sulla cella per i dettagli (codec, profilo, ogni traccia audio).<LineBreak/>
+                                        <LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Colonna Lingua: c'è l'italiano?</Run><LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• ITA (verde):</Run> unica traccia italiana, o italiano come prima traccia ("ITA + 2 altre").<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• ITA non è la 1ª traccia (giallo):</Run> il player web suonerebbe un'altra lingua.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Lingua non indicata / da verificare (giallo):</Run> le tracce non dicono la lingua, oppure l'unica traccia è segnata "inglese" (molti programmi lo fanno di default): va ascoltata.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Senza italiano (rosso):</Run> nessuna traccia italiana. Le lingue trovate sono nel tooltip.<LineBreak/>
+                                        • Conta solo quello che è scritto nelle tracce (codice lingua e titolo), non il nome del file.<LineBreak/>
+                                        <LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">6. Esiti salvati e sempre aggiornati</Run><LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Salvati:</Run> tutti gli esiti (file vuoti, Web, Lingua) restano nel PC anche chiudendo l'app; riaprendo una cartella si vedono subito.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Si salta il già fatto:</Run> rilanciando un controllo si leggono solo i video nuovi o cambiati (dimensione o data diverse). Un file cambiato dopo il controllo è "Da ricontrollare".<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Cartelle:</Run> mostrano il riassunto di ciò che contengono, anche in profondità ("3 non idonei · 2 da verificare"); nel tooltip i numeri e le date dei controlli.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Modifiche dall'app:</Run> rinomine, spostamenti ed eliminazioni portano con sé i loro esiti.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Modifiche da fuori (WinSCP, altri PC):</Run> all'apertura di una cartella (al massimo ogni 5 minuti) e ogni 5 minuti il server elenca tutti i file sotto la cartella aperta, anche migliaia, in un paio di secondi. Gli esiti di file eliminati si tolgono, quelli di file rinominati o spostati li seguono, i file cambiati diventano "Da ricontrollare" e i file vuoti si aggiornano in tutto l'albero. Per farlo subito: occhio → "Riallinea esiti ora".<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Mostra / nascondi:</Run> l'occhio nella barra sceglie quali esiti vedere (file vuoti, codec web, lingua) in tutte le tabelle, colonne ed evidenziazioni comprese. È colorato quando qualcosa è nascosto.<LineBreak/>
+                                        <LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">7. Altre tab</Run><LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Organizza file:</Run> in modalità Remoto lavora su uno qualsiasi dei server aperti qui (menu "Server").<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Videobox Corrector:</Run> ogni modifica fatta qui aggiorna in pochi istanti gli alberi delle sorgenti di quel server.<LineBreak/>
+                                        <LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Problemi</Run><LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Connessione:</Run> se una scheda non risponde più, disconnettila e riaprila. I dettagli sono nel Log globale, sezione "SFTP".<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Allineamento:</Run> richiede che il server accetti comandi (SSH); se non li accetta, gli esiti si correggono comunque nelle cartelle che apri.
                                     </TextBlock>
                                     </ScrollViewer>
                                 </Border>
@@ -2165,6 +2243,28 @@
                                                                 <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="4" Margin="0,0,6,0">
                                                                     <Button Classes="iconCircle" Command="{Binding CheckServer2ZeroByteCommand}" IsEnabled="{Binding !IsServer2CheckingZeroByte}" ToolTip.Tip="Analizza la cartella di questo server per trovare file vuoti (0 byte). Se lo stesso server è aperto anche a destra, i risultati sono condivisi"><Path Classes="icon" Data="{StaticResource IconSearch}"/></Button>
                                                                     <Button Classes="iconCircle danger" Command="{Binding StopServer2ZeroByteCommand}" IsVisible="{Binding IsServer2CheckingZeroByte}" ToolTip.Tip="Ferma il check in corso"><Path Classes="icon" Data="{StaticResource IconStop}"/></Button>
+                                                                    <Button Classes="iconCircle" Click="OnServer2CheckWebStreamClick" IsEnabled="{Binding !IsCheckingWebStream}" ToolTip.Tip="Controlla i video di questa cartella e delle sottocartelle: codec per i player web, lingua dell'audio o entrambi. I video già controllati e non cambiati si saltano. Tasto destro: ricontrolla tutto">
+                                                                        <Button.ContextMenu>
+                                                                            <ContextMenu>
+                                                                                <MenuItem Header="Ricontrolla tutti i video" Click="OnServer2RecheckAllWebStreamClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconRepeat}"/></MenuItem.Icon></MenuItem>
+                                                                            </ContextMenu>
+                                                                        </Button.ContextMenu>
+                                                                        <Path Classes="icon" Data="{StaticResource IconFilm}"/>
+                                                                    </Button>
+                                                                    <Button Classes="iconCircle danger" Command="{Binding StopWebStreamCheckCommand}" IsVisible="{Binding IsCheckingWebStream}" ToolTip.Tip="Ferma il controllo dei video (gli esiti già trovati restano salvati)"><Path Classes="icon" Data="{StaticResource IconStop}"/></Button>
+                                                                    <Button Classes="iconCircle" Classes.accent="{Binding !ShowsAllResults}" ToolTip.Tip="Esiti dei controlli da mostrare nelle tabelle (file vuoti, codec web, lingua). Evidenziato quando qualcosa è nascosto">
+                                                                        <Path Classes="icon" Data="{StaticResource IconEye}"/>
+                                                                        <Button.Flyout>
+                                                                            <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                                                <MenuItem Header="File vuoti (0 byte)" ToggleType="CheckBox" IsChecked="{Binding ShowZeroByteResults, Mode=TwoWay}"/>
+                                                                                <MenuItem Header="Codec web (colonna Web)" ToggleType="CheckBox" IsChecked="{Binding ShowWebResults, Mode=TwoWay}"/>
+                                                                                <MenuItem Header="Lingua (colonna Lingua)" ToggleType="CheckBox" IsChecked="{Binding ShowLanguageResults, Mode=TwoWay}"/>
+                                                                                <Separator/>
+                                                                                <MenuItem Header="Mostra / nascondi tutti" Command="{Binding ToggleAllResultsCommand}"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconEye}"/></MenuItem.Icon></MenuItem>
+                                                                                <MenuItem Header="Riallinea esiti ora" Command="{Binding RealignResultsCommand}" ToolTip.Tip="Confronta gli esiti salvati con i file sul server (anche nelle sottocartelle): toglie quelli di file eliminati, segue quelli rinominati, segna da ricontrollare quelli cambiati"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconRefresh}"/></MenuItem.Icon></MenuItem>
+                                                                            </MenuFlyout>
+                                                                        </Button.Flyout>
+                                                                    </Button>
                                                                 </StackPanel>
                                                                 <ComboBox Grid.Column="6" ItemsSource="{Binding SortOptions}" SelectedItem="{Binding Server2SortOption, Mode=TwoWay}" MinWidth="110" Margin="0,0,6,0" ToolTip.Tip="Ordina per">
                                                                     <ComboBox.ItemTemplate>
@@ -2176,26 +2276,48 @@
                                                                 <Button Grid.Column="7" Classes="iconCircle" Width="34" Margin="0,0,6,0" Command="{Binding ToggleServer2SortDirectionCommand}" ToolTip.Tip="Inverti direzione (crescente / decrescente)"><Panel><Path Classes="icon" Data="{StaticResource IconArrowUp}" IsVisible="{Binding Server2SortAscending}"/><Path Classes="icon" Data="{StaticResource IconArrowDown}" IsVisible="{Binding !Server2SortAscending}"/></Panel></Button>
                                                                 <Button Grid.Column="8" Classes="iconCircle danger" Command="{Binding Server2DisconnectCommand}" ToolTip.Tip="Disconnetti il server di questa scheda e chiudi la scheda"><Path Classes="icon" Data="{StaticResource IconBoltOff}"/></Button>
                                                             </Grid>
-                                                            <!-- Statistiche e stato sulla stessa riga, ad altezza fissa: la tabella non si sposta -->
-                                                            <Grid Grid.Row="1" ColumnDefinitions="*, Auto" Margin="0,6,0,0" Height="18">
-                                                                <TextBlock Text="{Binding Server2Stats}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" Margin="10,0,0,0" IsVisible="{Binding HasServer2Status}">
-                                                                    <Panel VerticalAlignment="Center"><Path Classes="icon accent" Width="12" Height="12" Data="{StaticResource IconSearch}" IsVisible="{Binding IsServer2CheckingZeroByte}"/><Path Classes="icon accent" Width="12" Height="12" Data="{StaticResource IconRefresh}" IsVisible="{Binding !IsServer2CheckingZeroByte}"/></Panel>
-                                                                    <TextBlock Text="{Binding Server2StatusText}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AppAccentBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="420"/>
-                                                                </StackPanel>
+                                                            <!-- Statistiche a sinistra (larghezza del testo), stato a destra in tutto lo spazio che resta:
+                                                                 altezza fissa, la tabella non si sposta e lo stato non si allarga/accorcia. Testo intero nel tooltip. -->
+                                                            <Grid Grid.Row="1" ColumnDefinitions="Auto, *" Margin="0,6,0,0" Height="20">
+                                                                <TextBlock Text="{Binding Server2Stats}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center" MaxWidth="320" TextTrimming="CharacterEllipsis"/>
+                                                                <DockPanel Grid.Column="1" HorizontalAlignment="Right" Margin="16,0,0,0" IsVisible="{Binding HasServer2Status}" Background="Transparent" ToolTip.Tip="{Binding Server2StatusText}">
+                                                                    <Button DockPanel.Dock="Right" Classes="iconCircle danger" Width="20" Height="20" MinHeight="20" Margin="8,0,0,0" Padding="0" Command="{Binding StopServer2DeleteCommand}" IsVisible="{Binding IsDeletingServer2}" ToolTip.Tip="Ferma l'eliminazione"><Path Classes="icon" Width="8" Height="8" Data="{StaticResource IconStop}"/></Button>
+                                                                    <Panel DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,6,0"><Path Classes="icon accent" Width="12" Height="12" Data="{StaticResource IconTrash}" IsVisible="{Binding IsDeletingServer2}"/><Path Classes="icon accent" Width="12" Height="12" Data="{StaticResource IconSearch}" IsVisible="{Binding ShowServer2ZeroByteIcon}"/><Path Classes="icon accent" Width="12" Height="12" Data="{StaticResource IconFilm}" IsVisible="{Binding ShowServer2VideoIcon}"/><Path Classes="icon accent" Width="12" Height="12" Data="{StaticResource IconRefresh}" IsVisible="{Binding ShowServer2RefreshIcon}"/></Panel>
+                                                                    <TextBlock Text="{Binding Server2StatusText}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AppAccentBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                                </DockPanel>
                                                             </Grid>
                                                         </Grid>
                                                         <h:FillSlot>
-                                                        <DataGrid Name="Server2FilesGrid" MinHeight="0" ItemsSource="{Binding Server2Entries}" ScrollViewer.HorizontalScrollBarVisibility="Auto" SelectedItem="{Binding SelectedServer2Entry, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" SelectionChanged="OnServer2SelectionChanged" DoubleTapped="OnServer2DoubleTapped" KeyDown="OnServer2GridKeyDown" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False">
+                                                        <DataGrid Name="Server2FilesGrid" RowHeight="33" MinHeight="0" ItemsSource="{Binding Server2Entries}" ScrollViewer.HorizontalScrollBarVisibility="Auto" SelectedItem="{Binding SelectedServer2Entry, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" SelectionChanged="OnServer2SelectionChanged" DoubleTapped="OnServer2DoubleTapped" KeyDown="OnServer2GridKeyDown" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False">
                                                             <DataGrid.Styles>
                                                                 <Style Selector="DataGridRow" x:DataType="models:SftpRemoteEntry">
-                                                                    <Setter Property="Classes.zeroByte" Value="{Binding HasZeroByteIssue}"/>
+                                                                    <Setter Property="Classes.webBad">
+                                                                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                                                            <Binding Path="IsWebBad"/>
+                                                                            <Binding Path="$parent[DataGrid].((vm:SftpTabViewModel)DataContext).ShowWebResults"/>
+                                                                        </MultiBinding>
+                                                                    </Setter>
+                                                                    <Setter Property="Classes.langBad">
+                                                                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                                                            <Binding Path="IsLangBad"/>
+                                                                            <Binding Path="$parent[DataGrid].((vm:SftpTabViewModel)DataContext).ShowLanguageResults"/>
+                                                                        </MultiBinding>
+                                                                    </Setter>
+                                                                    <Setter Property="Classes.zeroByte">
+                                                                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                                                            <Binding Path="HasZeroByteIssue"/>
+                                                                            <Binding Path="$parent[DataGrid].((vm:SftpTabViewModel)DataContext).ShowZeroByteResults"/>
+                                                                        </MultiBinding>
+                                                                    </Setter>
                                                                 </Style>
                                                             </DataGrid.Styles>
                                                             <DataGrid.ContextMenu>
                                                                 <ContextMenu Opening="OnFileMenuOpening">
                                                                     <MenuItem Header="Apri" Tag="dir" Click="OnServer2OpenClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconFolder}"/></MenuItem.Icon></MenuItem>
                                                                     <MenuItem Header="Anteprima video" Tag="video" Click="OnServer2PreviewClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconPlayCircle}"/></MenuItem.Icon></MenuItem>
+                                                                    <Separator/>
+                                                                    <MenuItem Header="Controlla codec / lingua..." Click="OnServer2VideoCheckClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconFilm}"/></MenuItem.Icon></MenuItem>
+                                                                    <MenuItem Header="Controlla file vuoti (0 byte)" Tag="dirs" Click="OnServer2ZeroCheckClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconSearch}"/></MenuItem.Icon></MenuItem>
                                                                     <Separator/>
                                                                     <MenuItem Header="Rinomina" Click="OnServer2RenameClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconEdit}"/></MenuItem.Icon></MenuItem>
                                                                     <MenuItem Header="Duplica..." Click="OnServer2DuplicateClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconCopy}"/></MenuItem.Icon></MenuItem>
@@ -2217,9 +2339,59 @@
                                                                     </DataGridTemplateColumn.CellTemplate>
                                                                 </DataGridTemplateColumn>
                                                                 <DataGridTextColumn Header="Nome" Binding="{Binding Name}" Width="*" MinWidth="150"/>
-                                                                <DataGridTextColumn Header="Contenuto" Binding="{Binding ContentsInfo}" Width="Auto" MinWidth="100"/>
-                                                                <DataGridTextColumn Header="Dim." Binding="{Binding SizeText}" Width="Auto" MinWidth="70"/>
-                                                                <DataGridTextColumn Header="Ultima modifica" Binding="{Binding Modified, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" Width="Auto" MinWidth="120"/>
+                                                                <DataGridTemplateColumn Header="Web" Width="170" MinWidth="90">
+                                                                    <DataGridTemplateColumn.CellTemplate>
+                                                                        <DataTemplate x:DataType="models:SftpRemoteEntry">
+                                                                            <Panel>
+                                                                                <StackPanel Classes="bi" Margin="8,0" IsVisible="{Binding IsVideoChecking}" ToolTip.Tip="Il video (o un video in questa cartella) è in lettura">
+                                                                                    <Path Classes="icon accent" Width="13" Height="13" Data="{StaticResource IconRefresh}"/>
+                                                                                    <TextBlock Text="In lettura…" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource AppAccentBrush}"/>
+                                                                                </StackPanel>
+                                                                                <StackPanel Classes="bi" Margin="8,0" Background="Transparent" ToolTip.Tip="{Binding WebStreamDetail}" ToolTip.ShowDelay="300" IsVisible="{Binding ShowWebStreamInfo}">
+                                                                                    <Panel VerticalAlignment="Center">
+                                                                                        <Path Classes="icon success" Width="13" Height="13" Data="{StaticResource IconCheckCircle}" IsVisible="{Binding IsWebOk}"/>
+                                                                                        <Path Classes="icon warn" Width="13" Height="13" Data="{StaticResource IconAlert}" IsVisible="{Binding IsWebWarn}"/>
+                                                                                        <Path Classes="icon danger" Width="13" Height="13" Data="{StaticResource IconBan}" IsVisible="{Binding IsWebBad}"/>
+                                                                                        <Path Classes="icon muted" Width="13" Height="13" Data="{StaticResource IconAlertCircle}" IsVisible="{Binding IsWebUnreadable}"/>
+                                                                                        <Path Classes="icon muted" Width="13" Height="13" Data="{StaticResource IconClock}" IsVisible="{Binding IsWebStale}"/>
+                                                                                    </Panel>
+                                                                                    <Panel VerticalAlignment="Center">
+                                                                                        <TextBlock Text="{Binding WebStreamInfo}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppSuccessBrush}" IsVisible="{Binding IsWebOk}"/>
+                                                                                        <TextBlock Text="{Binding WebStreamInfo}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppWarningBrush}" IsVisible="{Binding IsWebWarn}"/>
+                                                                                        <TextBlock Text="{Binding WebStreamInfo}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppDangerBrush}" IsVisible="{Binding IsWebBad}"/>
+                                                                                        <TextBlock Text="{Binding WebStreamInfo}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding IsWebUnreadable}"/>
+                                                                                        <TextBlock Text="{Binding WebStreamInfo}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding IsWebStale}"/>
+                                                                                    </Panel>
+                                                                                </StackPanel>
+                                                                            </Panel>
+                                                                        </DataTemplate>
+                                                                    </DataGridTemplateColumn.CellTemplate>
+                                                                </DataGridTemplateColumn>
+                                                                <DataGridTemplateColumn Header="Lingua" Width="150" MinWidth="80">
+                                                                    <DataGridTemplateColumn.CellTemplate>
+                                                                        <DataTemplate x:DataType="models:SftpRemoteEntry">
+                                                                            <StackPanel Classes="bi" Margin="8,0" Background="Transparent" ToolTip.Tip="{Binding LangDetail}" ToolTip.ShowDelay="300" IsVisible="{Binding LangInfo, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                                                                <Panel VerticalAlignment="Center">
+                                                                                    <Path Classes="icon success" Width="13" Height="13" Data="{StaticResource IconCheckCircle}" IsVisible="{Binding IsLangOk}"/>
+                                                                                    <Path Classes="icon warn" Width="13" Height="13" Data="{StaticResource IconAlert}" IsVisible="{Binding IsLangWarn}"/>
+                                                                                    <Path Classes="icon danger" Width="13" Height="13" Data="{StaticResource IconBan}" IsVisible="{Binding IsLangBad}"/>
+                                                                                    <Path Classes="icon muted" Width="13" Height="13" Data="{StaticResource IconAlertCircle}" IsVisible="{Binding IsLangUnreadable}"/>
+                                                                                    <Path Classes="icon muted" Width="13" Height="13" Data="{StaticResource IconClock}" IsVisible="{Binding IsLangStale}"/>
+                                                                                </Panel>
+                                                                                <Panel VerticalAlignment="Center">
+                                                                                    <TextBlock Text="{Binding LangInfo}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppSuccessBrush}" IsVisible="{Binding IsLangOk}"/>
+                                                                                    <TextBlock Text="{Binding LangInfo}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppWarningBrush}" IsVisible="{Binding IsLangWarn}"/>
+                                                                                    <TextBlock Text="{Binding LangInfo}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppDangerBrush}" IsVisible="{Binding IsLangBad}"/>
+                                                                                    <TextBlock Text="{Binding LangInfo}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding IsLangUnreadable}"/>
+                                                                                    <TextBlock Text="{Binding LangInfo}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding IsLangStale}"/>
+                                                                                </Panel>
+                                                                            </StackPanel>
+                                                                        </DataTemplate>
+                                                                    </DataGridTemplateColumn.CellTemplate>
+                                                                </DataGridTemplateColumn>
+                                                                <DataGridTextColumn Header="Contenuto" Binding="{Binding ContentsInfo}" Width="190" MinWidth="100"/>
+                                                                <DataGridTextColumn Header="Dim." Binding="{Binding SizeText}" Width="90" MinWidth="70"/>
+                                                                <DataGridTextColumn Header="Ultima modifica" Binding="{Binding Modified, Mode=OneWay, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" Width="130" MinWidth="120"/>
                                                             </DataGrid.Columns>
                                                         </DataGrid>
                                                         </h:FillSlot>
@@ -2233,7 +2405,32 @@
                                                             <Button Grid.Column="1" Classes="iconCircle" Command="{Binding SftpLocalHomeCommand}" Margin="0,0,6,0" ToolTip.Tip="Home"><Path Classes="icon" Data="{StaticResource IconHome}"/></Button>
                                                             <TextBox Grid.Column="2" Text="{Binding SftpCurrentLocalPath}" Margin="0,0,6,0" IsReadOnly="True"/>
                                                             <Button Grid.Column="3" Classes="iconCircle" Click="OnSftpLocalRefreshClick" Margin="0,0,6,0" ToolTip.Tip="Aggiorna"><Path Classes="icon" Data="{StaticResource IconRefresh}"/></Button>
-                                                            <Button Grid.Column="4" Classes="iconCircle" Click="OnLocalNewFolderClick" Margin="0,0,6,0" ToolTip.Tip="Nuova cartella"><Path Classes="icon" Data="{StaticResource IconPlus}"/></Button>
+                                                            <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="4" Margin="0,0,6,0">
+                                                                <Button Classes="iconCircle" Click="OnLocalNewFolderClick" ToolTip.Tip="Nuova cartella"><Path Classes="icon" Data="{StaticResource IconPlus}"/></Button>
+                                                                <Button Classes="iconCircle" Command="{Binding CheckLocalZeroBytesCommand}" IsEnabled="{Binding !IsCheckingLocalZero}" ToolTip.Tip="Analizza le cartelle di questa cartella del PC (con le sottocartelle) per trovare file vuoti (0 byte)"><Path Classes="icon" Data="{StaticResource IconSearch}"/></Button>
+                                                                <Button Classes="iconCircle" Click="OnLocalCheckWebStreamClick" IsEnabled="{Binding !IsCheckingWebStream}" ToolTip.Tip="Controlla i video di questa cartella del PC e delle sottocartelle: codec per i player web, lingua dell'audio o entrambi. I video già controllati e non cambiati si saltano. Tasto destro: ricontrolla tutto">
+                                                                    <Button.ContextMenu>
+                                                                        <ContextMenu>
+                                                                            <MenuItem Header="Ricontrolla tutti i video" Click="OnLocalRecheckAllWebStreamClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconRepeat}"/></MenuItem.Icon></MenuItem>
+                                                                        </ContextMenu>
+                                                                    </Button.ContextMenu>
+                                                                    <Path Classes="icon" Data="{StaticResource IconFilm}"/>
+                                                                </Button>
+                                                                <Button Classes="iconCircle danger" Command="{Binding StopWebStreamCheckCommand}" IsVisible="{Binding IsCheckingWebStream}" ToolTip.Tip="Ferma il controllo dei video (gli esiti già trovati restano salvati)"><Path Classes="icon" Data="{StaticResource IconStop}"/></Button>
+                                                                <Button Classes="iconCircle" Classes.accent="{Binding !ShowsAllResults}" ToolTip.Tip="Esiti dei controlli da mostrare nelle tabelle (file vuoti, codec web, lingua). Evidenziato quando qualcosa è nascosto">
+                                                                    <Path Classes="icon" Data="{StaticResource IconEye}"/>
+                                                                    <Button.Flyout>
+                                                                        <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                                            <MenuItem Header="File vuoti (0 byte)" ToggleType="CheckBox" IsChecked="{Binding ShowZeroByteResults, Mode=TwoWay}"/>
+                                                                            <MenuItem Header="Codec web (colonna Web)" ToggleType="CheckBox" IsChecked="{Binding ShowWebResults, Mode=TwoWay}"/>
+                                                                            <MenuItem Header="Lingua (colonna Lingua)" ToggleType="CheckBox" IsChecked="{Binding ShowLanguageResults, Mode=TwoWay}"/>
+                                                                            <Separator/>
+                                                                            <MenuItem Header="Mostra / nascondi tutti" Command="{Binding ToggleAllResultsCommand}"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconEye}"/></MenuItem.Icon></MenuItem>
+                                                                            <MenuItem Header="Riallinea esiti ora" Command="{Binding RealignResultsCommand}" ToolTip.Tip="Confronta gli esiti salvati con i file sul server (anche nelle sottocartelle): toglie quelli di file eliminati, segue quelli rinominati, segna da ricontrollare quelli cambiati"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconRefresh}"/></MenuItem.Icon></MenuItem>
+                                                                        </MenuFlyout>
+                                                                    </Button.Flyout>
+                                                                </Button>
+                                                            </StackPanel>
                                                             <ComboBox Grid.Column="5" ItemsSource="{Binding SortOptions}" SelectedItem="{Binding LocalSortOption, Mode=TwoWay}" MinWidth="110" Margin="0,0,6,0" ToolTip.Tip="Ordina per">
                                                                 <ComboBox.ItemTemplate>
                                                                     <DataTemplate x:DataType="models:SortOption">
@@ -2243,23 +2440,49 @@
                                                             </ComboBox>
                                                             <Button Grid.Column="6" Classes="iconCircle" Width="34" Command="{Binding ToggleLocalSortDirectionCommand}" ToolTip.Tip="Inverti direzione (crescente / decrescente)"><Panel><Path Classes="icon" Data="{StaticResource IconArrowUp}" IsVisible="{Binding LocalSortAscending}"/><Path Classes="icon" Data="{StaticResource IconArrowDown}" IsVisible="{Binding !LocalSortAscending}"/></Panel></Button>
                                                         </Grid>
-                                                        <!-- Statistiche e stato sulla stessa riga, ad altezza fissa: la tabella non si sposta -->
-                                                        <Grid Grid.Row="1" ColumnDefinitions="*, Auto" Margin="0,6,0,0" Height="18">
-                                                            <TextBlock Text="{Binding LocalBrowserStats}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" Margin="10,0,0,0" IsVisible="{Binding HasLocalStatus}">
-                                                                <Path Classes="icon accent" Width="12" Height="12" VerticalAlignment="Center" Data="{StaticResource IconRefresh}"/>
-                                                                <TextBlock Text="{Binding LocalStatusText}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AppAccentBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="420"/>
-                                                            </StackPanel>
+                                                        <!-- Statistiche a sinistra (larghezza del testo), stato a destra in tutto lo spazio che resta:
+                                                             altezza fissa, la tabella non si sposta e lo stato non si allarga/accorcia. Testo intero nel tooltip. -->
+                                                        <Grid Grid.Row="1" ColumnDefinitions="Auto, *" Margin="0,6,0,0" Height="20">
+                                                            <TextBlock Text="{Binding LocalBrowserStats}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center" MaxWidth="320" TextTrimming="CharacterEllipsis"/>
+                                                            <DockPanel Grid.Column="1" HorizontalAlignment="Right" Margin="16,0,0,0" IsVisible="{Binding HasLocalStatus}" Background="Transparent" ToolTip.Tip="{Binding LocalStatusText}">
+                                                                <Panel DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,6,0"><Path Classes="icon accent" Width="12" Height="12" Data="{StaticResource IconFilm}" IsVisible="{Binding ShowLocalVideoIcon}"/><Path Classes="icon accent" Width="12" Height="12" Data="{StaticResource IconRefresh}" IsVisible="{Binding !ShowLocalVideoIcon}"/></Panel>
+                                                                <TextBlock Text="{Binding LocalStatusText}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AppAccentBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                            </DockPanel>
                                                         </Grid>
                                                     </Grid>
                                                     <h:FillSlot>
-                                                    <DataGrid Name="LocalFilesGrid" MinHeight="0" ItemsSource="{Binding SftpLocalEntries}" ScrollViewer.HorizontalScrollBarVisibility="Auto" SelectedItem="{Binding SftpSelectedLocalEntry, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" SelectionChanged="OnLocalFilesSelectionChanged" DoubleTapped="OnSftpLocalEntryDoubleTapped" KeyDown="OnLocalGridKeyDown" DragDrop.AllowDrop="True" DragDrop.DragOver="OnLocalGridDragOver" DragDrop.Drop="OnLocalGridDrop" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False">
+                                                    <DataGrid Name="LocalFilesGrid" RowHeight="33" MinHeight="0" ItemsSource="{Binding SftpLocalEntries}" ScrollViewer.HorizontalScrollBarVisibility="Auto" SelectedItem="{Binding SftpSelectedLocalEntry, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" SelectionChanged="OnLocalFilesSelectionChanged" DoubleTapped="OnSftpLocalEntryDoubleTapped" KeyDown="OnLocalGridKeyDown" DragDrop.AllowDrop="True" DragDrop.DragOver="OnLocalGridDragOver" DragDrop.Drop="OnLocalGridDrop" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False">
                                                         <!-- Un solo menu per tutta la tabella (prima uno per riga, ricreato a ogni riga
                                                              riciclata durante lo scorrimento: era la causa dei blocchi scorrendo veloce) -->
+                                                        <DataGrid.Styles>
+                                                            <Style Selector="DataGridRow" x:DataType="models:LocalFileEntry">
+                                                                <Setter Property="Classes.webBad">
+                                                                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                                                        <Binding Path="IsWebBad"/>
+                                                                        <Binding Path="$parent[DataGrid].((vm:SftpTabViewModel)DataContext).ShowWebResults"/>
+                                                                    </MultiBinding>
+                                                                </Setter>
+                                                                <Setter Property="Classes.langBad">
+                                                                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                                                        <Binding Path="IsLangBad"/>
+                                                                        <Binding Path="$parent[DataGrid].((vm:SftpTabViewModel)DataContext).ShowLanguageResults"/>
+                                                                    </MultiBinding>
+                                                                </Setter>
+                                                                <Setter Property="Classes.zeroByte">
+                                                                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                                                        <Binding Path="HasZeroByteIssue"/>
+                                                                        <Binding Path="$parent[DataGrid].((vm:SftpTabViewModel)DataContext).ShowZeroByteResults"/>
+                                                                    </MultiBinding>
+                                                                </Setter>
+                                                            </Style>
+                                                        </DataGrid.Styles>
                                                         <DataGrid.ContextMenu>
                                                             <ContextMenu Opening="OnFileMenuOpening">
                                                                 <MenuItem Header="Apri" Tag="dir" Click="OnLocalOpenClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconFolder}"/></MenuItem.Icon></MenuItem>
                                                                 <MenuItem Header="Anteprima video" Tag="video" Click="OnLocalPreviewClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconPlayCircle}"/></MenuItem.Icon></MenuItem>
+                                                                <Separator/>
+                                                                <MenuItem Header="Controlla codec / lingua..." Click="OnLocalVideoCheckClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconFilm}"/></MenuItem.Icon></MenuItem>
+                                                                <MenuItem Header="Controlla file vuoti (0 byte)" Tag="dirs" Click="OnLocalZeroCheckClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconSearch}"/></MenuItem.Icon></MenuItem>
                                                                 <Separator/>
                                                                 <MenuItem Header="Rinomina" Click="OnLocalRenameClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconEdit}"/></MenuItem.Icon></MenuItem>
                                                                 <MenuItem Header="Duplica..." Click="OnLocalDuplicateClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconCopy}"/></MenuItem.Icon></MenuItem>
@@ -2279,8 +2502,58 @@
                                                                 </DataGridTemplateColumn.CellTemplate>
                                                             </DataGridTemplateColumn>
                                                             <DataGridTextColumn Header="Nome" Binding="{Binding Name}" Width="*" MinWidth="150"/>
-                                                            <DataGridTextColumn Header="Dim." Binding="{Binding SizeText}" Width="Auto" MinWidth="70"/>
-                                                            <DataGridTextColumn Header="Ultima modifica" Binding="{Binding Modified, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" Width="Auto" MinWidth="120"/>
+                                                            <DataGridTemplateColumn Header="Web" Width="170" MinWidth="90">
+                                                                <DataGridTemplateColumn.CellTemplate>
+                                                                    <DataTemplate x:DataType="models:LocalFileEntry">
+                                                                        <Panel>
+                                                                            <StackPanel Classes="bi" Margin="8,0" IsVisible="{Binding IsVideoChecking}" ToolTip.Tip="Il video (o un video in questa cartella) è in lettura">
+                                                                                <Path Classes="icon accent" Width="13" Height="13" Data="{StaticResource IconRefresh}"/>
+                                                                                <TextBlock Text="In lettura…" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource AppAccentBrush}"/>
+                                                                            </StackPanel>
+                                                                            <StackPanel Classes="bi" Margin="8,0" Background="Transparent" ToolTip.Tip="{Binding WebStreamDetail}" ToolTip.ShowDelay="300" IsVisible="{Binding ShowWebStreamInfo}">
+                                                                                <Panel VerticalAlignment="Center">
+                                                                                    <Path Classes="icon success" Width="13" Height="13" Data="{StaticResource IconCheckCircle}" IsVisible="{Binding IsWebOk}"/>
+                                                                                    <Path Classes="icon warn" Width="13" Height="13" Data="{StaticResource IconAlert}" IsVisible="{Binding IsWebWarn}"/>
+                                                                                    <Path Classes="icon danger" Width="13" Height="13" Data="{StaticResource IconBan}" IsVisible="{Binding IsWebBad}"/>
+                                                                                    <Path Classes="icon muted" Width="13" Height="13" Data="{StaticResource IconAlertCircle}" IsVisible="{Binding IsWebUnreadable}"/>
+                                                                                    <Path Classes="icon muted" Width="13" Height="13" Data="{StaticResource IconClock}" IsVisible="{Binding IsWebStale}"/>
+                                                                                </Panel>
+                                                                                <Panel VerticalAlignment="Center">
+                                                                                    <TextBlock Text="{Binding WebStreamInfo}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppSuccessBrush}" IsVisible="{Binding IsWebOk}"/>
+                                                                                    <TextBlock Text="{Binding WebStreamInfo}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppWarningBrush}" IsVisible="{Binding IsWebWarn}"/>
+                                                                                    <TextBlock Text="{Binding WebStreamInfo}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppDangerBrush}" IsVisible="{Binding IsWebBad}"/>
+                                                                                    <TextBlock Text="{Binding WebStreamInfo}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding IsWebUnreadable}"/>
+                                                                                    <TextBlock Text="{Binding WebStreamInfo}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding IsWebStale}"/>
+                                                                                </Panel>
+                                                                            </StackPanel>
+                                                                        </Panel>
+                                                                    </DataTemplate>
+                                                                </DataGridTemplateColumn.CellTemplate>
+                                                            </DataGridTemplateColumn>
+                                                            <DataGridTemplateColumn Header="Lingua" Width="150" MinWidth="80">
+                                                                <DataGridTemplateColumn.CellTemplate>
+                                                                    <DataTemplate x:DataType="models:LocalFileEntry">
+                                                                        <StackPanel Classes="bi" Margin="8,0" Background="Transparent" ToolTip.Tip="{Binding LangDetail}" ToolTip.ShowDelay="300" IsVisible="{Binding LangInfo, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                                                            <Panel VerticalAlignment="Center">
+                                                                                <Path Classes="icon success" Width="13" Height="13" Data="{StaticResource IconCheckCircle}" IsVisible="{Binding IsLangOk}"/>
+                                                                                <Path Classes="icon warn" Width="13" Height="13" Data="{StaticResource IconAlert}" IsVisible="{Binding IsLangWarn}"/>
+                                                                                <Path Classes="icon danger" Width="13" Height="13" Data="{StaticResource IconBan}" IsVisible="{Binding IsLangBad}"/>
+                                                                                <Path Classes="icon muted" Width="13" Height="13" Data="{StaticResource IconAlertCircle}" IsVisible="{Binding IsLangUnreadable}"/>
+                                                                                <Path Classes="icon muted" Width="13" Height="13" Data="{StaticResource IconClock}" IsVisible="{Binding IsLangStale}"/>
+                                                                            </Panel>
+                                                                            <Panel VerticalAlignment="Center">
+                                                                                <TextBlock Text="{Binding LangInfo}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppSuccessBrush}" IsVisible="{Binding IsLangOk}"/>
+                                                                                <TextBlock Text="{Binding LangInfo}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppWarningBrush}" IsVisible="{Binding IsLangWarn}"/>
+                                                                                <TextBlock Text="{Binding LangInfo}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppDangerBrush}" IsVisible="{Binding IsLangBad}"/>
+                                                                                <TextBlock Text="{Binding LangInfo}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding IsLangUnreadable}"/>
+                                                                                <TextBlock Text="{Binding LangInfo}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding IsLangStale}"/>
+                                                                            </Panel>
+                                                                        </StackPanel>
+                                                                    </DataTemplate>
+                                                                </DataGridTemplateColumn.CellTemplate>
+                                                            </DataGridTemplateColumn>
+                                                            <DataGridTextColumn Header="Dim." Binding="{Binding SizeText}" Width="90" MinWidth="70"/>
+                                                            <DataGridTextColumn Header="Ultima modifica" Binding="{Binding Modified, Mode=OneWay, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" Width="130" MinWidth="120"/>
                                                         </DataGrid.Columns>
                                                     </DataGrid>
                                                     </h:FillSlot>
@@ -2368,6 +2641,28 @@
                                                             <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="4" Margin="0,0,6,0">
                                                                 <Button Classes="iconCircle" Command="{Binding CheckZeroByteFoldersCommand}" IsEnabled="{Binding !IsCheckingZeroByte}" ToolTip.Tip="Analizza la cartella remota per trovare file vuoti (0 byte) da eliminare"><Path Classes="icon" Data="{StaticResource IconSearch}"/></Button>
                                                                 <Button Classes="iconCircle danger" Command="{Binding StopZeroByteCheckCommand}" IsVisible="{Binding IsCheckingZeroByte}" ToolTip.Tip="Ferma il check in corso"><Path Classes="icon" Data="{StaticResource IconStop}"/></Button>
+                                                                <Button Classes="iconCircle" Click="OnCheckWebStreamClick" IsEnabled="{Binding !IsCheckingWebStream}" ToolTip.Tip="Controlla i video di questa cartella e delle sottocartelle: codec per i player web, lingua dell'audio o entrambi (lo scegli nella finestra). I video già controllati e non cambiati si saltano. Tasto destro: ricontrolla tutto">
+                                                                    <Button.ContextMenu>
+                                                                        <ContextMenu>
+                                                                            <MenuItem Header="Ricontrolla tutti i video" Click="OnRecheckAllWebStreamClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconRepeat}"/></MenuItem.Icon></MenuItem>
+                                                                        </ContextMenu>
+                                                                    </Button.ContextMenu>
+                                                                    <Path Classes="icon" Data="{StaticResource IconFilm}"/>
+                                                                </Button>
+                                                                <Button Classes="iconCircle danger" Command="{Binding StopWebStreamCheckCommand}" IsVisible="{Binding IsCheckingWebStream}" ToolTip.Tip="Ferma il controllo dei video (gli esiti già trovati restano salvati)"><Path Classes="icon" Data="{StaticResource IconStop}"/></Button>
+                                                                <Button Classes="iconCircle" Classes.accent="{Binding !ShowsAllResults}" ToolTip.Tip="Esiti dei controlli da mostrare nelle tabelle (file vuoti, codec web, lingua). Evidenziato quando qualcosa è nascosto">
+                                                                    <Path Classes="icon" Data="{StaticResource IconEye}"/>
+                                                                    <Button.Flyout>
+                                                                        <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                                            <MenuItem Header="File vuoti (0 byte)" ToggleType="CheckBox" IsChecked="{Binding ShowZeroByteResults, Mode=TwoWay}"/>
+                                                                            <MenuItem Header="Codec web (colonna Web)" ToggleType="CheckBox" IsChecked="{Binding ShowWebResults, Mode=TwoWay}"/>
+                                                                            <MenuItem Header="Lingua (colonna Lingua)" ToggleType="CheckBox" IsChecked="{Binding ShowLanguageResults, Mode=TwoWay}"/>
+                                                                            <Separator/>
+                                                                            <MenuItem Header="Mostra / nascondi tutti" Command="{Binding ToggleAllResultsCommand}"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconEye}"/></MenuItem.Icon></MenuItem>
+                                                                            <MenuItem Header="Riallinea esiti ora" Command="{Binding RealignResultsCommand}" ToolTip.Tip="Confronta gli esiti salvati con i file sul server (anche nelle sottocartelle): toglie quelli di file eliminati, segue quelli rinominati, segna da ricontrollare quelli cambiati"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconRefresh}"/></MenuItem.Icon></MenuItem>
+                                                                        </MenuFlyout>
+                                                                    </Button.Flyout>
+                                                                </Button>
                                                             </StackPanel>
                                                             <ComboBox Grid.Column="6" ItemsSource="{Binding SortOptions}" SelectedItem="{Binding RemoteSortOption, Mode=TwoWay}" MinWidth="110" Margin="0,0,6,0" ToolTip.Tip="Ordina per">
                                                                 <ComboBox.ItemTemplate>
@@ -2379,27 +2674,49 @@
                                                             <Button Grid.Column="7" Classes="iconCircle" Width="34" Command="{Binding ToggleRemoteSortDirectionCommand}" ToolTip.Tip="Inverti direzione (crescente / decrescente)"><Panel><Path Classes="icon" Data="{StaticResource IconArrowUp}" IsVisible="{Binding RemoteSortAscending}"/><Path Classes="icon" Data="{StaticResource IconArrowDown}" IsVisible="{Binding !RemoteSortAscending}"/></Panel></Button>
                                                             <Button Grid.Column="8" Classes="iconCircle danger" Margin="6,0,0,0" Command="{Binding DisconnectActiveRemoteTabCommand}" ToolTip.Tip="Disconnetti il server di questa scheda e chiudi la scheda"><Path Classes="icon" Data="{StaticResource IconBoltOff}"/></Button>
                                                         </Grid>
-                                                        <!-- Statistiche e stato sulla stessa riga, ad altezza fissa: la tabella non si sposta -->
-                                                        <Grid Grid.Row="1" ColumnDefinitions="*, Auto" Margin="0,6,0,0" Height="18">
-                                                            <TextBlock Text="{Binding RemoteBrowserStats}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" Margin="10,0,0,0" IsVisible="{Binding HasRemoteStatus}">
-                                                                <Panel VerticalAlignment="Center"><Path Classes="icon accent" Width="12" Height="12" Data="{StaticResource IconSearch}" IsVisible="{Binding IsCheckingZeroByte}"/><Path Classes="icon accent" Width="12" Height="12" Data="{StaticResource IconRefresh}" IsVisible="{Binding !IsCheckingZeroByte}"/></Panel>
-                                                                <TextBlock Text="{Binding RemoteStatusText}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AppAccentBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="420"/>
-                                                            </StackPanel>
+                                                        <!-- Statistiche a sinistra (larghezza del testo), stato a destra in tutto lo spazio che resta:
+                                                             altezza fissa, la tabella non si sposta e lo stato non si allarga/accorcia. Testo intero nel tooltip. -->
+                                                        <Grid Grid.Row="1" ColumnDefinitions="Auto, *" Margin="0,6,0,0" Height="20">
+                                                            <TextBlock Text="{Binding RemoteBrowserStats}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center" MaxWidth="320" TextTrimming="CharacterEllipsis"/>
+                                                            <DockPanel Grid.Column="1" HorizontalAlignment="Right" Margin="16,0,0,0" IsVisible="{Binding HasRemoteStatus}" Background="Transparent" ToolTip.Tip="{Binding RemoteStatusTooltip}">
+                                                                <Button DockPanel.Dock="Right" Classes="iconCircle danger" Width="20" Height="20" MinHeight="20" Margin="8,0,0,0" Padding="0" Command="{Binding StopRemoteDeleteCommand}" IsVisible="{Binding IsDeletingRemote}" ToolTip.Tip="Ferma l'eliminazione"><Path Classes="icon" Width="8" Height="8" Data="{StaticResource IconStop}"/></Button>
+                                                                <Panel DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,6,0"><Path Classes="icon accent" Width="12" Height="12" Data="{StaticResource IconTrash}" IsVisible="{Binding IsDeletingRemote}"/><Path Classes="icon accent" Width="12" Height="12" Data="{StaticResource IconSearch}" IsVisible="{Binding ShowZeroByteStatusIcon}"/><Path Classes="icon accent" Width="12" Height="12" Data="{StaticResource IconFilm}" IsVisible="{Binding ShowWebStreamStatusIcon}"/><Path Classes="icon accent" Width="12" Height="12" Data="{StaticResource IconGlobe}" IsVisible="{Binding ShowLanguageStatusIcon}"/><Path Classes="icon accent" Width="12" Height="12" Data="{StaticResource IconRefresh}" IsVisible="{Binding ShowRefreshStatusIcon}"/></Panel>
+                                                                <TextBlock Text="{Binding RemoteStatusText}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AppAccentBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                            </DockPanel>
                                                         </Grid>
                                                     </Grid>
 
                                                     <h:FillSlot>
-                                                    <DataGrid Name="RemoteFilesGrid" MinHeight="0" ItemsSource="{Binding SftpRemoteEntries}" ScrollViewer.HorizontalScrollBarVisibility="Auto" SelectedItem="{Binding SftpSelectedRemoteEntry, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" SelectionChanged="OnRemoteFilesSelectionChanged" DoubleTapped="OnSftpEntryDoubleTapped" KeyDown="OnRemoteGridKeyDown" DragDrop.AllowDrop="True" DragDrop.DragOver="OnRemoteGridDragOver" DragDrop.Drop="OnRemoteGridDrop" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False">
+                                                    <DataGrid Name="RemoteFilesGrid" RowHeight="33" MinHeight="0" ItemsSource="{Binding SftpRemoteEntries}" ScrollViewer.HorizontalScrollBarVisibility="Auto" SelectedItem="{Binding SftpSelectedRemoteEntry, Mode=TwoWay}" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Extended" SelectionChanged="OnRemoteFilesSelectionChanged" DoubleTapped="OnSftpEntryDoubleTapped" KeyDown="OnRemoteGridKeyDown" DragDrop.AllowDrop="True" DragDrop.DragOver="OnRemoteGridDragOver" DragDrop.Drop="OnRemoteGridDrop" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False">
                                                         <DataGrid.Styles>
                                                             <Style Selector="DataGridRow" x:DataType="models:SftpRemoteEntry">
-                                                                <Setter Property="Classes.zeroByte" Value="{Binding HasZeroByteIssue}"/>
+                                                                <Setter Property="Classes.webBad">
+                                                                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                                                        <Binding Path="IsWebBad"/>
+                                                                        <Binding Path="$parent[DataGrid].((vm:SftpTabViewModel)DataContext).ShowWebResults"/>
+                                                                    </MultiBinding>
+                                                                </Setter>
+                                                                <Setter Property="Classes.langBad">
+                                                                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                                                        <Binding Path="IsLangBad"/>
+                                                                        <Binding Path="$parent[DataGrid].((vm:SftpTabViewModel)DataContext).ShowLanguageResults"/>
+                                                                    </MultiBinding>
+                                                                </Setter>
+                                                                <Setter Property="Classes.zeroByte">
+                                                                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                                                        <Binding Path="HasZeroByteIssue"/>
+                                                                        <Binding Path="$parent[DataGrid].((vm:SftpTabViewModel)DataContext).ShowZeroByteResults"/>
+                                                                    </MultiBinding>
+                                                                </Setter>
                                                             </Style>
                                                         </DataGrid.Styles>
                                                         <DataGrid.ContextMenu>
                                                             <ContextMenu Opening="OnFileMenuOpening">
                                                                 <MenuItem Header="Apri" Tag="dir" Click="OnRemoteOpenClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconFolder}"/></MenuItem.Icon></MenuItem>
                                                                 <MenuItem Header="Anteprima video" Tag="video" Click="OnRemotePreviewClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconPlayCircle}"/></MenuItem.Icon></MenuItem>
+                                                                <Separator/>
+                                                                <MenuItem Header="Controlla codec / lingua..." Click="OnRemoteVideoCheckClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconFilm}"/></MenuItem.Icon></MenuItem>
+                                                                <MenuItem Header="Controlla file vuoti (0 byte)" Tag="dirs" Click="OnRemoteZeroCheckClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconSearch}"/></MenuItem.Icon></MenuItem>
                                                                 <Separator/>
                                                                 <MenuItem Header="Rinomina" Click="OnRemoteRenameClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconEdit}"/></MenuItem.Icon></MenuItem>
                                                                 <MenuItem Header="Duplica..." Click="OnRemoteDuplicateClick"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconCopy}"/></MenuItem.Icon></MenuItem>
@@ -2420,9 +2737,59 @@
                                                                 </DataGridTemplateColumn.CellTemplate>
                                                             </DataGridTemplateColumn>
                                                             <DataGridTextColumn Header="Nome" Binding="{Binding Name}" Width="*" MinWidth="150"/>
-                                                            <DataGridTextColumn Header="Contenuto" Binding="{Binding ContentsInfo}" Width="Auto" MinWidth="100"/>
-                                                            <DataGridTextColumn Header="Dim." Binding="{Binding SizeText}" Width="Auto" MinWidth="70"/>
-                                                            <DataGridTextColumn Header="Ultima modifica" Binding="{Binding Modified, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" Width="Auto" MinWidth="120"/>
+                                                            <DataGridTemplateColumn Header="Web" Width="170" MinWidth="90">
+                                                                <DataGridTemplateColumn.CellTemplate>
+                                                                    <DataTemplate x:DataType="models:SftpRemoteEntry">
+                                                                        <Panel>
+                                                                            <StackPanel Classes="bi" Margin="8,0" IsVisible="{Binding IsVideoChecking}" ToolTip.Tip="Il video (o un video in questa cartella) è in lettura">
+                                                                                <Path Classes="icon accent" Width="13" Height="13" Data="{StaticResource IconRefresh}"/>
+                                                                                <TextBlock Text="In lettura…" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource AppAccentBrush}"/>
+                                                                            </StackPanel>
+                                                                            <StackPanel Classes="bi" Margin="8,0" Background="Transparent" ToolTip.Tip="{Binding WebStreamDetail}" ToolTip.ShowDelay="300" IsVisible="{Binding ShowWebStreamInfo}">
+                                                                                <Panel VerticalAlignment="Center">
+                                                                                    <Path Classes="icon success" Width="13" Height="13" Data="{StaticResource IconCheckCircle}" IsVisible="{Binding IsWebOk}"/>
+                                                                                    <Path Classes="icon warn" Width="13" Height="13" Data="{StaticResource IconAlert}" IsVisible="{Binding IsWebWarn}"/>
+                                                                                    <Path Classes="icon danger" Width="13" Height="13" Data="{StaticResource IconBan}" IsVisible="{Binding IsWebBad}"/>
+                                                                                    <Path Classes="icon muted" Width="13" Height="13" Data="{StaticResource IconAlertCircle}" IsVisible="{Binding IsWebUnreadable}"/>
+                                                                                    <Path Classes="icon muted" Width="13" Height="13" Data="{StaticResource IconClock}" IsVisible="{Binding IsWebStale}"/>
+                                                                                </Panel>
+                                                                                <Panel VerticalAlignment="Center">
+                                                                                    <TextBlock Text="{Binding WebStreamInfo}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppSuccessBrush}" IsVisible="{Binding IsWebOk}"/>
+                                                                                    <TextBlock Text="{Binding WebStreamInfo}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppWarningBrush}" IsVisible="{Binding IsWebWarn}"/>
+                                                                                    <TextBlock Text="{Binding WebStreamInfo}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppDangerBrush}" IsVisible="{Binding IsWebBad}"/>
+                                                                                    <TextBlock Text="{Binding WebStreamInfo}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding IsWebUnreadable}"/>
+                                                                                    <TextBlock Text="{Binding WebStreamInfo}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding IsWebStale}"/>
+                                                                                </Panel>
+                                                                            </StackPanel>
+                                                                        </Panel>
+                                                                    </DataTemplate>
+                                                                </DataGridTemplateColumn.CellTemplate>
+                                                            </DataGridTemplateColumn>
+                                                            <DataGridTemplateColumn Header="Lingua" Width="150" MinWidth="80">
+                                                                <DataGridTemplateColumn.CellTemplate>
+                                                                    <DataTemplate x:DataType="models:SftpRemoteEntry">
+                                                                        <StackPanel Classes="bi" Margin="8,0" Background="Transparent" ToolTip.Tip="{Binding LangDetail}" ToolTip.ShowDelay="300" IsVisible="{Binding LangInfo, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                                                            <Panel VerticalAlignment="Center">
+                                                                                <Path Classes="icon success" Width="13" Height="13" Data="{StaticResource IconCheckCircle}" IsVisible="{Binding IsLangOk}"/>
+                                                                                <Path Classes="icon warn" Width="13" Height="13" Data="{StaticResource IconAlert}" IsVisible="{Binding IsLangWarn}"/>
+                                                                                <Path Classes="icon danger" Width="13" Height="13" Data="{StaticResource IconBan}" IsVisible="{Binding IsLangBad}"/>
+                                                                                <Path Classes="icon muted" Width="13" Height="13" Data="{StaticResource IconAlertCircle}" IsVisible="{Binding IsLangUnreadable}"/>
+                                                                                <Path Classes="icon muted" Width="13" Height="13" Data="{StaticResource IconClock}" IsVisible="{Binding IsLangStale}"/>
+                                                                            </Panel>
+                                                                            <Panel VerticalAlignment="Center">
+                                                                                <TextBlock Text="{Binding LangInfo}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppSuccessBrush}" IsVisible="{Binding IsLangOk}"/>
+                                                                                <TextBlock Text="{Binding LangInfo}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppWarningBrush}" IsVisible="{Binding IsLangWarn}"/>
+                                                                                <TextBlock Text="{Binding LangInfo}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppDangerBrush}" IsVisible="{Binding IsLangBad}"/>
+                                                                                <TextBlock Text="{Binding LangInfo}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding IsLangUnreadable}"/>
+                                                                                <TextBlock Text="{Binding LangInfo}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding IsLangStale}"/>
+                                                                            </Panel>
+                                                                        </StackPanel>
+                                                                    </DataTemplate>
+                                                                </DataGridTemplateColumn.CellTemplate>
+                                                            </DataGridTemplateColumn>
+                                                            <DataGridTextColumn Header="Contenuto" Binding="{Binding ContentsInfo}" Width="190" MinWidth="100"/>
+                                                            <DataGridTextColumn Header="Dim." Binding="{Binding SizeText}" Width="90" MinWidth="70"/>
+                                                            <DataGridTextColumn Header="Ultima modifica" Binding="{Binding Modified, Mode=OneWay, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" Width="130" MinWidth="120"/>
                                                         </DataGrid.Columns>
                                                     </DataGrid>
                                                     </h:FillSlot>
@@ -2492,7 +2859,7 @@
                                                 </Grid>
                                                 <StackPanel Orientation="Horizontal" Spacing="10">
                                                     <TextBlock Text="Upload paralleli:" VerticalAlignment="Center"/>
-                                                    <Slider Value="{Binding SftpMaxUploadConcurrency}" Minimum="1" Maximum="16" Width="140" TickFrequency="1" IsSnapToTickEnabled="True"/>
+                                                    <Slider Value="{Binding SftpMaxUploadConcurrency}" Minimum="1" Maximum="6" Width="140" TickFrequency="1" IsSnapToTickEnabled="True" ToolTip.Tip="Al massimo 6: le connessioni verso un server sono 8 in tutto e due restano al browser dei file (e ai controlli), così il server non rifiuta connessioni"/>
                                                     <TextBlock Text="{Binding SftpMaxUploadConcurrency}" Width="28" VerticalAlignment="Center" FontWeight="Bold" Foreground="{DynamicResource AppAccentBrush}"/>
                                                 </StackPanel>
                                                 <TextBlock Text="{Binding UploadQueueStats}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" FontStyle="Italic"/>
@@ -2578,7 +2945,7 @@
                                                 </Grid>
                                                 <StackPanel Orientation="Horizontal" Spacing="10">
                                                     <TextBlock Text="Download paralleli:" VerticalAlignment="Center"/>
-                                                    <Slider Value="{Binding SftpMaxDownloadConcurrency}" Minimum="1" Maximum="16" Width="140" TickFrequency="1" IsSnapToTickEnabled="True"/>
+                                                    <Slider Value="{Binding SftpMaxDownloadConcurrency}" Minimum="1" Maximum="6" Width="140" TickFrequency="1" IsSnapToTickEnabled="True" ToolTip.Tip="Al massimo 6: le connessioni verso un server sono 8 in tutto e due restano al browser dei file (e ai controlli), così il server non rifiuta connessioni"/>
                                                     <TextBlock Text="{Binding SftpMaxDownloadConcurrency}" Width="28" VerticalAlignment="Center" FontWeight="Bold" Foreground="{DynamicResource AppAccentBrush}"/>
                                                 </StackPanel>
                                                 <TextBlock Text="{Binding DownloadQueueStats}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" FontStyle="Italic"/>
@@ -2748,50 +3115,83 @@
                     <Panel DataContext="{Binding Videobox}">
                     <ScrollViewer VerticalScrollBarVisibility="Auto" h:StickyBanner.Overlay="{Binding #VideoboxStickyBanner}">
                     <h:FillViewportPanel>
-                    <Grid RowDefinitions="Auto, Auto, Auto, *" Margin="0,10,0,10">
+                    <Grid RowDefinitions="Auto, Auto, Auto, Auto, *" Margin="0,10,0,10">
 
                         <!-- STATUS (in alto, sopra la guida) -->
                         <ContentControl Grid.Row="0" Theme="{StaticResource StatusBannerTheme}" Content="{Binding StatusMessage}" IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
 
                         <!-- GUIDA VIDEOBOX -->
-                        <Border Grid.Row="1" Classes="cardElevated" Margin="0,0,0,10" Padding="0" ClipToBounds="True">
+                        <Border Grid.Row="1" Classes="cardElevated" Margin="0,0,0,10" Padding="0" ClipToBounds="True" x:Name="VbGuideCard">
                             <StackPanel>
                                 <ToggleButton Classes="guideToggle" x:Name="ToggleGuideVideobox" IsChecked="False">
                                     <Grid ColumnDefinitions="*, Auto">
                                         <StackPanel Classes="bi">
                                             <Path Classes="icon accent" Data="{StaticResource IconBulb}"/>
-                                            <TextBlock Text="Guida rapida - Videobox Corrector" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AppTextBrush}"/>
+                                            <TextBlock Text="Guida - Videobox Corrector" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AppTextBrush}"/>
                                         </StackPanel>
                                         <Path Grid.Column="1" Classes="chevron"/>
                                     </Grid>
                                 </ToggleButton>
                                 <Border IsVisible="{Binding #ToggleGuideVideobox.IsChecked}" Background="Transparent" Margin="16,0,16,16" Padding="12,12,4,12">
-                                    <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
+                                    <ScrollViewer MaxHeight="420" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
                                     <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}">
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">A cosa serve</Run><LineBreak/>
-                                        Corregge i link video dei post del forum (Invision Community): confronta i link di ogni post con i file presenti sul server SFTP e genera i nuovi link sul dominio corretto.<LineBreak/>
+                                        Videobox Corrector sistema i post del forum (Invision Community). Ha due modalità, che scegli con il selettore in alto:<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Mappatura:</Run> confronta i link video di ogni post con i file sui server SFTP e genera i link nuovi sul dominio giusto.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Titoli TMDB (beta):</Run> propone il titolo di ogni post secondo TMDB e controlla il numero di episodi.<LineBreak/>
                                         <LineBreak/>
-                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Come si usa</Run><LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 1. Configura:</Run> apri "Impostazioni e Domini", compila URL e API Key del forum e aggiungi le <Run FontWeight="SemiBold">sorgenti SFTP</Run>: per ognuna la connessione (un profilo della tab SFTP, anche su server diversi), la cartella sul server, il dominio e il percorso pubblico. L'anteprima mostra il link che verrà generato. Salva.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 2. Carica i post:</Run> scegli una categoria: "Carica Pag." carica 50 post, "Carica Tutti" li carica tutti a blocchi. Con la ricerca e i filtri colorati sotto (clic su un colore per mostrarlo o nasconderlo, "Da sistemare" nasconde i verdi) restano solo i post che ti interessano.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 3. Carica l'albero:</Run> scegli dal menu <Run FontWeight="SemiBold">Sorgenti</Run> quali caricare (la scelta resta salvata e vale per tutte le categorie: cambiando categoria alberi e spunte non cambiano) e premi "Carica": ogni sorgente compare come radice dell'albero, e i colori confrontano i post con i file di tutte. Dopo il caricamento l'albero si aggiorna da solo.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 4. Mappa:</Run> seleziona un post, clicca la cartella con i suoi episodi (o un singolo file, per i film) e premi "Mappa": i link vengono abbinati ai file in ordine naturale, col dominio della sorgente del file. Funziona anche con i post <Run FontWeight="SemiBold">senza link</Run>: viene creata una riga per ogni file. Per un film in più parti mappa un file alla volta: va sulla riga selezionata e poi passa alla successiva. Col clic destro puoi copiare titoli, percorsi e link.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 5. Controlla:</Run> ogni riga mostra il file che il post ha ora sul forum e quello che diventerà (in grande il nome del file, sotto server e cartella; l'indirizzo completo passando il mouse). Sopra la tabella i conteggi e un riepilogo: verde se file e link coincidono, arancione se no. Con le frecce di "Ordine" scambi gli abbinamenti. La spunta "Usa" decide cosa va sul forum: una riga senza spunta viene tolta dal post ("verrà tolto dal post"); I file hanno la precedenza: dopo "Mappa" (cartella o singolo file) le righe rimaste senza file perdono la spunta e vengono tolte; se i file sono più dei link, quelli mancanti vengono aggiunti. Per un film in più parti mappa un file alla volta: ognuno riprende la spunta sulla sua riga. Se rimetti la spunta a una riga senza file, quella resta com'è. Con Ctrl (righe sparse) o Maiusc (un intervallo) selezioni più righe: Spazio, o il clic destro, mette o toglie la spunta a tutte insieme.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 6. Applica:</Run> invia al forum i nuovi link e il titolo. La tabella si ricarica con i link salvati dal forum: ogni riga dice "✓ salvato sul forum" (verde) oppure "inviato, non ancora confermato" (arancione, aggiunta in fondo se il forum non l'ha restituita). Il post resta aperto e selezionato anche se diventa verde e i verdi sono nascosti. Sotto i conteggi compare il riepilogo dell'ultimo invio, con quanti link il forum ha salvato davvero.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Rinomina:</Run> il titolo del post in alto si può modificare: "Rinomina" cambia solo il titolo e lascia i link come sono sul forum.<LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Mappatura: come si usa</Run><LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 1. Configura:</Run> in "Impostazioni e Domini" inserisci URL e API Key del forum e aggiungi le sorgenti SFTP: per ognuna il profilo (della tab SFTP, anche su server diversi), la cartella sul server, il dominio e il percorso pubblico. L'anteprima mostra il link che verrà generato. Salva.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 2. Carica i post:</Run> scegli una categoria. "Carica Pag." carica 50 post, "Carica Tutti" li carica tutti a blocchi. Ricerca e filtri colorati (clic su un colore per mostrarlo o nasconderlo; "Da sistemare" nasconde i verdi) lasciano solo i post che ti interessano.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 3. Carica l'albero:</Run> dal menu "Sorgenti" scegli quali caricare (la scelta resta salvata e vale per tutte le categorie) e premi "Carica". Ogni sorgente è una radice dell'albero; i colori confrontano i post con i file di tutte.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 4. Mappa:</Run> seleziona un post, clicca la cartella con i suoi episodi (o un singolo file, per i film) e premi "Mappa": i link si abbinano ai file in ordine naturale, col dominio della sorgente. Funziona anche con i post senza link (una riga per file). Per un film in più parti mappa un file alla volta.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 5. Controlla:</Run> ogni riga mostra il file attuale sul forum e quello nuovo (nome in grande, sotto server e cartella; l'indirizzo completo col mouse). Sopra la tabella conteggi e riepilogo: verde se file e link coincidono, arancione se no. Le frecce di "Ordine" scambiano gli abbinamenti.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 6. Applica:</Run> invia al forum i nuovi link e il titolo. La tabella si ricarica con quanto salvato: "✓ salvato sul forum" (verde) oppure "inviato, non ancora confermato" (arancione). Il post resta selezionato anche se diventa verde.<LineBreak/>
+                                        <LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Mappatura: dettagli utili</Run><LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Spunta "Usa":</Run> decide cosa va sul forum; una riga senza spunta viene tolta dal post. Dopo "Mappa" le righe senza file perdono la spunta; se i file sono più dei link, quelli mancanti si aggiungono.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Più righe insieme:</Run> Ctrl (righe sparse) o Maiusc (intervallo), poi Spazio o il clic destro per mettere o togliere la spunta a tutte.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Rinomina:</Run> il titolo del post in alto si può modificare; "Rinomina" cambia solo il titolo e lascia i link come sono.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Copia:</Run> col clic destro copi titoli, percorsi e link.<LineBreak/>
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Significato dei colori</Run><LineBreak/>
                                         <Run Text="●" Foreground="#22C55E"/> <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">Verde:</Run> tutti i link puntano a un dominio valido.<LineBreak/>
                                         <Run Text="●" Foreground="#F59E0B"/> <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">Arancione:</Run> link misti, alcuni validi e altri vecchi.<LineBreak/>
                                         <Run Text="●" Foreground="#EF4444"/> <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">Rosso:</Run> link tutti vecchi, oppure file senza nessun link.<LineBreak/>
-                                        <Run Text="●" Foreground="#A855F7"/> <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">Viola:</Run> mismatch, il numero di link del post è diverso dal numero di file nella cartella. Il confronto si fa con la cartella della sorgente che ha lo stesso dominio del link: due sorgenti con lo stesso percorso su server diversi (es. "Anime" su DDL 1 e DDL 2) non si confondono.<LineBreak/>
-                                        <Run Text="●" Foreground="Gray"/> <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">Grigio:</Run> post senza link video (si possono mappare lo stesso: vedi il punto 4).<LineBreak/>
+                                        <Run Text="●" Foreground="#A855F7"/> <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">Viola:</Run> il numero di link del post è diverso dal numero di file nella cartella. Si confronta con la sorgente che ha lo stesso dominio del link: due sorgenti con lo stesso percorso su server diversi non si confondono.<LineBreak/>
+                                        <Run Text="●" Foreground="Gray"/> <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">Grigio:</Run> post senza link video (si possono mappare lo stesso, vedi il punto 4).<LineBreak/>
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Aggiornamenti automatici</Run><LineBreak/>
-                                        L'albero si aggiorna da solo quando i file cambiano (dall'app subito, dall'esterno ogni minuto); i post visibili si rileggono dal forum ogni 30 secondi (titoli e link modificati, post nuovi o eliminati) senza perdere la selezione.
+                                        L'albero si aggiorna da solo quando i file cambiano (dall'app subito, da fuori ogni minuto). I post visibili si rileggono dal forum ogni 30 secondi (titoli e link modificati, post nuovi o eliminati) senza perdere la selezione.<LineBreak/>
+                                        <LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Titoli TMDB (beta)</Run><LineBreak/>
+                                        Funzione ancora in prova: controlla sempre i titoli proposti prima di rinominare. Serve una chiave TMDB, da inserire in "Impostazioni" quando sei in Titoli TMDB.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Passi:</Run> 1 carica i post di una categoria, 2 analizza, 3 controlla con filtri e ricerca. Il passo da fare è blu, quelli fatti sono verdi.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Analizza:</Run> il codice TMDB si legge dalla pagina del post, a ritmo calmo; se manca si cerca per titolo e il post va "da confermare". La seconda volta è immediata (codici e pagine sono in memoria). L'analisi non modifica niente sul forum.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Stagione:</Run> dalla pagina del post, poi dal titolo, poi dal numero di episodi (da confermare). Gli speciali usano la stagione 0 di TMDB.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Filtri:</Run> Da rinominare, Episodi diversi da TMDB (mancanti o in più), In corso (stagione in onda o link cresciuti negli ultimi 30 giorni), Da confermare, Non trovati, Già corretti, Titolo manuale, Saltati.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Cerca:</Run> nel titolo attuale, in quello proposto, nel nome TMDB (anche originale), nel numero del post o nel codice TMDB; si combina con il filtro.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Pattern:</Run> in "Pattern dei titoli"; il pulsante "?" elenca i segnaposto (Titolo, Episodi, Totale, Anno, Stagione, Lingua, In Corso…). "Applica pattern" ricalcola subito; i pezzi vuoti spariscono con le loro parentesi.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Correzioni:</Run> nel dettaglio puoi scrivere il titolo a mano (resta anche cambiando pattern), scegliere un'altra stagione o indicare il codice TMDB giusto. Le scelte restano salvate.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Rinomina:</Run> "Rinomina selezionati" cambia i titoli dei post spuntati, uno alla volta. Ogni post si rilegge prima (se è cambiato dopo l'analisi si salta) e si ricontrolla dopo: se cambiasse altro oltre al titolo si ferma tutto. Dopo 3 errori di fila va in pausa; Stop si ferma dopo il post in corso.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Annulla:</Run> "Annulla ultima rinomina" rimette i titoli di prima, solo ai post che nessuno ha modificato dopo. Il registro resta nel PC.
                                     </TextBlock>
                                     </ScrollViewer>
                                 </Border>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Mappatura | Titoli TMDB -->
+                        <Border Grid.Row="3" HorizontalAlignment="Left" Background="{DynamicResource AppTabTrackBrush}" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" CornerRadius="12" Padding="3" Margin="0,0,0,10">
+                            <StackPanel Orientation="Horizontal" Spacing="2">
+                                <ToggleButton Classes="modeTab" IsChecked="{Binding !IsTmdbMode, Mode=OneWay}" Command="{Binding ShowMappingCommand}"
+                                              ToolTip.Tip="Mappatura dei link dei post con i file sui server SFTP">
+                                    <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconLayers}"/><TextBlock Text="Mappatura"/></StackPanel>
+                                </ToggleButton>
+                                <ToggleButton Classes="modeTab" IsChecked="{Binding IsTmdbMode, Mode=OneWay}" Command="{Binding ShowTmdbCommand}"
+                                              ToolTip.Tip="Titoli dei post secondo TMDB e controllo del numero di episodi">
+                                    <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconFilm}"/><TextBlock Text="Titoli TMDB"/></StackPanel>
+                                </ToggleButton>
                             </StackPanel>
                         </Border>
 
@@ -2801,7 +3201,8 @@
                                     <Grid ColumnDefinitions="*, Auto">
                                         <StackPanel Classes="bi">
                                             <Path Classes="icon accent" Data="{StaticResource IconSettings}"/>
-                                            <TextBlock Text="Impostazioni e Domini" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AppTextBrush}"/>
+                                            <TextBlock Text="Impostazioni e Domini" IsVisible="{Binding !IsTmdbMode}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AppTextBrush}"/>
+                                            <TextBlock Text="Impostazioni (forum e TMDB)" IsVisible="{Binding IsTmdbMode}" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AppTextBrush}"/>
                                         </StackPanel>
                                         <Path Grid.Column="1" Classes="chevron"/>
                                     </Grid>
@@ -2833,8 +3234,48 @@
                                             </StackPanel>
                                         </Border>
 
+                                        <!-- TMDB (solo in "Titoli TMDB") -->
+                                        <Border Classes="card" IsVisible="{Binding IsTmdbMode}">
+                                            <StackPanel Spacing="12" DataContext="{Binding Tmdb}" x:DataType="vm:TmdbTitlesViewModel">
+                                                <Grid ColumnDefinitions="*, Auto">
+                                                    <StackPanel Spacing="2">
+                                                        <StackPanel Classes="bi">
+                                                            <Path Classes="icon accent" Data="{StaticResource IconFilm}"/>
+                                                            <TextBlock Text="TMDB" FontWeight="Bold" FontSize="13"/>
+                                                        </StackPanel>
+                                                        <TextBlock Text="La chiave si crea gratis su themoviedb.org → Impostazioni → API: va bene sia la «Chiave API» sia il «Token di lettura». Viene salvata cifrata nel PC." FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="12,0,0,0">
+                                                        <Panel VerticalAlignment="Center">
+                                                            <Border Width="24" Height="24" CornerRadius="12" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1" IsVisible="{Binding TmdbTone, Converter={x:Static h:ToneConverters.Is}, ConverterParameter=off}">
+                                                                <Path Classes="icon" Data="{StaticResource IconMinusCircle}" Width="12" Height="12" Stroke="{DynamicResource AppTextMutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                            </Border>
+                                                            <Border Width="24" Height="24" CornerRadius="12" Background="{DynamicResource AppSuccessSoftBrush}" IsVisible="{Binding TmdbTone, Converter={x:Static h:ToneConverters.Is}, ConverterParameter=premium}">
+                                                                <Path Classes="icon" Data="{StaticResource IconCheck}" Width="11" Height="11" Stroke="{DynamicResource AppSuccessBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                            </Border>
+                                                            <Border Width="24" Height="24" CornerRadius="12" Background="{DynamicResource AppWarningSoftBrush}" IsVisible="{Binding TmdbTone, Converter={x:Static h:ToneConverters.Is}, ConverterParameter=limited}">
+                                                                <Path Classes="icon" Data="{StaticResource IconAlert}" Width="12" Height="12" Stroke="{DynamicResource AppWarningBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                            </Border>
+                                                        </Panel>
+                                                        <TextBlock Text="{Binding TmdbBadge}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                                <Grid ColumnDefinitions="Auto, *">
+                                                    <TextBlock Text="Chiave" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                                    <TextBox Grid.Column="1" Text="{Binding TmdbKey, Mode=TwoWay}" PasswordChar="•" PlaceholderText="Chiave API (32 caratteri) o Token di lettura (eyJ...)"/>
+                                                </Grid>
+                                                <WrapPanel Orientation="Horizontal" ItemSpacing="8" LineSpacing="6">
+                                                    <Button Classes="success" Command="{Binding SaveTmdbKeyCommand}" IsEnabled="{Binding !IsTmdbBusy}" ToolTip.Tip="Controlla la chiave con TMDB e, se funziona, la salva"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconSave}"/><TextBlock Text="Verifica e salva"/></StackPanel></Button>
+                                                    <Button Classes="info" Command="{Binding TestTmdbKeyCommand}" IsEnabled="{Binding !IsTmdbBusy}" IsVisible="{Binding HasTmdbKey}" ToolTip.Tip="Controlla che la chiave salvata funzioni ancora"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconSearch}"/><TextBlock Text="Verifica chiave"/></StackPanel></Button>
+                                                    <Button Classes="danger" Command="{Binding DeleteTmdbKeyCommand}" IsEnabled="{Binding !IsTmdbBusy}" IsVisible="{Binding HasTmdbKey}" ToolTip.Tip="Rimuove la chiave dal PC"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconTrash}"/><TextBlock Text="Elimina chiave"/></StackPanel></Button>
+                                                </WrapPanel>
+                                                <ContentControl Theme="{StaticResource StatusBannerTheme}" Content="{Binding TmdbStatusMessage}"/>
+                                            </StackPanel>
+                                        </Border>
+
+
                                         <!-- SORGENTI SFTP -->
-                                        <Border Classes="card">
+                                        <Border Classes="card" IsVisible="{Binding !IsTmdbMode}">
                                             <StackPanel Spacing="12">
                                                 <Grid ColumnDefinitions="*, Auto">
                                                     <StackPanel Spacing="2">
@@ -2912,7 +3353,7 @@
                                         </Border>
 
                                         <!-- DOMINI SECONDARI -->
-                                        <Border Classes="card">
+                                        <Border Classes="card" IsVisible="{Binding !IsTmdbMode}">
                                             <StackPanel Spacing="10">
                                                 <Grid ColumnDefinitions="*, Auto">
                                                     <StackPanel Spacing="2">
@@ -2949,7 +3390,7 @@
                                         </Border>
 
                                         <Grid ColumnDefinitions="*, Auto">
-                                            <StackPanel Classes="bi" VerticalAlignment="Center">
+                                            <StackPanel Classes="bi" VerticalAlignment="Center" IsVisible="{Binding !IsTmdbMode}">
                                                 <Path Classes="icon" Data="{StaticResource IconInfo}"/>
                                                 <TextBlock Text="Dopo il salvataggio i colori di post e albero vengono ricalcolati." FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center"/>
                                             </StackPanel>
@@ -2962,7 +3403,7 @@
                             </StackPanel>
                         </Border>
 
-                        <Grid Grid.Row="3" ColumnDefinitions="340, 10, 300, 10, *">
+                        <Grid Grid.Row="4" ColumnDefinitions="340, 10, 300, 10, *" IsVisible="{Binding !IsTmdbMode}">
 
                             <Grid Grid.Column="0" RowDefinitions="Auto, Auto, *">
                                 <Border Classes="cardElevated" Padding="10" Margin="0,0,0,10">
@@ -3314,7 +3755,7 @@
                                                     </Border>
                                                 </WrapPanel>
                                             </StackPanel>
-                                            <Button Grid.Column="1" Classes="success" VerticalAlignment="Top" Command="{Binding ApplyUpdatesAsync}" IsEnabled="{Binding HasMappingItems}" ToolTip.ShowOnDisabled="True"
+                                            <Button Grid.Column="1" Classes="success" VerticalAlignment="Top" Command="{Binding ApplyUpdatesCommand}" IsEnabled="{Binding HasMappingItems}" ToolTip.ShowOnDisabled="True"
                                                     ToolTip.Tip="Invia i nuovi link (e il titolo) a Videobox. I link deselezionati verranno rimossi dal post. Si attiva quando la tabella contiene dei link. Suggerimento: con Ctrl o Maiusc selezioni più righe, poi Spazio (o clic destro) per metterle o toglierle tutte insieme.">
                                                 <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCheck}"/><TextBlock Text="Applica"/></StackPanel>
                                             </Button>
@@ -3435,6 +3876,370 @@
                                     </DockPanel>
                                 </Border>
                             </Grid>
+                        </Grid>
+
+                        <!-- ===================== TITOLI TMDB ===================== -->
+                        <Grid Grid.Row="4" RowDefinitions="Auto, *" IsVisible="{Binding IsTmdbMode}">
+                        <!-- Categoria da caricare (stessi comandi della Mappatura) -->
+                        <Border Grid.Row="0" Classes="cardElevated" Padding="12,10" Margin="0,0,0,10">
+                            <Grid ColumnDefinitions="Auto, 300, Auto, Auto, *">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" ToolTip.Tip="Passo 1: scegli la categoria e carica i suoi post">
+                                    <Border Classes="step" Classes.current="{Binding Tmdb.IsStep1Current}" Classes.done="{Binding Tmdb.IsStep1Done}"><TextBlock Text="1"/></Border>
+                                    <TextBlock Classes="stepLabel" Text="Carica i post"/>
+                                </StackPanel>
+                                <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableCategories}" SelectedItem="{Binding SelectedCategory, Mode=TwoWay}"
+                                          HorizontalAlignment="Stretch" ToolTip.Tip="Categoria di Videobox di cui caricare i post da analizzare">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:CategoryItem">
+                                            <StackPanel Classes="bi">
+                                                <Path Classes="icon accent" Data="{StaticResource IconLayers}" IsVisible="{Binding IsAll}"/>
+                                                <Path Classes="icon" Data="{StaticResource IconFolder}" Stroke="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding !IsAll}"/>
+                                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                                <Button Grid.Column="2" Classes="iconCircle" Margin="6,0,0,0" Command="{Binding LoadCategoriesCommand}" ToolTip.Tip="Ricarica l'elenco delle categorie dal sito"><Path Classes="icon" Data="{StaticResource IconRefresh}"/></Button>
+                                <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" Margin="10,0,0,0" IsVisible="{Binding !IsLoadingPosts}">
+                                    <Button Command="{Binding LoadCategoryCommand}" ToolTip.Tip="Carica solo la prima pagina (50 post)"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconRefresh}"/><TextBlock Text="Carica Pag."/></StackPanel></Button>
+                                    <Button Classes="accent" Command="{Binding LoadAllCategoryCommand}" ToolTip.Tip="Carica tutti i post della categoria a blocchi di 50"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconDownload}"/><TextBlock Text="Carica Tutti"/></StackPanel></Button>
+                                </StackPanel>
+                                <Button Grid.Column="3" Classes="danger" Margin="10,0,0,0" Command="{Binding StopLoadingPostsCommand}" IsVisible="{Binding IsLoadingPosts}" ToolTip.Tip="Ferma il caricamento dei post (quelli già scaricati restano)"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconStop}"/><TextBlock Text="Stop"/></StackPanel></Button>
+                                <StackPanel Grid.Column="4" Spacing="4" Margin="14,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding PostsProgressText}" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" TextTrimming="CharacterEllipsis" IsVisible="{Binding IsLoadingPosts}"/>
+                                    <ProgressBar IsIndeterminate="True" Height="4" MinWidth="0" IsVisible="{Binding IsLoadingPosts}"/>
+                                    <TextBlock Text="{Binding TotalPostsText}" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" TextTrimming="CharacterEllipsis" IsVisible="{Binding !IsLoadingPosts}"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        <Grid Grid.Row="1" RowDefinitions="Auto, *, Auto" DataContext="{Binding Tmdb}" x:DataType="vm:TmdbTitlesViewModel">
+
+                            <!-- Analisi: avanzamento, filtri e pattern -->
+                            <Border Grid.Row="0" Classes="cardElevated" Margin="0,0,0,10">
+                                <StackPanel Spacing="10">
+                                    <Grid ColumnDefinitions="Auto, Auto, Auto, *, Auto">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" ToolTip.Tip="Passo 2: confronta i post caricati con TMDB (non modifica il forum)">
+                                            <Border Classes="step" Classes.current="{Binding IsStep2Current}" Classes.done="{Binding IsStep2Done}"><TextBlock Text="2"/></Border>
+                                            <TextBlock Classes="stepLabel" Text="Analizza"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1" Classes="accent" Command="{Binding AnalyzeCommand}" IsVisible="{Binding !IsAnalyzing}" IsEnabled="{Binding CanAnalyze}" ToolTip.ShowOnDisabled="True"
+                                                ToolTip.Tip="Legge il codice TMDB dalla pagina di ogni post (a ritmo calmo) e confronta con TMDB. Non modifica niente sul forum.">
+                                            <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconSearch}"/><TextBlock Text="{Binding AnalyzeButtonText}"/></StackPanel>
+                                        </Button>
+                                        <Button Grid.Column="1" Classes="danger" Command="{Binding StopCommand}" IsVisible="{Binding IsAnalyzing}" ToolTip.Tip="Ferma l'analisi: i post già analizzati restano, «Continua» riprende">
+                                            <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconStop}"/><TextBlock Text="Stop"/></StackPanel>
+                                        </Button>
+                                        <Button Grid.Column="2" Margin="8,0,0,0" Command="{Binding ReanalyzeAllCommand}" IsVisible="{Binding HasRows}" IsEnabled="{Binding !IsAnalyzing}"
+                                                ToolTip.Tip="Rifà l'analisi da capo, rileggendo anche le pagine dei post">
+                                            <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconRefresh}"/><TextBlock Text="Rianalizza tutto"/></StackPanel>
+                                        </Button>
+                                        <StackPanel Grid.Column="3" Spacing="4" Margin="14,0" VerticalAlignment="Center">
+                                            <ProgressBar Value="{Binding Progress}" Height="6" MinWidth="0" IsVisible="{Binding IsAnalyzing}"/>
+                                            <TextBlock Text="{Binding HintText}" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding HintText}"/>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <Grid ColumnDefinitions="Auto, *, Auto" IsVisible="{Binding HasRows}">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Top" Margin="0,2,0,0" ToolTip.Tip="Passo 3: controlla i risultati con i filtri, correggi dove serve e scegli quali rinominare">
+                                        <Border Classes="step" Classes.current="{Binding IsStep3Current}"><TextBlock Text="3"/></Border>
+                                        <TextBlock Classes="stepLabel" Text="Controlla"/>
+                                    </StackPanel>
+                                    <WrapPanel Grid.Column="1" Orientation="Horizontal" ItemSpacing="8" LineSpacing="6" VerticalAlignment="Center">
+                                        <ToggleButton Classes="filterPill" IsChecked="{Binding IsFilterAll, Mode=OneWay}" Command="{Binding SetFilterCommand}" CommandParameter="All">
+                                            <TextBlock><Run Text="Tutti "/><Run Text="{Binding CountAll}" FontWeight="Bold"/></TextBlock>
+                                        </ToggleButton>
+                                        <ToggleButton Classes="filterPill" IsChecked="{Binding IsFilterRename, Mode=OneWay}" Command="{Binding SetFilterCommand}" CommandParameter="Rename" ToolTip.Tip="Abbinamento sicuro e titolo diverso da quello proposto">
+                                            <StackPanel Classes="bi"><Path Classes="icon accent" Data="{StaticResource IconEdit}"/><TextBlock><Run Text="Da rinominare "/><Run Text="{Binding CountRename}" FontWeight="Bold"/></TextBlock></StackPanel>
+                                        </ToggleButton>
+                                        <ToggleButton Classes="filterPill danger" IsChecked="{Binding IsFilterEpisodes, Mode=OneWay}" Command="{Binding SetFilterCommand}" CommandParameter="Episodes" ToolTip.Tip="Il numero di link del post non corrisponde agli episodi della stagione su TMDB">
+                                            <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconAlert}"/><TextBlock><Run Text="Episodi diversi da TMDB "/><Run Text="{Binding CountEpisodes}" FontWeight="Bold"/></TextBlock></StackPanel>
+                                        </ToggleButton>
+                                        <ToggleButton Classes="filterPill warning" IsChecked="{Binding IsFilterInCorso, Mode=OneWay}" Command="{Binding SetFilterCommand}" CommandParameter="InCorso" ToolTip.Tip="Meno episodi del totale e lo si sta aggiornando: «(In Corso)» nel titolo">
+                                            <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconClock}"/><TextBlock><Run Text="In corso "/><Run Text="{Binding CountInCorso}" FontWeight="Bold"/></TextBlock></StackPanel>
+                                        </ToggleButton>
+                                        <ToggleButton Classes="filterPill warning" IsChecked="{Binding IsFilterConfirm, Mode=OneWay}" Command="{Binding SetFilterCommand}" CommandParameter="Confirm" ToolTip.Tip="Abbinamento o stagione incerti, o episodi diversi: controlla prima di rinominare">
+                                            <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconSearch}"/><TextBlock><Run Text="Da confermare "/><Run Text="{Binding CountConfirm}" FontWeight="Bold"/></TextBlock></StackPanel>
+                                        </ToggleButton>
+                                        <ToggleButton Classes="filterPill" IsChecked="{Binding IsFilterNotFound, Mode=OneWay}" Command="{Binding SetFilterCommand}" CommandParameter="NotFound">
+                                            <TextBlock><Run Text="Non trovati "/><Run Text="{Binding CountNotFound}" FontWeight="Bold"/></TextBlock>
+                                        </ToggleButton>
+                                        <ToggleButton Classes="filterPill success" IsChecked="{Binding IsFilterOk, Mode=OneWay}" Command="{Binding SetFilterCommand}" CommandParameter="Ok">
+                                            <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCheck}"/><TextBlock><Run Text="Già corretti "/><Run Text="{Binding CountOk}" FontWeight="Bold"/></TextBlock></StackPanel>
+                                        </ToggleButton>
+                                        <ToggleButton Classes="filterPill danger" IsChecked="{Binding IsFilterErrors, Mode=OneWay}" Command="{Binding SetFilterCommand}" CommandParameter="Errors" IsVisible="{Binding HasErrors}">
+                                            <TextBlock><Run Text="Errori "/><Run Text="{Binding CountErrors}" FontWeight="Bold"/></TextBlock>
+                                        </ToggleButton>
+                                        <ToggleButton Classes="filterPill" IsChecked="{Binding IsFilterManual, Mode=OneWay}" Command="{Binding SetFilterCommand}" CommandParameter="Manual" IsVisible="{Binding HasManual}"
+                                                      ToolTip.Tip="Titoli scritti da te: restano anche cambiando pattern e non entrano in «Seleziona tutti»">
+                                            <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconEdit}"/><TextBlock><Run Text="Titolo manuale "/><Run Text="{Binding CountManual}" FontWeight="Bold"/></TextBlock></StackPanel>
+                                        </ToggleButton>
+                                        <ToggleButton Classes="filterPill danger" IsChecked="{Binding IsFilterSkipped, Mode=OneWay}" Command="{Binding SetFilterCommand}" CommandParameter="Skipped" IsVisible="{Binding HasSkipped}"
+                                                      ToolTip.Tip="Post non rinominati durante l'ultima rinomina: nel dettaglio trovi il motivo">
+                                            <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconAlert}"/><TextBlock><Run Text="Saltati "/><Run Text="{Binding CountSkipped}" FontWeight="Bold"/></TextBlock></StackPanel>
+                                        </ToggleButton>
+                                    </WrapPanel>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" Margin="12,0,0,0" VerticalAlignment="Top">
+                                        <TextBlock Text="{Binding SearchResultText}" IsVisible="{Binding HasSearch}" FontSize="12"
+                                                   Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center"/>
+                                        <TextBox x:Name="TmdbSearchBox" Width="260" Text="{Binding SearchText, Mode=TwoWay}"
+                                                 PlaceholderText="Cerca titolo, nome TMDB, n° post..."
+                                                 ToolTip.Tip="Cerca nel titolo attuale, in quello proposto, nel nome TMDB (anche originale), nel numero del post o nel codice TMDB. Si combina con il filtro scelto.">
+                                            <TextBox.InnerLeftContent>
+                                                <Path Classes="icon" Data="{StaticResource IconSearch}" Width="13" Height="13" Stretch="Uniform" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                            </TextBox.InnerLeftContent>
+                                            <TextBox.InnerRightContent>
+                                                <Button Classes="iconCircle" Width="22" Height="22" Margin="0,0,4,0" Padding="0" Command="{Binding ClearSearchCommand}"
+                                                        IsVisible="{Binding HasSearch}" ToolTip.Tip="Svuota la ricerca">
+                                                    <Path Classes="icon" Data="{StaticResource IconClose}" Width="9" Height="9" Stretch="Uniform"/>
+                                                </Button>
+                                            </TextBox.InnerRightContent>
+                                        </TextBox>
+                                    </StackPanel>
+                                    </Grid>
+
+                                    <ToggleButton x:Name="ToggleTmdbPatterns" Classes="guideToggle" IsChecked="False" Padding="10,6" ToolTip.Tip="Mostra o nascondi i pattern dei titoli">
+                                        <Grid ColumnDefinitions="Auto, *, Auto">
+                                            <StackPanel Classes="bi"><Path Classes="icon accent" Data="{StaticResource IconSettings}"/><TextBlock Text="Pattern dei titoli" FontWeight="SemiBold" FontSize="12"/></StackPanel>
+                                            <TextBlock Grid.Column="1" Text="{Binding SeriesPattern}" FontFamily="Consolas,Menlo,monospace" FontSize="11" Foreground="{DynamicResource AppAccentBrush}"
+                                                       Margin="14,0,10,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" IsVisible="{Binding !#ToggleTmdbPatterns.IsChecked}"/>
+                                            <Path Grid.Column="2" Classes="chevron"/>
+                                        </Grid>
+                                    </ToggleButton>
+                                    <Border Background="{DynamicResource AppSurface2Brush}" CornerRadius="8" Padding="10,8" IsVisible="{Binding #ToggleTmdbPatterns.IsChecked}">
+                                        <Grid ColumnDefinitions="Auto, *, Auto" RowDefinitions="Auto, Auto, Auto">
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,6">
+                                                <TextBlock Text="Anime / Serie" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                <h:PatternLegendButton Kind="TmdbSeries" Target="{Binding #TmdbSeriesPatternBox}"/>
+                                            </StackPanel>
+                                            <TextBox x:Name="TmdbSeriesPatternBox" Grid.Column="1" Text="{Binding SeriesPattern, Mode=TwoWay}" FontFamily="Consolas,Menlo,monospace" FontSize="12" Margin="0,0,0,6"/>
+                                            <StackPanel Grid.Row="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0">
+                                                <TextBlock Text="Film" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                                <h:PatternLegendButton Kind="TmdbMovie" Target="{Binding #TmdbMoviePatternBox}"/>
+                                            </StackPanel>
+                                            <TextBox x:Name="TmdbMoviePatternBox" Grid.Row="1" Grid.Column="1" Text="{Binding MoviePattern, Mode=TwoWay}" FontFamily="Consolas,Menlo,monospace" FontSize="12"/>
+                                            <StackPanel Grid.RowSpan="2" Grid.Column="2" Spacing="6" Margin="10,0,0,0" VerticalAlignment="Center">
+                                                <Button Command="{Binding ApplyPatternsCommand}" IsEnabled="{Binding !IsAnalyzing}" ToolTip.Tip="Ricalcola i titoli proposti con questi pattern (senza rileggere il forum)">
+                                                    <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconRefresh}"/><TextBlock Text="Applica pattern"/></StackPanel>
+                                                </Button>
+                                                <Button Classes="ghost" Command="{Binding ResetPatternsCommand}" ToolTip.Tip="Torna ai pattern predefiniti"><TextBlock Text="Predefiniti" FontSize="11"/></Button>
+                                            </StackPanel>
+                                            <TextBlock Grid.Row="2" Grid.ColumnSpan="3" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" Margin="0,6,0,0" TextWrapping="Wrap"
+                                                       Text="Premi «?» per l'elenco dei segnaposto (cliccandone uno si aggiunge dove c'è il cursore). Dopo una modifica premi «Applica pattern»: i titoli si ricalcolano subito, senza rileggere il forum."/>
+                                        </Grid>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Tabella e dettaglio -->
+                            <Grid Grid.Row="1" ColumnDefinitions="*, 12, 400">
+                                <Border Grid.Column="0" Classes="cardElevated" Padding="0" ClipToBounds="True">
+                                    <h:FillSlot MinFill="260">
+                                    <DockPanel>
+                                        <Grid DockPanel.Dock="Top" ColumnDefinitions="40, 52, *, 230, 110, 190" Margin="12,10,12,8">
+                                            <TextBlock Grid.Column="2" Text="TITOLO ATTUALE → TITOLO PROPOSTO" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                            <TextBlock Grid.Column="3" Text="SCHEDA TMDB" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                            <TextBlock Grid.Column="4" Text="FORUM / TMDB" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                            <TextBlock Grid.Column="5" Text="STATO" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                        </Grid>
+                                        <Border DockPanel.Dock="Top" Height="1" Background="{DynamicResource AppBorderBrush}"/>
+                                        <Panel>
+                                            <ListBox x:Name="TmdbRowsList" Classes="tmdbRows" ItemsSource="{Binding Rows}" SelectedItem="{Binding SelectedRow, Mode=TwoWay}" Background="Transparent"
+                                                     ContainerPrepared="OnTmdbRowPrepared" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                                <ListBox.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:TmdbRowViewModel">
+                                                        <Grid ColumnDefinitions="40, 52, *, 230, 110, 190" Margin="0,4">
+                                                            <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}" VerticalAlignment="Center" ToolTip.Tip="Da rinominare (la rinomina arriverà nella prossima versione)"/>
+                                                            <Border Grid.Column="1" Width="38" Height="54" CornerRadius="5" ClipToBounds="True" Background="{DynamicResource AppSurface2Brush}" HorizontalAlignment="Left">
+                                                                <Panel>
+                                                                    <TextBlock Text="{Binding Initials}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource AppTextMutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                    <Image Source="{Binding Poster}" Stretch="UniformToFill"/>
+                                                                </Panel>
+                                                            </Border>
+                                                            <StackPanel Grid.Column="2" Spacing="3" VerticalAlignment="Center" Margin="0,0,12,0">
+                                                                <TextBlock Text="{Binding CurrentTitle}" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding CurrentTitle}"/>
+                                                                <Grid ColumnDefinitions="Auto, *" IsVisible="{Binding HasProposal}">
+                                                                    <TextBlock Text="→ " Foreground="{DynamicResource AppAccentBrush}" FontWeight="Bold"/>
+                                                                    <TextBlock Grid.Column="1" Text="{Binding ProposedTitle}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ProposedTitle}"/>
+                                                                </Grid>
+                                                            </StackPanel>
+                                                            <StackPanel Grid.Column="3" Spacing="2" VerticalAlignment="Center" Margin="0,0,10,0">
+                                                                <TextBlock Text="{Binding MatchText}" FontSize="12" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding MatchText}"/>
+                                                                <TextBlock Text="{Binding SourceText}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding SourceText}"/>
+                                                            </StackPanel>
+                                                            <Panel Grid.Column="4" VerticalAlignment="Center" HorizontalAlignment="Left">
+                                                                <Border Classes="moviePill epOk" IsVisible="{Binding EpOk}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCheck}"/><TextBlock Text="{Binding EpisodesText}"/></StackPanel></Border>
+                                                                <Border Classes="moviePill epWarn" IsVisible="{Binding EpWarn}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconClock}"/><TextBlock Text="{Binding EpisodesText}"/></StackPanel></Border>
+                                                                <Border Classes="moviePill epBad" IsVisible="{Binding EpBad}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconAlert}"/><TextBlock Text="{Binding EpisodesText}"/></StackPanel></Border>
+                                                                <Border Classes="moviePill" IsVisible="{Binding EpNone}"><TextBlock Text="{Binding EpisodesText}"/></Border>
+                                                            </Panel>
+                                                            <Panel Grid.Column="5" VerticalAlignment="Center" ToolTip.Tip="{Binding StateTip}">
+                                                                <TextBlock Classes="tmdbState rename" Text="{Binding StateText}" IsVisible="{Binding IsRename}"/>
+                                                                <TextBlock Classes="tmdbState ok" Text="{Binding StateText}" IsVisible="{Binding IsOk}"/>
+                                                                <TextBlock Classes="tmdbState confirm" Text="{Binding StateText}" IsVisible="{Binding IsConfirm}"/>
+                                                                <TextBlock Classes="tmdbState missing" Text="{Binding StateText}" IsVisible="{Binding IsMissing}"/>
+                                                                <TextBlock Classes="tmdbState confirm" Text="{Binding StateText}" IsVisible="{Binding IsOutcomeWarn}"/>
+                                                            </Panel>
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ListBox.ItemTemplate>
+                                            </ListBox>
+                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" MaxWidth="420" IsVisible="{Binding !HasRows}">
+                                                <Path Classes="icon accent" Data="{StaticResource IconFilm}" Width="30" Height="30" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="{Binding EmptyTitle}" FontWeight="Bold" FontSize="15" HorizontalAlignment="Center"/>
+                                                <TextBlock TextWrapping="Wrap" TextAlignment="Center" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}"
+                                                           Text="{Binding EmptyText}"/>
+                                            </StackPanel>
+                                        </Panel>
+                                    </DockPanel>
+                                    </h:FillSlot>
+                                </Border>
+
+                                <!-- Dettaglio -->
+                                <Border Grid.Column="2" Classes="cardElevated">
+                                    <Panel>
+                                    <!-- Nessun post scelto: il riquadro resta (la tabella non cambia larghezza) -->
+                                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8" MaxWidth="280"
+                                                IsVisible="{Binding SelectedRow, Converter={x:Static ObjectConverters.IsNull}}">
+                                        <Path Classes="icon" Data="{StaticResource IconFilm}" Width="28" Height="28" Stretch="Uniform" HorizontalAlignment="Center" Stroke="{DynamicResource AppTextMutedBrush}"/>
+                                        <TextBlock Text="Dettaglio del post" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                        <TextBlock Text="Dopo l'analisi, clicca un post nella tabella per vedere la scheda TMDB, le stagioni e il titolo proposto." FontSize="12"
+                                                   TextWrapping="Wrap" TextAlignment="Center" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                    </StackPanel>
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto" DataContext="{Binding SelectedRow}" x:DataType="vm:TmdbRowViewModel"
+                                                  IsVisible="{Binding $parent[Panel].((vm:TmdbTitlesViewModel)DataContext).SelectedRow, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                        <StackPanel Spacing="12" Margin="0,0,6,0">
+                                            <Grid ColumnDefinitions="Auto, *">
+                                                <Border Width="110" Height="160" CornerRadius="10" ClipToBounds="True" Background="{DynamicResource AppSurface2Brush}">
+                                                    <Panel>
+                                                        <TextBlock Text="{Binding Initials}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource AppTextMutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        <Image Source="{Binding $parent[Grid;1].((vm:TmdbTitlesViewModel)DataContext).DetailPoster}" Stretch="UniformToFill"/>
+                                                    </Panel>
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Margin="14,0,0,0" Spacing="6">
+                                                    <TextBlock Text="{Binding A.MatchName}" FontSize="16" FontWeight="Bold" TextWrapping="Wrap"/>
+                                                    <TextBlock Text="{Binding OriginalText}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" TextWrapping="Wrap" IsVisible="{Binding HasOriginal}"/>
+                                                    <WrapPanel ItemSpacing="6" LineSpacing="6">
+                                                        <Border Classes="moviePill accent"><TextBlock><Run Text="{Binding KindText}"/><Run Text=" "/><Run Text="{Binding YearText}"/></TextBlock></Border>
+                                                        <Border Classes="moviePill" IsVisible="{Binding TmdbCode, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"><TextBlock Text="{Binding TmdbCode}"/></Border>
+                                                    </WrapPanel>
+                                                    <TextBlock Text="{Binding A.IdSource}" FontSize="11" Foreground="{DynamicResource AppSuccessBrush}" TextWrapping="Wrap"/>
+                                                    <TextBlock Text="{Binding SeasonSourceText}" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" TextWrapping="Wrap"/>
+                                                </StackPanel>
+                                            </Grid>
+
+                                            <StackPanel Spacing="4" IsVisible="{Binding HasSeasons}">
+                                                <TextBlock FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AppTextMutedBrush}"><Run Text="STAGIONI SU TMDB"/><Run Text="  ·  clicca per sceglierne un'altra" FontWeight="Normal"/></TextBlock>
+                                                <ItemsControl ItemsSource="{Binding SeasonRows}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:TmdbSeasonRow">
+                                                            <Button Classes="ghost" Padding="0" Margin="0,0,0,4" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                                                    Command="{Binding $parent[Grid;1].((vm:TmdbTitlesViewModel)DataContext).ChooseSeasonCommand}" CommandParameter="{Binding Number}"
+                                                                    ToolTip.Tip="Usa questa stagione per il post: il titolo si ricalcola e la scelta resta salvata">
+                                                                <Border Classes="seasonRow" Classes.current="{Binding IsCurrent}" CornerRadius="8" Padding="10,6">
+                                                                    <Grid ColumnDefinitions="*, Auto">
+                                                                        <TextBlock Text="{Binding Label}" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                                                        <TextBlock Grid.Column="1" Text="{Binding Info}" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" Margin="8,0,0,0"/>
+                                                                    </Grid>
+                                                                </Border>
+                                                            </Button>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+
+                                            <StackPanel Spacing="4">
+                                                <TextBlock Text="EPISODI" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                                <TextBlock FontSize="12" TextWrapping="Wrap"><Run Text="Sul forum: "/><Run Text="{Binding A.LinkCount}" FontWeight="SemiBold"/><Run Text="  ·  TMDB: "/><Run Text="{Binding A.Total}" FontWeight="SemiBold"/><Run Text="  ·  già usciti: "/><Run Text="{Binding A.Aired}" FontWeight="SemiBold"/></TextBlock>
+                                                <TextBlock Text="{Binding NotesText}" FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource AppWarningBrush}" IsVisible="{Binding HasNotes}"/>
+                                            </StackPanel>
+
+                                            <StackPanel Spacing="4" IsVisible="{Binding HasMatchImages}">
+                                                <TextBlock Text="MINIATURA DA TMDB" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                                <TextBlock Text="{Binding ImagesText}" FontSize="12" TextWrapping="Wrap"
+                                                           ToolTip.Tip="La copertina che verrebbe caricata come miniatura del post con la spunta «Aggiorna anche la miniatura» (è quella qui sopra)"/>
+                                            </StackPanel>
+
+                                            <StackPanel Spacing="4">
+                                                <TextBlock Text="TITOLO" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                                <TextBlock Text="{Binding CurrentTitle}" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}" TextDecorations="Strikethrough" TextWrapping="Wrap"/>
+                                                <TextBox Text="{Binding ProposedTitle, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" TextWrapping="Wrap" FontSize="13"
+                                                         ToolTip.Tip="Puoi correggerlo a mano: viene ricordato (filtro «Titolo manuale») e resta anche cambiando pattern"/>
+                                                <StackPanel Spacing="4" IsVisible="{Binding IsManual}">
+                                                    <WrapPanel ItemSpacing="8" LineSpacing="4">
+                                                        <Border Classes="moviePill accent"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconEdit}"/><TextBlock Text="Titolo scritto da te"/></StackPanel></Border>
+                                                        <Button Classes="ghost" Padding="8,2" Command="{Binding $parent[Grid;1].((vm:TmdbTitlesViewModel)DataContext).UsePatternTitleCommand}" ToolTip.Tip="Dimentica il titolo scritto a mano e usa quello del pattern">
+                                                            <TextBlock Text="Torna al pattern" FontSize="11"/>
+                                                        </Button>
+                                                    </WrapPanel>
+                                                    <TextBlock FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" TextWrapping="Wrap"><Run Text="Col pattern: "/><Run Text="{Binding PatternTitle}"/></TextBlock>
+                                                </StackPanel>
+                                            </StackPanel>
+
+                                            <Border Background="{DynamicResource AppSuccessSoftBrush}" CornerRadius="8" Padding="10,6" IsVisible="{Binding IsOutcomeGood}"><TextBlock Text="{Binding OutcomeText}" TextWrapping="Wrap" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource AppSuccessBrush}"/></Border>
+                                            <Border Background="{DynamicResource AppWarningSoftBrush}" CornerRadius="8" Padding="10,6" IsVisible="{Binding IsOutcomeWarn}"><TextBlock Text="{Binding OutcomeText}" TextWrapping="Wrap" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource AppWarningBrush}"/></Border>
+
+                                            <StackPanel Spacing="4">
+                                                <TextBlock Text="ABBINAMENTO SBAGLIATO?" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                                <Grid ColumnDefinitions="*, Auto">
+                                                    <TextBox Text="{Binding $parent[Grid;2].((vm:TmdbTitlesViewModel)DataContext).CodeInput, Mode=TwoWay}" FontSize="12" PlaceholderText="tv/1234, movie/5678 o indirizzo TMDB"
+                                                             ToolTip.Tip="Codice TMDB giusto per questo post: viene ricordato anche per le prossime analisi"/>
+                                                    <Button Grid.Column="1" Margin="6,0,0,0" Command="{Binding $parent[Grid;2].((vm:TmdbTitlesViewModel)DataContext).ApplyCodeCommand}"><TextBlock Text="Usa"/></Button>
+                                                </Grid>
+                                                <Button Classes="ghost" Padding="8,2" HorizontalAlignment="Left" IsVisible="{Binding HasUserChoice}"
+                                                        Command="{Binding $parent[Grid;1].((vm:TmdbTitlesViewModel)DataContext).ResetChoicesCommand}" ToolTip.Tip="Torna al codice e alla stagione trovati dall'analisi (il titolo scritto a mano resta)">
+                                                    <TextBlock Text="Dimentica codice e stagione scelti da te" FontSize="11"/>
+                                                </Button>
+                                            </StackPanel>
+
+                                            <WrapPanel ItemSpacing="8" LineSpacing="6">
+                                                <Button Command="{Binding $parent[Grid;1].((vm:TmdbTitlesViewModel)DataContext).OpenTmdbCommand}" IsVisible="{Binding TmdbUrl, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                                    <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconGlobe}"/><TextBlock Text="Apri su TMDB"/></StackPanel>
+                                                </Button>
+                                                <Button Command="{Binding $parent[Grid;1].((vm:TmdbTitlesViewModel)DataContext).OpenPostCommand}">
+                                                    <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconEye}"/><TextBlock Text="Apri il post"/></StackPanel>
+                                                </Button>
+                                            </WrapPanel>
+                                        </StackPanel>
+                                    </ScrollViewer>
+                                    </Panel>
+                                </Border>
+                            </Grid>
+
+                            <!-- Azioni -->
+                            <Border Grid.Row="2" Classes="cardElevated" Margin="0,10,0,0" IsVisible="{Binding HasRows}">
+                                <Grid ColumnDefinitions="Auto, *, Auto">
+                                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                        <TextBlock VerticalAlignment="Center" FontWeight="SemiBold"><Run Text="{Binding CountChecked}"/><Run Text=" selezionati"/></TextBlock>
+                                        <Button Command="{Binding CheckAllRenameCommand}"><TextBlock Text="Seleziona tutti «Da rinominare»"/></Button>
+                                        <Button Command="{Binding UncheckAllCommand}"><TextBlock Text="Deseleziona"/></Button>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Spacing="4" Margin="16,0" VerticalAlignment="Center">
+                                        <ProgressBar Value="{Binding RenameProgress}" Height="6" MinWidth="0" IsVisible="{Binding IsRenaming}"/>
+                                        <TextBlock FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" TextWrapping="Wrap" IsVisible="{Binding !HasRenameText}"
+                                                   Text="La rinomina va un post alla volta: ognuno viene riletto prima (se è cambiato si salta) e ricontrollato dopo. Si può annullare."/>
+                                        <TextBlock Text="{Binding RenameText}" FontSize="12" TextWrapping="Wrap" IsVisible="{Binding HasRenameText}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                        <CheckBox IsChecked="{Binding UpdateImages}" IsEnabled="{Binding CanUpdateImages}" ToolTip.ShowOnDisabled="True" ToolTip.Tip="{Binding UpdateImagesTip}" VerticalAlignment="Center">
+                                            <TextBlock Text="Aggiorna anche la miniatura" FontSize="12"/>
+                                        </CheckBox>
+                                        <Button Classes="warning" IsVisible="{Binding CanUndo}" IsEnabled="{Binding CanRename}"
+                                                Tag="{Binding UndoLastBatchCommand}" CommandParameter="{Binding UndoConfirmText}" Click="OnConfirmRemoveAllClick"
+                                                ToolTip.Tip="Rimette il titolo di prima ai post dell'ultima rinomina (solo a quelli non modificati dopo)">
+                                            <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconUndo}"/><TextBlock Text="Annulla ultima rinomina"/></StackPanel>
+                                        </Button>
+                                        <Button Classes="danger" Command="{Binding StopRenameCommand}" IsVisible="{Binding IsRenaming}" ToolTip.Tip="Si ferma dopo il post in corso: quelli già fatti restano">
+                                            <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconStop}"/><TextBlock Text="Stop"/></StackPanel>
+                                        </Button>
+                                        <Button Classes="success" IsVisible="{Binding !IsRenaming}" IsEnabled="{Binding CanRename}"
+                                                Tag="{Binding RenameCheckedCommand}" CommandParameter="{Binding RenameConfirmText}" Click="OnConfirmRemoveAllClick"
+                                                ToolTip.Tip="Rinomina sul forum i post spuntati, uno alla volta, con controllo prima e dopo ogni invio">
+                                            <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCheck}"/><TextBlock><Run Text="Rinomina selezionati ("/><Run Text="{Binding CountChecked}"/><Run Text=")"/></TextBlock></StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </Grid>
                         </Grid>
                     </Grid>
                     </h:FillViewportPanel>
@@ -3558,7 +4363,7 @@
                                     <Grid ColumnDefinitions="*, Auto">
                                         <StackPanel Classes="bi">
                                             <Path Classes="icon accent" Data="{StaticResource IconBulb}"/>
-                                            <TextBlock Text="Guida rapida - Proxy" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AppTextBrush}"/>
+                                            <TextBlock Text="Guida - Proxy" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AppTextBrush}"/>
                                         </StackPanel>
                                         <Path Grid.Column="1" Classes="chevron"/>
                                     </Grid>
@@ -3918,7 +4723,7 @@
                                         <Grid ColumnDefinitions="*, Auto">
                                             <StackPanel Classes="bi">
                                                 <Path Classes="icon accent" Data="{StaticResource IconBulb}"/>
-                                                <TextBlock Text="Guida rapida - Domini" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AppTextBrush}"/>
+                                                <TextBlock Text="Guida - Domini" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AppTextBrush}"/>
                                             </StackPanel>
                                             <Path Grid.Column="1" Classes="chevron"/>
                                         </Grid>

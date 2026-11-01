@@ -46,6 +46,21 @@ public class VideoboxApiService
         return await response.Content.ReadFromJsonAsync<VideoboxDto>() ?? new VideoboxDto();
     }
 
+    /// <summary>
+    /// Il post come lo restituisce l'API (JSON), sempre aggiornato: serve alla rinomina per confrontare
+    /// prima e dopo l'invio. Un post eliminato dà HttpRequestException con StatusCode 404.
+    /// </summary>
+    public async Task<string> GetVideoJsonAsync(int videoId, CancellationToken ct = default)
+    {
+        ConfigureAuth();
+        var url = $"{_settingsService.Current.IpsBaseUrl.TrimEnd('/')}/api/videobox/videos/{videoId}";
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
+        using var response = await _httpClient.SendAsync(request, ct);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsStringAsync(ct);
+    }
+
     // Ripristinato int? (nullable) per far funzionare la selezione "Tutti i Media" (che passa null/0)
     public async Task<VideoboxPagedDto> GetVideosByCategoryAsync(int? categoryId, int page = 1, CancellationToken ct = default)
     {
@@ -77,7 +92,21 @@ public class VideoboxApiService
         return pagedData?.results ?? new List<VideoboxCategoryDto>();
     }
 
-    public async Task UpdateVideoUrlsAsync(int videoId, string serverId, string title, int categoryId, int authorId, List<string> newUrls)
+    /// <summary>
+    /// Miniatura da caricare con l'invio. L'API accetta solo questa immagine e solo come file
+    /// (campo thumbnail[nome-file] = contenuto del file); immagine grande e sfondo li gestisce il forum.
+    /// </summary>
+    public sealed record ThumbnailUpload(string FileName, byte[] Content);
+
+    /// <summary>
+    /// Il caricamento della miniatura è stato provato sul forum vero (post 14725, 31/10/2026): il forum
+    /// salva il file e lo usa sia come miniatura sia come immagine del post. Con false la spunta
+    /// "aggiorna la miniatura" resta disattivata.
+    /// </summary>
+    public static bool ThumbnailUploadConfirmed { get; set; } = true;
+
+    public async Task UpdateVideoUrlsAsync(int videoId, string serverId, string title, int categoryId, int authorId, List<string> newUrls,
+        ThumbnailUpload? thumbnail = null)
     {
         ConfigureAuth();
         var settings = _settingsService.Current;
@@ -97,20 +126,62 @@ public class VideoboxApiService
             formData.Add(new KeyValuePair<string, string>($"videos[{serverId}][]", link));
         }
 
-        var content = new FormUrlEncodedContent(formData);
+        HttpContent content;
+        if (thumbnail == null) content = new FormUrlEncodedContent(formData);
+        else
+        {
+            // Con un file serve multipart. I campi sono senza "filename": così PHP li mette tutti tra i
+            // normali valori del modulo, come vuole l'API (thumbnail[nome] = contenuto del file).
+            var multi = new MultipartFormDataContent();
+            foreach (var kv in formData) multi.Add(new StringContent(kv.Value, Encoding.UTF8), Quoted(kv.Key));
+            multi.Add(new ByteArrayContent(thumbnail.Content), Quoted($"thumbnail[{thumbnail.FileName}]"));
+            content = multi;
+        }
 
+        using var _ = content;
         var response = await _httpClient.PostAsync(url, content);
         
-        if (!response.IsSuccessStatusCode)
-        {
-            var errorBody = await response.Content.ReadAsStringAsync();
-            throw new Exception($"Errore API IPS ({response.StatusCode}): {errorBody}");
-        }
-
         var responseString = await response.Content.ReadAsStringAsync();
-        if (!string.IsNullOrWhiteSpace(responseString) && responseString.Contains("error", StringComparison.OrdinalIgnoreCase))
+        if (!response.IsSuccessStatusCode)
+            throw new Exception($"Errore API IPS ({(int)response.StatusCode} {response.StatusCode}): {DescribeError(responseString)}");
+
+        // Con 200 il forum restituisce il post aggiornato. Un errore vero ha la forma
+        // {"errorCode": "...", "errorMessage": "..."}: non basta che la parola "error" compaia
+        // da qualche parte (es. il titolo "Zankyou no Terror").
+        var ipsError = ReadIpsError(responseString);
+        if (ipsError != null)
+            throw new Exception($"Il forum ha risposto con un errore: {ipsError}");
+    }
+
+    private static string Quoted(string name) => "\"" + name.Replace("\"", "") + "\"";
+
+    /// <summary>Messaggio di un errore IPS ({errorCode, errorMessage}), null se la risposta non è un errore.</summary>
+    internal static string? ReadIpsError(string? body)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return null;
+        try
         {
-            throw new Exception($"Risposta IPS 200 OK ma con errore: {responseString}");
+            using var doc = System.Text.Json.JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            if (root.ValueKind != System.Text.Json.JsonValueKind.Object) return null;
+            bool hasCode = root.TryGetProperty("errorCode", out var code);
+            bool hasMsg = root.TryGetProperty("errorMessage", out var msg);
+            if (!hasCode && !hasMsg) return null;
+            var text = hasMsg ? msg.ToString() : "";
+            return hasCode ? $"{text} (codice {code})".Trim() : text;
         }
+        catch (System.Text.Json.JsonException) { return null; }
+    }
+
+    /// <summary>
+    /// Testo breve di una risposta di errore: mai la risposta intera (può contenere i dati
+    /// dell'autore del post, come email e indirizzo IP).
+    /// </summary>
+    private static string DescribeError(string? body)
+    {
+        var ips = ReadIpsError(body);
+        if (ips != null) return ips;
+        var text = System.Text.RegularExpressions.Regex.Replace(body ?? "", @"<[^>]+>|\s+", " ").Trim();
+        return text.Length == 0 ? "risposta vuota" : text.Length > 200 ? text[..200] + "…" : text;
     }
 }

@@ -277,7 +277,32 @@ public partial class SftpTabViewModel
         checker = new ZeroByteCheckerService(service, () => service.IsConnected);
         AttachChecker(checker);
         _checkers[server.ServerKey] = checker;
+
+        // Risultati salvati di questo server: le cartelle rosse compaiono subito, anche dopo il riavvio
+        if (App.Services?.GetService(typeof(DownloadManager.Persistence.ZeroByteCheckRepository)) is DownloadManager.Persistence.ZeroByteCheckRepository store)
+        {
+            var key = server.ServerKey;
+            checker.StoreLoaded += (_, _) => Dispatcher.UIThread.Post(() => ReapplyZeroFlags(key));
+            _ = checker.AttachStoreAsync(store, key);
+        }
         return checker;
+    }
+
+    /// <summary>Ricolora le cartelle mostrate (in entrambi i pannelli) con i risultati del check di quel server.</summary>
+    private void ReapplyZeroFlags(string serverKey)
+    {
+        if (!_checkers.TryGetValue(serverKey, out var checker)) return;
+        void Apply(IEnumerable<SftpRemoteEntry> entries)
+        {
+            foreach (var e in entries.Where(e => e.IsDirectory))
+            {
+                var key = e.FullPath.TrimEnd('/');
+                e.HasZeroByteIssue = checker.TryGetFolderFlag(key, out var flag) && flag;
+                if (checker.TryGetFolderContents(key, out var info)) e.ContentsInfo = info;
+            }
+        }
+        if (string.Equals(RemoteConfig?.ServerKey, serverKey, StringComparison.OrdinalIgnoreCase)) Apply(SftpRemoteEntries);
+        if (IsServer2Connected && string.Equals(_server2Config?.ServerKey, serverKey, StringComparison.OrdinalIgnoreCase)) Apply(Server2Entries);
     }
 
     /// <summary>Controllo del server di un trasferimento (null = connessione principale).</summary>

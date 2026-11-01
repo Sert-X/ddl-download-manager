@@ -90,7 +90,7 @@ public partial class DownloadItem : ObservableObject
     // Lavori sul file dopo il download (il messaggio della fase è in ErrorMessage)
     private static readonly string[] PostPhases =
     {
-        "Copia in MP4", "Controllo del file", "Riparazione", "Audio italiano", "Unione",
+        "Copia in MP4", "Controllo del file", "Riparazione", "Audio italiano", "Audio per i player web", "Unione",
         "Imprimo", "Conversione", "In attesa"
     };
 

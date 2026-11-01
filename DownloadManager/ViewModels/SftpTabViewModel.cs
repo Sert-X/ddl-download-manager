@@ -46,13 +46,13 @@ public partial class SftpTabViewModel : ViewModelBase
     [ObservableProperty] private string _sftpStatusMessage = string.Empty;
     [ObservableProperty] private bool _isSftpBusy = false;
 
-    [ObservableProperty] private ObservableCollection<SftpRemoteEntry> _sftpRemoteEntries = new();
+    [ObservableProperty] private BulkObservableCollection<SftpRemoteEntry> _sftpRemoteEntries = new();
     [ObservableProperty] private SftpRemoteEntry? _sftpSelectedRemoteEntry;
     [ObservableProperty] private bool _isRefreshingRemote;
     private bool _isForceReloading;
     [ObservableProperty] private string _remoteBrowserStats = "";
 
-    [ObservableProperty] private ObservableCollection<LocalFileEntry> _sftpLocalEntries = new();
+    [ObservableProperty] private BulkObservableCollection<LocalFileEntry> _sftpLocalEntries = new();
     [ObservableProperty] private LocalFileEntry? _sftpSelectedLocalEntry;
     [ObservableProperty] private string _localBrowserStats = "";
 
@@ -172,6 +172,14 @@ public partial class SftpTabViewModel : ViewModelBase
                     ? "Avvio check 0-byte in corso..."
                     : ZeroByteCheckStatus;
             }
+            if (IsDeletingRemote)
+                return string.IsNullOrEmpty(RemoteDeleteStatus) ? "Eliminazione in corso..." : RemoteDeleteStatus;
+            if (IsCheckingWebStream && VideoCheckPanel == CheckPanel.Right)
+            {
+                return string.IsNullOrEmpty(WebStreamCheckStatus)
+                    ? "Controllo video in corso..."
+                    : WebStreamCheckStatus;
+            }
             if (IsRefreshingRemote) return "Lettura cartella in corso...";
             return "";
         }
@@ -182,8 +190,11 @@ public partial class SftpTabViewModel : ViewModelBase
     // Stato in linea del pannello locale (come quello di destra, nella riga sotto i pulsanti:
     // non sposta la tabella)
     [ObservableProperty] private bool _isRefreshingLocal;
-    public string LocalStatusText => IsRefreshingLocal ? "Lettura cartella in corso..." : "";
-    public bool HasLocalStatus => IsRefreshingLocal;
+    public string LocalStatusText =>
+        IsCheckingWebStream && VideoCheckPanel == CheckPanel.Local ? (string.IsNullOrEmpty(WebStreamCheckStatus) ? "Controllo video in corso..." : WebStreamCheckStatus)
+        : IsCheckingLocalZero ? "Check 0-byte sul PC in corso..."
+        : IsRefreshingLocal ? "Lettura cartella in corso..." : "";
+    public bool HasLocalStatus => LocalStatusText.Length > 0;
     partial void OnIsRefreshingLocalChanged(bool value)
     {
         OnPropertyChanged(nameof(LocalStatusText));
@@ -219,6 +230,8 @@ public partial class SftpTabViewModel : ViewModelBase
         // SOLO per messaggi importanti (START, FINE, TIMEOUT, errore),
         // non per ogni cartella. Così la UI non viene saturata.
         AttachChecker(_zeroByteChecker);
+        InitWebStream();
+        InitResultsSync();
 
         _localWatcherDebounce = new DispatcherTimer
         {
@@ -411,9 +424,7 @@ public partial class SftpTabViewModel : ViewModelBase
         var sorted = SftpEntrySorter.SortLocalEntries(
             current, LocalSortOption.Mode, LocalSortAscending);
 
-        SftpLocalEntries.Clear();
-        foreach (var e in sorted)
-            SftpLocalEntries.Add(e);
+        SftpLocalEntries.ReplaceAll(sorted, scrollToTop: false);
 
         if (SftpSelectedLocalEntry != null
             && !SftpLocalEntries.Contains(SftpSelectedLocalEntry))
@@ -431,9 +442,7 @@ public partial class SftpTabViewModel : ViewModelBase
         var sorted = SftpEntrySorter.SortRemoteEntries(
             current, RemoteSortOption.Mode, RemoteSortAscending);
 
-        SftpRemoteEntries.Clear();
-        foreach (var e in sorted)
-            SftpRemoteEntries.Add(e);
+        SftpRemoteEntries.ReplaceAll(sorted, scrollToTop: false);
 
         if (SftpSelectedRemoteEntry != null
             && !SftpRemoteEntries.Contains(SftpSelectedRemoteEntry))
@@ -442,13 +451,22 @@ public partial class SftpTabViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Trasferimenti in parallelo verso lo stesso server: al massimo 6. Le connessioni sono 8 in
+    /// tutto (SftpSessionLimiter) e due restano al browser dei file e ai controlli: oltre 6 i
+    /// trasferimenti in più restavano comunque in attesa.
+    /// </summary>
+    public const int MaxParallelTransfers = 6;
+
     partial void OnSftpMaxUploadConcurrencyChanged(int value)
     {
+        if (value > MaxParallelTransfers) { SftpMaxUploadConcurrency = MaxParallelTransfers; return; }
         if (_sftpUploadQueue != null) _sftpUploadQueue.MaxConcurrency = value;
     }
 
     partial void OnSftpMaxDownloadConcurrencyChanged(int value)
     {
+        if (value > MaxParallelTransfers) { SftpMaxDownloadConcurrency = MaxParallelTransfers; return; }
         if (_sftpDownloadQueue != null) _sftpDownloadQueue.MaxConcurrency = value;
     }
 
@@ -475,16 +493,13 @@ public partial class SftpTabViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(RemoteStatusText));
         OnPropertyChanged(nameof(HasRemoteStatus));
+        OnPropertyChanged(nameof(RemoteStatusTooltip));
+        NotifyStatusIcons();
     }
 
-    partial void OnZeroByteCheckStatusChanged(string value)
-        => OnPropertyChanged(nameof(RemoteStatusText));
+    partial void OnZeroByteCheckStatusChanged(string value) => NotifyRemoteStatus();
 
-    partial void OnIsRefreshingRemoteChanged(bool value)
-    {
-        OnPropertyChanged(nameof(RemoteStatusText));
-        OnPropertyChanged(nameof(HasRemoteStatus));
-    }
+    partial void OnIsRefreshingRemoteChanged(bool value) => NotifyRemoteStatus();
 
     private void UpdateSftpBadges()
     {
@@ -802,6 +817,15 @@ public partial class SftpTabViewModel : ViewModelBase
 
                 // Modifiche fatte da fuori (es. WinSCP): se la cartella è cambiata, o se l'hai
                 // aggiornata a mano, lo si segnala anche all'albero di Videobox Corrector.
+                // Esiti salvati della verifica streaming (colonna Web)
+                if (RemoteConfig != null)
+                {
+                    await ApplyWebStreamAsync(entries, pathToRead, RemoteConfig.ServerKey, cleanup: true);
+                    // Modifiche fatte da fuori anche nelle sottocartelle (al massimo ogni 5 minuti per cartella)
+                    _ = SyncResultsAsync(left: false, force: false);
+                }
+                if (!ReferenceEquals(service, Remote) || SftpCurrentRemotePath != pathToRead) return;
+
                 bool samePath = SamePath(_lastListedRemotePath, pathToRead);
                 bool differs = !samePath || !SameListing(SftpRemoteEntries, entries);
 
@@ -956,6 +980,11 @@ public partial class SftpTabViewModel : ViewModelBase
                     return list;
                 });
 
+                if (SftpCurrentLocalPath != pathToRead) return;
+
+                // Esiti salvati (colonne Web e Lingua) e file vuoti
+                await ApplyWebStreamAsync(entries, pathToRead.Replace('\\', '/'), WebStreamCheckerService.LocalKey, cleanup: true);
+                ApplyLocalZeroFlags(entries);
                 if (SftpCurrentLocalPath != pathToRead) return;
 
                 var sorted = SftpEntrySorter.SortLocalEntries(entries, LocalSortOption.Mode, LocalSortAscending);
@@ -1244,46 +1273,6 @@ public partial class SftpTabViewModel : ViewModelBase
         finally { IsSftpBusy = false; }
     }
 
-    public async Task SftpRemoteDeleteManyAsync(IEnumerable<SftpRemoteEntry> entries)
-    {
-        if (!IsRemoteConnected) { SftpStatusMessage = "Nessun server aperto: connettine uno nel pannello di destra."; return; }
-
-        var list = entries.Where(e => e != null).ToList();
-        if (list.Count == 0) return;
-
-        int success = 0, failed = 0, done = 0;
-        var errors = new List<string>();
-
-        IsSftpBusy = true;
-        foreach (var entry in list)
-        {
-            SftpStatusMessage = $"Eliminazione in corso dal server ({++done}/{list.Count}): {entry.Name}";
-            try
-            {
-                if (entry.IsDirectory) await Remote.DeleteDirectoryAsync(entry.FullPath);
-                else await Remote.DeleteFileAsync(entry.FullPath);
-                success++;
-                InvalidateZeroByteCacheRecursive(TransferJobBase.GetRemoteParent(entry.FullPath));
-            }
-            catch (Exception ex)
-            {
-                failed++;
-                errors.Add($"{entry.Name}: {ex.Message}");
-            }
-        }
-
-        IsSftpBusy = false;
-        await SftpRefreshInternalAsync(silent: true);
-        InvalidateZeroByteCacheRecursive(SftpCurrentRemotePath);
-
-        if (failed == 0)
-            SftpStatusMessage = success == 1 ? "Elemento eliminato dal server." : $"{success} elementi eliminati dal server.";
-        else if (success == 0)
-            SftpStatusMessage = $"Eliminazione fallita: {errors.First()}";
-        else
-            SftpStatusMessage = $"Eliminati {success}, falliti {failed}. Primo errore: {errors.First()}";
-    }
-
     public async Task SftpRemoteCreateFolderAsync(string name)
     {
         if (!IsRemoteConnected) { SftpStatusMessage = "Nessun server aperto: connettine uno nel pannello di destra."; return; }
@@ -1363,6 +1352,7 @@ public partial class SftpTabViewModel : ViewModelBase
                     throw new InvalidOperationException("non si può spostare una cartella dentro sé stessa");
 
                 await Remote.RenameAsync(entry.FullPath, target);
+                await WebStreamMovedAsync(entry.FullPath, target);
                 moved++;
             }
             catch (Exception ex) { errors.Add($"{entry.Name}: {ex.Message}"); }
@@ -1390,6 +1380,7 @@ public partial class SftpTabViewModel : ViewModelBase
 
             SftpStatusMessage = $"Rinomina in corso: {entry.Name} → {newName}";
             await Remote.RenameAsync(entry.FullPath, newPath);
+            await WebStreamMovedAsync(entry.FullPath, newPath);
             SftpStatusMessage = $"Rinominato in: {newName}";
             await SftpRefreshAsync();
             InvalidateZeroByteCacheRecursive(SftpCurrentRemotePath);
@@ -1415,7 +1406,8 @@ public partial class SftpTabViewModel : ViewModelBase
             var server = RemoteConfig;
 
             int totalQueued = 0;
-            foreach (var local in selected)
+            // Nell'ordine della lista (naturale), non in quello dei clic
+            foreach (var local in selected.OrderBy(e => e.IsDirectory).ThenBy(e => e.Name, Comparer<string>.Create(NaturalComparer.Compare)))
             {
                 if (local.IsDirectory)
                 {
@@ -1456,7 +1448,7 @@ public partial class SftpTabViewModel : ViewModelBase
             var server = RemoteConfig;
 
             int totalQueued = 0;
-            foreach (var path in localPaths)
+            foreach (var path in localPaths.OrderBy(Directory.Exists).ThenBy(p => Path.GetFileName(p.TrimEnd('\\', '/')), Comparer<string>.Create(NaturalComparer.Compare)))
             {
                 if (Directory.Exists(path))
                     totalQueued += await _sftpUploadQueue.EnqueueFolderAsync(path, targetDir, server);
@@ -1504,6 +1496,8 @@ public partial class SftpTabViewModel : ViewModelBase
             if (!Directory.Exists(targetDir)) Directory.CreateDirectory(targetDir);
 
             int queued = 0;
+            // Nell'ordine della lista (naturale), non in quello dei clic
+            selected = selected.OrderBy(e => e.IsDirectory).ThenBy(e => e.Name, Comparer<string>.Create(NaturalComparer.Compare)).ToList();
             foreach (var remote in selected)
             {
                 SftpStatusMessage = remote.IsDirectory
@@ -1541,7 +1535,12 @@ public partial class SftpTabViewModel : ViewModelBase
         var localFolder = Path.Combine(localTarget, remoteName);
         Directory.CreateDirectory(localFolder);
 
-        var entries = await Remote.ListDirectoryAsync(remoteFolder);
+        // Prima i file e poi le sottocartelle, in ordine "naturale" (1, 2, ... 10): il server li
+        // restituisce in ordine qualsiasi o come testo (1, 10, 11, 2)
+        var entries = (await Remote.ListDirectoryAsync(remoteFolder))
+            .OrderBy(e => e.IsDirectory)
+            .ThenBy(e => e.Name, Comparer<string>.Create(NaturalComparer.Compare))
+            .ToList();
         foreach (var entry in entries)
         {
             if (entry.IsDirectory)
@@ -1600,16 +1599,8 @@ public partial class SftpTabViewModel : ViewModelBase
 
         try
         {
-            var cfg = server;
-
-            // URL senza credenziali (le passiamo come opzioni Media a LibVLC)
-            var segments = entry.FullPath.TrimStart('/').Split('/');
-            var encodedPath = string.Join("/", Array.ConvertAll(segments, Uri.EscapeDataString));
-
-            var url = $"sftp://{cfg.Host}:{cfg.Port}/{encodedPath}";
-
             var playerWindow = new Views.SftpVideoPlayerWindow();
-            playerWindow.PlayUrl(url, entry.Name, cfg.Username, cfg.Password);
+            playerWindow.PlayRemote(server, entry.FullPath, entry.Name, entry.Size);
             playerWindow.Show();
 
             SftpStatusMessage = $"Anteprima: {entry.Name}";
@@ -1652,7 +1643,8 @@ public partial class SftpTabViewModel : ViewModelBase
     public void PauseSftpJobPublic(SftpUploadJob job) => _sftpUploadQueue.PauseJob(job);
     public void ResumeSftpJobPublic(SftpUploadJob job) => _sftpUploadQueue.ResumeJob(job);
     public void CancelSftpJobPublic(SftpUploadJob job) => _sftpUploadQueue.CancelJob(job);
-    public void RemoveSftpJobPublic(SftpUploadJob job) => _sftpUploadQueue.RemoveJob(job);
+    /// <summary>Rimuove gli upload non in corso; restituisce quanti sono rimasti perché in corso.</summary>
+    public int RemoveSftpJobs(IEnumerable<SftpUploadJob> jobs) => _sftpUploadQueue.RemoveJobs(jobs);
 
     [RelayCommand] private void SftpDownloadQueueStartAll() { _sftpDownloadQueue.StartAll(); SftpStatusMessage = "Coda download avviata."; }
     [RelayCommand] private void SftpDownloadQueuePauseAll() { _sftpDownloadQueue.PauseAll(); SftpStatusMessage = "Coda download in pausa."; }
@@ -1664,7 +1656,8 @@ public partial class SftpTabViewModel : ViewModelBase
     public void PauseSftpDownloadJobPublic(SftpDownloadJob job) => _sftpDownloadQueue.PauseJob(job);
     public void ResumeSftpDownloadJobPublic(SftpDownloadJob job) => _sftpDownloadQueue.ResumeJob(job);
     public void CancelSftpDownloadJobPublic(SftpDownloadJob job) => _sftpDownloadQueue.CancelJob(job);
-    public void RemoveSftpDownloadJobPublic(SftpDownloadJob job) => _sftpDownloadQueue.RemoveJob(job);
+    /// <summary>Rimuove i download non in corso; restituisce quanti sono rimasti perché in corso.</summary>
+    public int RemoveSftpDownloadJobs(IEnumerable<SftpDownloadJob> jobs) => _sftpDownloadQueue.RemoveJobs(jobs);
 
     public void Dispose()
     {

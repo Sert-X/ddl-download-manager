@@ -3,22 +3,71 @@
         xmlns:vlc="clr-namespace:LibVLCSharp.Avalonia;assembly=LibVLCSharp.Avalonia"
         x:Class="DownloadManager.Views.SftpVideoPlayerWindow"
         Title="Anteprima video"
-        Width="960" Height="640"
-        MinWidth="600" MinHeight="400"
+        Width="1080" Height="680"
+        MinWidth="720" MinHeight="440"
         WindowStartupLocation="CenterScreen"
-        Background="Black">
+        Background="{DynamicResource AppBackgroundBrush}">
 
-    <Grid RowDefinitions="*, Auto">
+    <Window.Styles>
+        <Style Selector="ComboBox.track">
+            <Setter Property="MinWidth" Value="150"/>
+            <Setter Property="MaxWidth" Value="220"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style Selector="TextBlock.infoTitle">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.infoKey">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{DynamicResource AppTextMutedBrush}"/>
+        </Style>
+        <Style Selector="TextBlock.infoValue">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+    </Window.Styles>
 
-        <!-- VideoView dichiarato in XAML: così il suo handle nativo esiste
-             prima del Play e VLC non apre una finestra separata.
-             I controlli stanno in una riga a parte, mai sopra il video. -->
-        <vlc:VideoView Grid.Row="0" x:Name="PlayerView"/>
+    <Grid RowDefinitions="*, Auto" ColumnDefinitions="*, Auto">
 
-        <Border Grid.Row="1" Background="{DynamicResource AppSurfaceBrush}"
+        <!-- VideoView dichiarato in XAML: così il suo handle nativo esiste prima del Play e VLC
+             non apre una finestra separata. Niente sopra il video (è una finestra nativa):
+             controlli e informazioni stanno accanto. -->
+        <Panel Grid.Row="0" Grid.Column="0" Background="Black">
+            <vlc:VideoView x:Name="PlayerView"/>
+        </Panel>
+
+        <!-- Informazioni sul file (codec, tracce) -->
+        <Border x:Name="InfoPanel" Grid.Row="0" Grid.Column="1" Width="300" IsVisible="False"
+                Background="{DynamicResource AppSurfaceBrush}"
+                BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1,0,0,0">
+            <DockPanel>
+                <Grid DockPanel.Dock="Top" ColumnDefinitions="*, Auto" Margin="16,12,10,10">
+                    <StackPanel Classes="bi">
+                        <Path Classes="icon accent" Data="{StaticResource IconInfo}"/>
+                        <TextBlock Text="Informazioni" FontSize="13" FontWeight="Bold"/>
+                    </StackPanel>
+                    <Button x:Name="CloseInfoButton" Grid.Column="1" Classes="iconCircle" Width="28" Height="28"
+                            Focusable="False" ToolTip.Tip="Chiudi (I)">
+                        <Path Classes="icon" Data="{StaticResource IconClose}" Width="11" Height="11"/>
+                    </Button>
+                </Grid>
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel x:Name="InfoContent" Margin="16,0,16,16" Spacing="16">
+                        <TextBlock Text="Le informazioni compaiono quando il video parte." FontSize="12" TextWrapping="Wrap"
+                                   Foreground="{DynamicResource AppTextMutedBrush}"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+
+        <!-- Controlli -->
+        <Border Grid.Row="1" Grid.ColumnSpan="2" Background="{DynamicResource AppSurfaceBrush}"
                 BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="0,1,0,0"
                 Padding="16,10,16,12">
-            <StackPanel Spacing="8">
+            <StackPanel Spacing="10">
 
                 <!-- Barra di avanzamento -->
                 <Grid ColumnDefinitions="Auto,*,Auto">
@@ -33,41 +82,63 @@
                                VerticalAlignment="Center" Margin="12,0,0,0"/>
                 </Grid>
 
-                <!-- Pulsanti, stato, volume -->
                 <Grid ColumnDefinitions="Auto,*,Auto">
 
+                    <!-- Riproduzione -->
                     <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                        <Button x:Name="BackButton" Classes="ghost" Focusable="False" ToolTip.Tip="Indietro di 10 secondi (←)">
-                            <TextBlock Text="-10s" FontSize="12"/>
+                        <Button x:Name="BackButton" Classes="iconCircle" Focusable="False" ToolTip.Tip="Indietro di 10 secondi (←)">
+                            <TextBlock Text="-10" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center"/>
                         </Button>
                         <Button x:Name="PlayPauseButton" Classes="accent iconCircle" Width="42" Height="42"
                                 Focusable="False" ToolTip.Tip="Play / pausa (Spazio)">
                             <Path x:Name="PlayPauseIcon" Classes="icon" Data="{StaticResource IconPause}" Width="16" Height="16"/>
                         </Button>
-                        <Button x:Name="ForwardButton" Classes="ghost" Focusable="False" ToolTip.Tip="Avanti di 10 secondi (→)">
-                            <TextBlock Text="+10s" FontSize="12"/>
+                        <Button x:Name="ForwardButton" Classes="iconCircle" Focusable="False" ToolTip.Tip="Avanti di 10 secondi (→)">
+                            <TextBlock Text="+10" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center"/>
                         </Button>
                     </StackPanel>
 
+                    <!-- File e stato -->
                     <StackPanel Grid.Column="1" Spacing="1" Margin="16,0" VerticalAlignment="Center">
                         <TextBlock x:Name="FileNameText" Text="" FontSize="13" FontWeight="SemiBold"
                                    TextTrimming="CharacterEllipsis"/>
-                        <TextBlock x:Name="StatusText" Text="In caricamento..." FontSize="11"
-                                   Foreground="{DynamicResource AppTextMutedBrush}"/>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Ellipse x:Name="StatusDot" Width="7" Height="7" VerticalAlignment="Center"
+                                     Fill="{DynamicResource AppWarningBrush}"/>
+                            <TextBlock x:Name="StatusText" Text="In caricamento..." FontSize="11"
+                                       Foreground="{DynamicResource AppTextMutedBrush}" TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
                     </StackPanel>
 
+                    <!-- Tracce, volume, info, schermo intero -->
                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                        <TextBlock Text="Volume" FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center"/>
-                        <Slider x:Name="VolumeSlider" Width="110" Minimum="0" Maximum="100" Value="80"
-                                Focusable="False" VerticalAlignment="Center" ToolTip.Tip="Volume (↑ / ↓)"/>
-                        <Button x:Name="FullscreenButton" Classes="ghost" Focusable="False" ToolTip.Tip="Schermo intero (F), ESC per uscire">
-                            <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconMonitor}"/><TextBlock Text="Schermo intero"/></StackPanel>
+                        <StackPanel Classes="bi" ToolTip.Tip="Traccia audio (A per passare alla successiva)">
+                            <Path Classes="icon" Data="{StaticResource IconGlobe}" Stroke="{DynamicResource AppTextMutedBrush}"/>
+                            <ComboBox x:Name="AudioCombo" Classes="track" PlaceholderText="Audio" IsEnabled="False" Focusable="False"/>
+                        </StackPanel>
+                        <StackPanel Classes="bi" ToolTip.Tip="Sottotitoli (S per passare ai successivi)">
+                            <Path Classes="icon" Data="{StaticResource IconSubtitles}" Stroke="{DynamicResource AppTextMutedBrush}"/>
+                            <ComboBox x:Name="SubtitleCombo" Classes="track" PlaceholderText="Sottotitoli" IsEnabled="False" Focusable="False"/>
+                        </StackPanel>
+                        <Border Width="1" Height="24" Background="{DynamicResource AppBorderBrush}" Margin="4,0"/>
+                        <StackPanel Classes="bi" ToolTip.Tip="Volume (↑ / ↓)">
+                            <Path Classes="icon" Data="{StaticResource IconVolume}" Stroke="{DynamicResource AppTextMutedBrush}"/>
+                            <Slider x:Name="VolumeSlider" Width="96" Minimum="0" Maximum="100" Value="80"
+                                    Focusable="False" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <Button x:Name="InfoButton" Classes="iconCircle" Focusable="False" ToolTip.Tip="Informazioni su codec e tracce (I)">
+                            <Path Classes="icon" Data="{StaticResource IconInfo}"/>
                         </Button>
+                        <Button x:Name="FullscreenButton" Classes="iconCircle" Focusable="False" ToolTip.Tip="Schermo intero (F), ESC per uscire">
+                            <Path Classes="icon" Data="{StaticResource IconMonitor}"/>
+                        </Button>
+                        <Border Width="36" Height="36" Background="Transparent"
+                                ToolTip.Tip="Spazio: play/pausa · ←/→: ±10 s · ↑/↓: volume · A: audio · S: sottotitoli · I: informazioni · F: schermo intero · ESC: esci">
+                            <Path Classes="icon" Data="{StaticResource IconKeyboard}" Stroke="{DynamicResource AppTextMutedBrush}"
+                                  HorizontalAlignment="Center"/>
+                        </Border>
                     </StackPanel>
                 </Grid>
-
-                <TextBlock Text="Spazio: play/pausa  ·  ←/→: ±10s  ·  ↑/↓: volume  ·  F: schermo intero  ·  ESC: esci"
-                           FontSize="11" Foreground="{DynamicResource AppTextMutedBrush}"/>
             </StackPanel>
         </Border>
     </Grid>
