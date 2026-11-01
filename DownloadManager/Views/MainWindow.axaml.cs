@@ -102,7 +102,8 @@ public partial class MainWindow : Window
         // (le colonne della DataGrid non sono nell'albero visivo, non si possono legare in XAML)
         viewModel.Sftp.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName is nameof(SftpTabViewModel.ShowWebResults) or nameof(SftpTabViewModel.ShowLanguageResults))
+            if (e.PropertyName is nameof(SftpTabViewModel.ShowWebResults) or nameof(SftpTabViewModel.ShowLanguageResults)
+                or nameof(SftpTabViewModel.ShowDurationResults))
                 UpdateResultColumns();
         };
         Opened += (_, _) => UpdateResultColumns();
@@ -1825,12 +1826,9 @@ public partial class MainWindow : Window
     private async Task StartVideoCheckWithChoiceAsync(bool recheckAll)
     {
         if (Vm == null || !Vm.Sftp.CanStartVideoCheck()) return;
-        var choice = await VideoCheckDialog.ShowAsync(this, recheckAll);
-        if (choice == VideoCheckDialog.Choice.Cancel) return;
-        Vm.Sftp.StartVideoCheck(
-            web: choice != VideoCheckDialog.Choice.LanguageOnly,
-            lang: choice != VideoCheckDialog.Choice.CodecOnly,
-            recheckAll);
+        var choice = await VideoCheckDialog.ShowAsync(this, recheckAll, minDurationMinutes: Vm.Sftp.MinVideoDurationMinutes);
+        if (choice == null) return;
+        Vm.Sftp.StartVideoCheck(choice.Web, choice.Language, recheckAll, choice.Duration);
     }
 
     // ───── Esiti dei controlli e controlli sugli elementi selezionati ─────
@@ -1847,6 +1845,7 @@ public partial class MainWindow : Window
                 {
                     case "Web": col.IsVisible = Vm.Sftp.ShowWebResults; break;
                     case "Lingua": col.IsVisible = Vm.Sftp.ShowLanguageResults; break;
+                    case "Durata": col.IsVisible = Vm.Sftp.ShowDurationResults; break;
                 }
             }
         }
@@ -1863,11 +1862,9 @@ public partial class MainWindow : Window
         var prompt = targets.Count == 1
             ? $"«{targets[0].Name}»{(targets[0].IsDirectory ? " e tutto quello che contiene" : "")}. Si rilegge anche se già controllato."
             : $"I {targets.Count} elementi selezionati (con le loro sottocartelle). Si rileggono anche se già controllati.";
-        var choice = await VideoCheckDialog.ShowAsync(this, prompt: prompt);
-        if (choice == VideoCheckDialog.Choice.Cancel) return;
-        Vm.Sftp.StartVideoCheckOnSelection(left, targets,
-            web: choice != VideoCheckDialog.Choice.LanguageOnly,
-            lang: choice != VideoCheckDialog.Choice.CodecOnly);
+        var choice = await VideoCheckDialog.ShowAsync(this, prompt: prompt, minDurationMinutes: Vm.Sftp.MinVideoDurationMinutes);
+        if (choice == null) return;
+        Vm.Sftp.StartVideoCheckOnSelection(left, targets, choice.Web, choice.Language, choice.Duration);
     }
 
     private void OnRemoteZeroCheckClick(object? sender, RoutedEventArgs e) => Vm?.Sftp.CheckZeroByteOnSelection(false, ResolveItems<SftpRemoteEntry>(sender));
@@ -1881,9 +1878,9 @@ public partial class MainWindow : Window
     private async Task LeftVideoCheckAsync(bool recheckAll)
     {
         if (Vm == null || !Vm.Sftp.CanStartVideoCheckAnywhere()) return;
-        var choice = await VideoCheckDialog.ShowAsync(this, recheckAll);
-        if (choice == VideoCheckDialog.Choice.Cancel) return;
-        Vm.Sftp.StartVideoCheckLeft(choice != VideoCheckDialog.Choice.LanguageOnly, choice != VideoCheckDialog.Choice.CodecOnly, recheckAll);
+        var choice = await VideoCheckDialog.ShowAsync(this, recheckAll, minDurationMinutes: Vm.Sftp.MinVideoDurationMinutes);
+        if (choice == null) return;
+        Vm.Sftp.StartVideoCheckLeft(choice.Web, choice.Language, recheckAll, choice.Duration);
     }
 
     private void OnLocalCheckWebStreamClick(object? sender, RoutedEventArgs e) => _ = LocalVideoCheckAsync(recheckAll: false, targets: null);
@@ -1901,13 +1898,22 @@ public partial class MainWindow : Window
             : targets.Count == 1
                 ? $"«{targets[0].Name}»{(targets[0].IsDirectory ? " e tutto quello che contiene" : "")}, sul PC. Si rilegge anche se già controllato."
                 : $"I {targets.Count} elementi selezionati del PC (con le loro sottocartelle). Si rileggono anche se già controllati.";
-        var choice = await VideoCheckDialog.ShowAsync(this, recheckAll, prompt);
-        if (choice == VideoCheckDialog.Choice.Cancel) return;
-        Vm.Sftp.StartVideoCheckLocal(choice != VideoCheckDialog.Choice.LanguageOnly, choice != VideoCheckDialog.Choice.CodecOnly, recheckAll, targets);
+        var choice = await VideoCheckDialog.ShowAsync(this, recheckAll, prompt, Vm.Sftp.MinVideoDurationMinutes);
+        if (choice == null) return;
+        Vm.Sftp.StartVideoCheckLocal(choice.Web, choice.Language, recheckAll, targets, choice.Duration);
     }
 
     private void OnLocalZeroCheckClick(object? sender, RoutedEventArgs e)
     {
         if (Vm != null) _ = Vm.Sftp.CheckLocalZeroOnSelectionAsync(ResolveItems<LocalFileEntry>(sender));
+    }
+
+    // ───── Soglia della durata (menu con l'occhio) ─────
+
+    private async void OnMinDurationClick(object? sender, RoutedEventArgs e)
+    {
+        if (Vm == null) return;
+        var minutes = await DurationThresholdDialog.ShowAsync(this, Vm.Sftp.MinVideoDurationMinutes);
+        if (minutes != null) Vm.Sftp.MinVideoDurationMinutes = minutes.Value;
     }
 }

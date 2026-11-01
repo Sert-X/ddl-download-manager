@@ -46,7 +46,9 @@ public class WebStreamCheckRepository
         foreach (var column in new[]
                  {
                      "LangLevel INTEGER", "LangText TEXT", "LangDetail TEXT",
-                     "RulesVersion INTEGER NOT NULL DEFAULT 1"
+                     "RulesVersion INTEGER NOT NULL DEFAULT 1",
+                     // Durata del video in secondi (NULL = mai letta) e se è stimata (TS/MPEG)
+                     "Duration REAL", "DurationApprox INTEGER NOT NULL DEFAULT 0"
                  })
         {
             try { await conn.ExecuteAsync($"ALTER TABLE WebStreamChecks ADD COLUMN {column}"); } catch { /* già presente */ }
@@ -66,13 +68,16 @@ public class WebStreamCheckRepository
         public string? LangText { get; set; }
         public string? LangDetail { get; set; }
         public long RulesVersion { get; set; }
+        public double? Duration { get; set; }
+        public long DurationApprox { get; set; }
     }
 
     private static WebStreamResult ToResult(Row r) => new(
         r.FullPath, (WebStreamLevel)r.Level, r.ShortText, r.Detail, r.Size,
         DateTime.TryParse(r.Modified, null, System.Globalization.DateTimeStyles.RoundtripKind, out var m) ? m : DateTime.MinValue,
         DateTime.TryParse(r.CheckedAt, out var c) ? c : DateTime.MinValue,
-        (WebStreamLevel)(r.LangLevel ?? 0), r.LangText ?? "", r.LangDetail ?? "", (int)r.RulesVersion);
+        (WebStreamLevel)(r.LangLevel ?? 0), r.LangText ?? "", r.LangDetail ?? "", (int)r.RulesVersion,
+        r.Duration, r.DurationApprox != 0);
 
     public async Task SaveAsync(string serverKey, WebStreamResult r)
     {
@@ -82,12 +87,13 @@ public class WebStreamCheckRepository
             await using var conn = new SqliteConnection(_connectionString);
             await conn.ExecuteAsync(@"INSERT OR REPLACE INTO WebStreamChecks
                     (ServerKey, FullPath, Size, Modified, Level, ShortText, Detail, CheckedAt,
-                     LangLevel, LangText, LangDetail, RulesVersion)
+                     LangLevel, LangText, LangDetail, RulesVersion, Duration, DurationApprox)
                     VALUES (@serverKey, @FullPath, @Size, @modified, @level, @ShortText, @Detail, @at,
-                     @langLevel, @LangText, @LangDetail, @RulesVersion)",
+                     @langLevel, @LangText, @LangDetail, @RulesVersion, @Duration, @durationApprox)",
                 new
                 {
                     serverKey, r.FullPath, r.Size, r.ShortText, r.Detail, r.LangText, r.LangDetail, r.RulesVersion,
+                    r.Duration, durationApprox = r.DurationApprox ? 1 : 0,
                     langLevel = r.LangLevel == WebStreamLevel.None ? (int?)null : (int)r.LangLevel,
                     modified = r.Modified.ToString("o"),
                     level = (int)r.Level,
@@ -107,7 +113,7 @@ public class WebStreamCheckRepository
             var prefix = EscapeLike(folder.TrimEnd('/')) + "/%";
             var rows = await conn.QueryAsync<Row>(
                 @"SELECT FullPath, Size, Modified, Level, ShortText, Detail, CheckedAt,
-                         LangLevel, LangText, LangDetail, RulesVersion FROM WebStreamChecks
+                         LangLevel, LangText, LangDetail, RulesVersion, Duration, DurationApprox FROM WebStreamChecks
                   WHERE ServerKey = @serverKey AND FullPath LIKE @prefix ESCAPE '\'",
                 new { serverKey, prefix });
             return rows.Select(ToResult).ToList();

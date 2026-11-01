@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.1] — 2026-11-01
+
+### 📡 SFTP — Controllo della durata
+- **Colonna "Durata"** in tutte le tabelle dei file (server e PC): quanto dura ogni video; nelle cartelle quanti video e la durata totale. Si legge insieme agli altri controlli, senza scaricare di più.
+- **Video troppo corti**: sotto la soglia scelta (occhio → "Durata minima…", all'inizio 5 minuti) il video è segnalato in giallo come "corto", e le cartelle dicono quanti ("2 sotto 5 min"). Cambiando la soglia le segnalazioni si aggiornano subito, senza ricontrollare i file.
+- **Finestra della verifica con le caselle**: codec web, lingua e durata, anche tutti insieme; l'ultima scelta resta. Con "Durata" si leggono solo i video di cui manca ancora la durata.
+- File .ts e .mpg: la durata, che non è scritta nel file, si stima dalla dimensione ("~").
+
 ## [1.5.0] — 2026-11-01
 
 ### 📡 SFTP — Controlli sui video

@@ -87,10 +87,36 @@ public abstract partial class CheckedFileEntry : ObservableObject
 
     partial void OnWebStreamDetailChanged(string value) => OnPropertyChanged(nameof(HasWebStreamDetail));
 
+    // ---- Durata (colonna Durata) ----
+    /// <summary>Ok = durata nota, Warning = sotto la soglia ("corto"), Stale = file cambiato, None = mai letta.</summary>
+    [ObservableProperty] private WebStreamLevel _durationLevel;
+    /// <summary>Testo breve (es. "23:41", "3:05 · corto", "2 sotto 5 min").</summary>
+    [ObservableProperty] private string _durationText = string.Empty;
+    [ObservableProperty] private string _durationDetail = string.Empty;
+
+    public bool IsDurationOk => DurationLevel == WebStreamLevel.Ok;
+    public bool IsDurationShort => DurationLevel == WebStreamLevel.Warning;
+    public bool IsDurationStale => DurationLevel == WebStreamLevel.Stale;
+
+    public void SetDuration(WebStreamLevel level, string text, string detail)
+    {
+        DurationLevel = level;
+        DurationText = text;
+        DurationDetail = detail;
+    }
+
+    partial void OnDurationLevelChanged(WebStreamLevel value)
+    {
+        OnPropertyChanged(nameof(IsDurationOk));
+        OnPropertyChanged(nameof(IsDurationShort));
+        OnPropertyChanged(nameof(IsDurationStale));
+    }
+
     /// <summary>Copia gli esiti da un'altra riga (stesso file letto di nuovo).</summary>
     public void CopyChecksFrom(CheckedFileEntry source)
     {
         SetWebStream(source.WebStreamLevel, source.WebStreamInfo, source.WebStreamDetail);
         SetLanguage(source.LangLevel, source.LangInfo, source.LangDetail);
+        SetDuration(source.DurationLevel, source.DurationText, source.DurationDetail);
     }
 }

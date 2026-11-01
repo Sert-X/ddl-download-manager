@@ -9,6 +9,14 @@
         ShowInTaskbar="False"
         Background="{DynamicResource AppBackgroundBrush}">
 
+    <Window.Styles>
+        <Style Selector="Border.option">
+            <Setter Property="Background" Value="{DynamicResource AppSurface2Brush}"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="14,10"/>
+        </Style>
+    </Window.Styles>
+
     <StackPanel Margin="22" Spacing="18">
 
         <Grid ColumnDefinitions="Auto, *">
@@ -25,42 +33,53 @@
             </StackPanel>
         </Grid>
 
-        <StackPanel Spacing="10">
-            <Button x:Name="CodecOnlyButton" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="14,12" Click="OnCodecOnlyClick">
-                <Grid ColumnDefinitions="Auto, *">
-                    <Path Classes="icon accent" Width="18" Height="18" Data="{StaticResource IconFilm}" VerticalAlignment="Center" Margin="0,0,14,0"/>
-                    <StackPanel Grid.Column="1" Spacing="2">
-                        <TextBlock Text="Solo codec" FontWeight="SemiBold"/>
-                        <TextBlock Text="Audio e video adatti ai player web (colonna Web)" FontSize="12" TextWrapping="Wrap"
-                                   Foreground="{DynamicResource AppTextMutedBrush}"/>
-                    </StackPanel>
-                </Grid>
-            </Button>
-            <Button x:Name="LanguageOnlyButton" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="14,12" Click="OnLanguageOnlyClick">
-                <Grid ColumnDefinitions="Auto, *">
-                    <Path Classes="icon accent" Width="18" Height="18" Data="{StaticResource IconGlobe}" VerticalAlignment="Center" Margin="0,0,14,0"/>
-                    <StackPanel Grid.Column="1" Spacing="2">
-                        <TextBlock Text="Solo lingua" FontWeight="SemiBold"/>
-                        <TextBlock Text="Audio in italiano, come unica traccia o tra le tracce (colonna Lingua)" FontSize="12" TextWrapping="Wrap"
-                                   Foreground="{DynamicResource AppTextMutedBrush}"/>
-                    </StackPanel>
-                </Grid>
-            </Button>
-            <Button x:Name="BothButton" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="14,12" Click="OnBothClick">
-                <Grid ColumnDefinitions="Auto, *">
-                    <Path Classes="icon accent" Width="18" Height="18" Data="{StaticResource IconLayers}" VerticalAlignment="Center" Margin="0,0,14,0"/>
-                    <StackPanel Grid.Column="1" Spacing="2">
-                        <TextBlock Text="Codec e lingua" FontWeight="SemiBold"/>
-                        <TextBlock Text="Entrambi (colonne Web e Lingua). Stessa velocità: ogni file si legge una volta sola" FontSize="12" TextWrapping="Wrap"
-                                   Foreground="{DynamicResource AppTextMutedBrush}"/>
-                    </StackPanel>
-                </Grid>
-            </Button>
+        <StackPanel Spacing="8">
+            <Border Classes="option">
+                <CheckBox x:Name="WebCheck" IsChecked="True">
+                    <Grid ColumnDefinitions="Auto, *" Margin="4,0,0,0">
+                        <Path Classes="icon accent" Width="16" Height="16" Data="{StaticResource IconFilm}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                        <StackPanel Grid.Column="1" Spacing="2">
+                            <TextBlock Text="Codec web" FontWeight="SemiBold"/>
+                            <TextBlock Text="Audio e video adatti ai player web (colonna Web)" FontSize="12" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource AppTextMutedBrush}"/>
+                        </StackPanel>
+                    </Grid>
+                </CheckBox>
+            </Border>
+            <Border Classes="option">
+                <CheckBox x:Name="LangCheck" IsChecked="True">
+                    <Grid ColumnDefinitions="Auto, *" Margin="4,0,0,0">
+                        <Path Classes="icon accent" Width="16" Height="16" Data="{StaticResource IconGlobe}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                        <StackPanel Grid.Column="1" Spacing="2">
+                            <TextBlock Text="Lingua" FontWeight="SemiBold"/>
+                            <TextBlock Text="Audio in italiano, come unica traccia o tra le tracce (colonna Lingua)" FontSize="12" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource AppTextMutedBrush}"/>
+                        </StackPanel>
+                    </Grid>
+                </CheckBox>
+            </Border>
+            <Border Classes="option">
+                <CheckBox x:Name="DurationCheck" IsChecked="True">
+                    <Grid ColumnDefinitions="Auto, *" Margin="4,0,0,0">
+                        <Path Classes="icon accent" Width="16" Height="16" Data="{StaticResource IconClock}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                        <StackPanel Grid.Column="1" Spacing="2">
+                            <TextBlock Text="Durata" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="DurationHint" Text="Durata di ogni video e segnalazione dei più corti della soglia (colonna Durata)" FontSize="12" TextWrapping="Wrap"
+                                       Foreground="{DynamicResource AppTextMutedBrush}"/>
+                        </StackPanel>
+                    </Grid>
+                </CheckBox>
+            </Border>
+            <TextBlock Text="Stessa velocità con una o tutte le voci: ogni video si legge una volta sola." FontSize="11"
+                       Foreground="{DynamicResource AppTextMutedBrush}" TextWrapping="Wrap" Margin="2,2,0,0"/>
         </StackPanel>
 
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
             <Button Classes="ghost" MinWidth="100" IsCancel="True" Click="OnCancelClick">
                 <TextBlock Text="Annulla"/>
+            </Button>
+            <Button x:Name="OkButton" Classes="accent" MinWidth="120" IsDefault="True" Click="OnOkClick">
+                <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCheck}"/><TextBlock Text="Controlla"/></StackPanel>
             </Button>
         </StackPanel>
     </StackPanel>

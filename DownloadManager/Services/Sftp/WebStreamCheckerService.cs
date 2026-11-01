@@ -23,7 +23,8 @@ public sealed record WebStreamResult(
     string FullPath, WebStreamLevel Level, string ShortText, string Detail,
     long Size, DateTime Modified, DateTime CheckedAt,
     WebStreamLevel LangLevel = WebStreamLevel.None, string LangText = "", string LangDetail = "",
-    int RulesVersion = WebStreamCheckerService.RulesVersion)
+    int RulesVersion = WebStreamCheckerService.RulesVersion,
+    double? Duration = null, bool DurationApprox = false)
 {
     /// <summary>L'esito vale ancora per il file con questa dimensione e data.</summary>
     public bool Matches(long size, DateTime modified) =>
@@ -101,10 +102,44 @@ public sealed class WebStreamCheckerService
         RaiseStateChanged();
     }
 
+    /// <summary>Durata sotto la quale un video si segnala come corto (secondi; 0 = mai). La imposta l'interfaccia.</summary>
+    public double ShortThresholdSeconds { get; set; }
+
+    public static string CheckLabel(bool web, bool lang, bool duration)
+    {
+        var parts = new List<string>();
+        if (web) parts.Add("Web");
+        if (lang) parts.Add(parts.Count == 0 ? "Lingua" : "lingua");
+        if (duration) parts.Add(parts.Count == 0 ? "Durata" : "durata");
+        return string.Join("+", parts);
+    }
+
+    public static string CheckName(bool web, bool lang, bool duration)
+    {
+        var parts = new List<string>();
+        if (web) parts.Add("codec");
+        if (lang) parts.Add("lingua");
+        if (duration) parts.Add("durata");
+        if (parts.Count == 1) return web ? "Verifica streaming" : lang ? "Controllo lingua" : "Controllo durata";
+        return "Verifica " + (parts.Count == 2 ? $"{parts[0]} e {parts[1]}" : $"{parts[0]}, {parts[1]} e {parts[2]}");
+    }
+
+    public static string FormatMinutes(double seconds) =>
+        seconds % 60 == 0 ? $"{seconds / 60:0} min" : $"{seconds / 60:0.#} min";
+
+    /// <summary>Durata leggibile: 1:23:45 oppure 23:41.</summary>
+    public static string FormatDuration(double seconds)
+    {
+        var t = TimeSpan.FromSeconds(Math.Max(0, Math.Round(seconds)));
+        return t.TotalHours >= 1 ? $"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}" : $"{t.Minutes}:{t.Seconds:00}";
+    }
+
     /// <summary>Il video va letto per i controlli richiesti.</summary>
-    private static bool NeedsRead(WebStreamResult? saved, SftpRemoteEntry v, bool web, bool lang, bool recheckAll)
+    private static bool NeedsRead(WebStreamResult? saved, SftpRemoteEntry v, bool web, bool lang, bool duration, bool recheckAll)
     {
         if (recheckAll || saved == null || !saved.Matches(v.Size, v.Modified)) return true;
+        // Durata mai letta (esiti di prima di questa funzione) o file illeggibile l'ultima volta
+        if (duration && (saved.Duration == null || saved.Level == WebStreamLevel.Unreadable)) return true;
         if (web && saved.Level is WebStreamLevel.None or WebStreamLevel.Unreadable) return true;
         if (lang)
         {
@@ -149,10 +184,10 @@ public sealed class WebStreamCheckerService
     /// <param name="recheckAll">Rilegge anche i video già controllati.</param>
     /// <param name="targets">Solo questi file e cartelle (della cartella <paramref name="rootFolder"/>); null = tutta la cartella.</param>
     public Task RunCheckAsync(SftpConfig server, ISftpService listing, string rootFolder,
-        bool web, bool lang, bool recheckAll = false, IReadOnlyList<SftpRemoteEntry>? targets = null)
+        bool web, bool lang, bool recheckAll = false, IReadOnlyList<SftpRemoteEntry>? targets = null, bool duration = false)
     {
         var connection = new SharedConnection(server, _limiter);
-        return RunCoreAsync(server.ServerKey, server.Name, rootFolder, web, lang, recheckAll, targets,
+        return RunCoreAsync(server.ServerKey, server.Name, rootFolder, web, lang, duration, recheckAll, targets,
             (folder, ct) => listing.ListDirectoryAsync(folder, ct),
             (ffprobe, v, ct) => ProbeWithRetryAsync(connection, ffprobe, v, ct),
             connection);
@@ -166,8 +201,8 @@ public sealed class WebStreamCheckerService
     /// l'intestazione). Percorsi con "/" (es. "C:/Video/film.mkv"), come nel database.
     /// </summary>
     public Task RunLocalCheckAsync(string rootFolder, bool web, bool lang, bool recheckAll = false,
-        IReadOnlyList<SftpRemoteEntry>? targets = null)
-        => RunCoreAsync(LocalKey, "PC", rootFolder.Replace('\\', '/'), web, lang, recheckAll, targets,
+        IReadOnlyList<SftpRemoteEntry>? targets = null, bool duration = false)
+        => RunCoreAsync(LocalKey, "PC", rootFolder.Replace('\\', '/'), web, lang, duration, recheckAll, targets,
             (folder, ct) => Task.Run(() => ListLocal(folder), ct),
             (ffprobe, v, ct) => ProbeLocalAsync(ffprobe, v, ct),
             null);
@@ -214,14 +249,14 @@ public sealed class WebStreamCheckerService
 
     /// <summary>Nucleo della verifica: elenco dei video, lettura (3 alla volta), salvataggio, riepilogo.</summary>
     private async Task RunCoreAsync(string serverKey, string serverName, string rootFolder,
-        bool web, bool lang, bool recheckAll, IReadOnlyList<SftpRemoteEntry>? targets,
+        bool web, bool lang, bool duration, bool recheckAll, IReadOnlyList<SftpRemoteEntry>? targets,
         Func<string, CancellationToken, Task<List<SftpRemoteEntry>>> listDir,
         Func<string, SftpRemoteEntry, CancellationToken, Task<WebStreamResult>> probe,
         IDisposable? resource)
     {
-        if (IsChecking || (!web && !lang)) { resource?.Dispose(); return; }
-        var label = web && lang ? "Web+lingua" : web ? "Web" : "Lingua";
-        var what = web && lang ? "Verifica codec e lingua" : web ? "Verifica streaming" : "Controllo lingua";
+        if (IsChecking || (!web && !lang && !duration)) { resource?.Dispose(); return; }
+        var label = CheckLabel(web, lang, duration);
+        var what = CheckName(web, lang, duration);
 
         var ffmpegPath = _ffmpeg.GetFfmpegPath();
         var ffprobe = ffmpegPath == null ? null : Path.Combine(Path.GetDirectoryName(ffmpegPath) ?? "", "ffprobe.exe");
@@ -238,14 +273,15 @@ public sealed class WebStreamCheckerService
         CheckingServerKey = serverKey;
 
         IsChecking = true;
-        CheckingKind = web ? WebStreamCheckKind.Web : WebStreamCheckKind.Language;
+        CheckingKind = web || duration ? WebStreamCheckKind.Web : WebStreamCheckKind.Language;
         ProgressStatus = $"{label}: ricerca video...";
         ProgressDetail = $"{what}: ricerca dei video in {root}";
         RaiseStateChanged();
         _logger.LogInformation("[WEB-STREAM] {What} avviato su {Root} ({Server})", what, root, serverName);
 
         int checkedNow = 0, done = 0, skipped = 0;
-        int webBad = 0, webWarn = 0, langBad = 0, langWarn = 0, unreadable = 0;
+        int webBad = 0, webWarn = 0, langBad = 0, langWarn = 0, unreadable = 0, shortCount = 0;
+        var shortBelow = ShortThresholdSeconds;
         var countLock = new object();
         void CountResult(WebStreamResult r)
         {
@@ -254,6 +290,7 @@ public sealed class WebStreamCheckerService
                 if (r.Level == WebStreamLevel.Unreadable || r.LangLevel == WebStreamLevel.Unreadable) { unreadable++; return; }
                 if (web) { if (r.Level == WebStreamLevel.Bad) webBad++; else if (r.Level == WebStreamLevel.Warning) webWarn++; }
                 if (lang) { if (r.LangLevel == WebStreamLevel.Bad) langBad++; else if (r.LangLevel == WebStreamLevel.Warning) langWarn++; }
+                if (duration && shortBelow > 0 && r.Duration is { } d && d < shortBelow) shortCount++;
             }
         }
 
@@ -279,7 +316,7 @@ public sealed class WebStreamCheckerService
             var saved = (await _repo.GetUnderAsync(serverKey, root))
                 .ToDictionary(r => r.FullPath, StringComparer.Ordinal);
 
-            var todo = videos.Where(v => NeedsRead(saved.GetValueOrDefault(v.FullPath), v, web, lang, recheckAll)).ToList();
+            var todo = videos.Where(v => NeedsRead(saved.GetValueOrDefault(v.FullPath), v, web, lang, duration, recheckAll)).ToList();
             skipped = videos.Count - todo.Count;
 
             // Esiti dei video già controllati, per il riepilogo finale
@@ -366,6 +403,7 @@ public sealed class WebStreamCheckerService
                 if (webBad > 0) parts.Add($"{webBad} non adatti al web");
                 if (langBad > 0) parts.Add($"{langBad} senza italiano");
                 if (webWarn + langWarn > 0) parts.Add($"{webWarn + langWarn} da verificare");
+                if (shortCount > 0) parts.Add($"{shortCount} più corti di {FormatMinutes(shortBelow)}");
                 if (unreadable > 0) parts.Add($"{unreadable} non leggibili");
                 var outcome = parts.Count == 0 ? "nessun problema" : string.Join(", ", parts);
                 var news = skipped > 0 ? $" ({checkedNow} letti ora, {skipped} già controllati)" : "";
@@ -539,7 +577,10 @@ public sealed class WebStreamCheckerService
 
     /// <summary>Tracce di un file sul PC (ffprobe legge solo quello che serve).</summary>
     public static Task<List<ProbedStream>> ProbeLocalStreamsAsync(string ffprobe, string localPath, CancellationToken ct)
-        => RunFfprobeAsync(ffprobe, localPath, ct);
+        => RunFfprobeLocalAsync(ffprobe, localPath, ct);
+
+    private static async Task<List<ProbedStream>> RunFfprobeLocalAsync(string ffprobe, string localPath, CancellationToken ct)
+        => await RunFfprobeAsync(ffprobe, localPath, ct);
 
     private static WebStreamResult BuildResult(SftpRemoteEntry v, List<ProbedStream> streams, Container container)
     {
@@ -551,11 +592,27 @@ public sealed class WebStreamCheckerService
             : null;
         var (level, shortText, detail) = WebStreamRules.Evaluate(streams, containerNote);
         var (langLevel, langText, langDetail) = LanguageRules.Evaluate(streams);
+        var (dur, approx) = DurationOf(v, streams as ProbeOutput, container);
         return new WebStreamResult(v.FullPath, level, shortText, detail + stamp, v.Size, v.Modified, DateTime.Now,
-            langLevel, langText, langDetail + stamp);
+            langLevel, langText, langDetail + stamp, Duration: dur, DurationApprox: approx);
     }
 
-    private static async Task<(List<ProbedStream> Streams, Container Container)> ProbeRemoteAsync(SftpClient client, string ffprobe,
+    /// <summary>Formati letti solo all'inizio, senza la durata scritta nel file (ffprobe la stima dal pezzo letto).</summary>
+    private static readonly HashSet<string> StreamOnlyFormats = new(StringComparer.OrdinalIgnoreCase) { ".ts", ".m2ts", ".mts", ".mpg", ".mpeg" };
+
+    /// <summary>
+    /// Durata del video. MP4, MKV, AVI, WebM la scrivono nel file e ffprobe la legge anche dal pezzo
+    /// scaricato. Per TS/MPEG non c'è: si stima dalla dimensione del file e dal bitrate (approssimata).
+    /// </summary>
+    private static (double? Seconds, bool Approx) DurationOf(SftpRemoteEntry v, ProbeOutput? probe, Container container)
+    {
+        if (probe == null) return (null, false);
+        if (container == Container.Other && StreamOnlyFormats.Contains(Path.GetExtension(v.Name)))
+            return probe.BitRate is > 0 && v.Size > 0 ? (v.Size * 8.0 / probe.BitRate.Value, true) : (probe.Duration, true);
+        return (probe.Duration, false);
+    }
+
+    private static async Task<(ProbeOutput Streams, Container Container)> ProbeRemoteAsync(SftpClient client, string ffprobe,
         SftpRemoteEntry v, int headBytes, CancellationToken ct)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -713,7 +770,7 @@ public sealed class WebStreamCheckerService
         }
     }
 
-    private static async Task<List<ProbedStream>> RunFfprobeAsync(string ffprobe, string file, CancellationToken ct)
+    private static async Task<ProbeOutput> RunFfprobeAsync(string ffprobe, string file, CancellationToken ct)
     {
         var psi = new ProcessStartInfo
         {
@@ -726,7 +783,7 @@ public sealed class WebStreamCheckerService
         foreach (var a in new[]
                  {
                      "-v", "error", "-show_entries",
-                     "stream=codec_type,codec_name,profile,pix_fmt,channels:stream_tags=language,title:stream_disposition=default,attached_pic,forced",
+                     "stream=codec_type,codec_name,profile,pix_fmt,channels:stream_tags=language,title:stream_disposition=default,attached_pic,forced:format=duration,bit_rate",
                      "-of", "json", file
                  })
             psi.ArgumentList.Add(a);
@@ -754,13 +811,22 @@ public sealed class WebStreamCheckerService
         return streams;
     }
 
-    private static List<ProbedStream> ParseStreams(string json)
+    private static ProbeOutput ParseStreams(string json)
     {
-        var list = new List<ProbedStream>();
+        var list = new ProbeOutput();
         if (string.IsNullOrWhiteSpace(json)) return list;
         try
         {
             using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("format", out var fmt))
+            {
+                // ffprobe scrive i numeri come testo ("1424.512000")
+                static double? Num(JsonElement e, string name) =>
+                    e.TryGetProperty(name, out var v) && double.TryParse(v.ValueKind == JsonValueKind.String ? v.GetString() : v.GetRawText(),
+                        System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : null;
+                list.Duration = Num(fmt, "duration") is > 0 and var dur ? dur : null;
+                list.BitRate = Num(fmt, "bit_rate") is > 0 and var br ? br : null;
+            }
             if (!doc.RootElement.TryGetProperty("streams", out var arr)) return list;
             foreach (var s in arr.EnumerateArray())
             {
@@ -784,6 +850,13 @@ public sealed class WebStreamCheckerService
     }
 
     private void RaiseStateChanged() => StateChanged?.Invoke(this, EventArgs.Empty);
+}
+
+/// <summary>Tracce lette da ffprobe, con durata e bitrate del file.</summary>
+public sealed class ProbeOutput : List<ProbedStream>
+{
+    public double? Duration { get; set; }
+    public double? BitRate { get; set; }
 }
 
 public sealed record ProbedStream(string Type, string Codec, string Profile, string PixFmt, string Language,

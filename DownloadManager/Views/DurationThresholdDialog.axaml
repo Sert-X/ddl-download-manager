@@ -1,0 +1,41 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="DownloadManager.Views.DurationThresholdDialog"
+        Title="Durata minima"
+        Width="440"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        ShowInTaskbar="False"
+        Background="{DynamicResource AppBackgroundBrush}">
+
+    <StackPanel Margin="22" Spacing="18">
+        <Grid ColumnDefinitions="Auto, *">
+            <Border Width="42" Height="42" CornerRadius="21"
+                    Background="{DynamicResource AppWarningSoftBrush}"
+                    VerticalAlignment="Top">
+                <Path Classes="icon warn" Data="{StaticResource IconClock}" Width="20" Height="20"/>
+            </Border>
+            <StackPanel Grid.Column="1" Margin="14,0,0,0" Spacing="6" VerticalAlignment="Center">
+                <TextBlock Text="Durata minima dei video" FontSize="15" FontWeight="Bold"/>
+                <TextBlock FontSize="13" TextWrapping="Wrap" Foreground="{DynamicResource AppTextMutedBrush}"
+                           Text="I video più corti di così vengono segnalati come &quot;corto&quot; nella colonna Durata. Con 0 nessuna segnalazione. Cambiandola le segnalazioni si aggiornano subito, senza ricontrollare i file."/>
+            </StackPanel>
+        </Grid>
+
+        <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center">
+            <NumericUpDown x:Name="MinutesBox" Minimum="0" Maximum="600" Increment="1" FormatString="0.#"
+                           Width="140" HorizontalContentAlignment="Center"/>
+            <TextBlock Text="minuti" VerticalAlignment="Center" FontSize="13"/>
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+            <Button Classes="ghost" MinWidth="100" IsCancel="True" Click="OnCancelClick">
+                <TextBlock Text="Annulla"/>
+            </Button>
+            <Button x:Name="OkButton" Classes="accent" MinWidth="110" IsDefault="True" Click="OnOkClick">
+                <StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconCheck}"/><TextBlock Text="Salva"/></StackPanel>
+            </Button>
+        </StackPanel>
+    </StackPanel>
+</Window>

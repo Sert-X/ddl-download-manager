@@ -77,7 +77,25 @@ public partial class SftpTabViewModel
     /// <summary>Colonna Lingua ed evidenziazione dei video senza italiano.</summary>
     [ObservableProperty] private bool _showLanguageResults = true;
 
-    public bool ShowsAllResults => ShowZeroByteResults && ShowWebResults && ShowLanguageResults;
+    /// <summary>Colonna Durata e segnalazione dei video corti.</summary>
+    [ObservableProperty] private bool _showDurationResults = true;
+    /// <summary>Durata minima (minuti): i video più corti sono "corti". 0 = nessuna segnalazione.</summary>
+    [ObservableProperty] private double _minVideoDurationMinutes = 5;
+
+    public bool ShowsAllResults => ShowZeroByteResults && ShowWebResults && ShowLanguageResults && ShowDurationResults;
+    public string MinDurationMenuText => MinVideoDurationMinutes > 0
+        ? $"Durata minima: {WebStreamCheckerService.FormatMinutes(MinVideoDurationMinutes * 60)}..."
+        : "Durata minima: nessuna...";
+
+    partial void OnShowDurationResultsChanged(bool value) => SaveDisplay(s => s.ShowDurationResults = value);
+    partial void OnMinVideoDurationMinutesChanged(double value)
+    {
+        OnPropertyChanged(nameof(MinDurationMenuText));
+        if (_webChecker != null) _webChecker.ShortThresholdSeconds = Math.Max(0, value) * 60;
+        SaveDisplay(s => s.MinVideoDurationMinutes = value);
+        // Le segnalazioni si ricalcolano dalle durate salvate, senza rileggere i file
+        if (!_loadingDisplay) _ = ApplyWebStreamToCurrentAsync();
+    }
 
     partial void OnShowZeroByteResultsChanged(bool value) => SaveDisplay(s => s.ShowZeroByteResults = value);
     partial void OnShowWebResultsChanged(bool value) => SaveDisplay(s => s.ShowWebResults = value);
@@ -100,6 +118,7 @@ public partial class SftpTabViewModel
         ShowZeroByteResults = show;
         ShowWebResults = show;
         ShowLanguageResults = show;
+        ShowDurationResults = show;
     }
 
     /// <summary>Icona della riga di stato: pellicola o globo durante le verifiche.</summary>
@@ -122,11 +141,14 @@ public partial class SftpTabViewModel
             ShowZeroByteResults = _displaySettings.Current.ShowZeroByteResults;
             ShowWebResults = _displaySettings.Current.ShowWebResults;
             ShowLanguageResults = _displaySettings.Current.ShowLanguageResults;
+            ShowDurationResults = _displaySettings.Current.ShowDurationResults;
+            MinVideoDurationMinutes = _displaySettings.Current.MinVideoDurationMinutes;
             _loadingDisplay = false;
         }
 
         _webChecker = App.Services?.GetService<WebStreamCheckerService>();
         if (_webChecker == null) return;
+        _webChecker.ShortThresholdSeconds = Math.Max(0, MinVideoDurationMinutes) * 60;
 
         _webChecker.StateChanged += (_, _) => Dispatcher.UIThread.Post(() =>
         {
@@ -220,7 +242,7 @@ public partial class SftpTabViewModel
 
     /// <summary>Verifica solo i file e le cartelle selezionati (riletti anche se già controllati).</summary>
     /// <param name="left">Pannello di sinistra (altrimenti quello di destra).</param>
-    public void StartVideoCheckOnSelection(bool left, IReadOnlyList<SftpRemoteEntry> targets, bool web, bool lang)
+    public void StartVideoCheckOnSelection(bool left, IReadOnlyList<SftpRemoteEntry> targets, bool web, bool lang, bool duration = false)
     {
         if (targets.Count == 0) return;
         var server = left ? _server2Config : RemoteConfig;
@@ -236,31 +258,31 @@ public partial class SftpTabViewModel
         }
         var listing = left ? _server2 : Remote;
         var folder = left ? (Server2Path ?? "/") : SftpCurrentRemotePath;
-        var what = web && lang ? "Verifica codec e lingua" : web ? "Verifica streaming" : "Controllo lingua";
+        var what = WebStreamCheckerService.CheckName(web, lang, duration);
         SftpStatusMessage = targets.Count == 1 ? $"{what} di {targets[0].Name}..." : $"{what} di {targets.Count} elementi...";
         VideoCheckPanel = left ? CheckPanel.Left : CheckPanel.Right;
-        _ = _webChecker.RunCheckAsync(server, listing, folder, web, lang, recheckAll: true, targets: targets);
+        _ = _webChecker.RunCheckAsync(server, listing, folder, web, lang, recheckAll: true, targets: targets, duration: duration);
     }
 
     /// <summary>Verifica di tutta la cartella aperta nel pannello di sinistra (server).</summary>
-    public void StartVideoCheckLeft(bool web, bool lang, bool recheckAll)
+    public void StartVideoCheckLeft(bool web, bool lang, bool recheckAll, bool duration = false)
     {
         if (_webChecker == null || _server2Config == null || !IsServer2Connected) { SftpStatusMessage = "Collega prima il server nel pannello di sinistra."; return; }
         if (_webChecker.IsChecking) { SftpStatusMessage = "Un controllo dei video è già in corso: fermalo prima di avviarne un altro."; return; }
         var root = string.IsNullOrWhiteSpace(Server2Path) ? "/" : Server2Path;
-        var what = web && lang ? "Verifica codec e lingua" : web ? "Verifica streaming" : "Controllo lingua";
+        var what = WebStreamCheckerService.CheckName(web, lang, duration);
         SftpStatusMessage = $"{what} dei video in {root} su '{Server2Name}'...";
         VideoCheckPanel = CheckPanel.Left;
-        _ = _webChecker.RunCheckAsync(_server2Config, _server2, root, web, lang, recheckAll);
+        _ = _webChecker.RunCheckAsync(_server2Config, _server2, root, web, lang, recheckAll, duration: duration);
     }
 
     /// <summary>Verifica dei video sul PC: cartella aperta (targets null) o elementi selezionati.</summary>
-    public void StartVideoCheckLocal(bool web, bool lang, bool recheckAll, IReadOnlyList<LocalFileEntry>? targets = null)
+    public void StartVideoCheckLocal(bool web, bool lang, bool recheckAll, IReadOnlyList<LocalFileEntry>? targets = null, bool duration = false)
     {
         if (_webChecker == null) return;
         if (_webChecker.IsChecking) { SftpStatusMessage = "Un controllo dei video è già in corso: fermalo prima di avviarne un altro."; return; }
         if (string.IsNullOrWhiteSpace(SftpCurrentLocalPath) || !Directory.Exists(SftpCurrentLocalPath)) { SftpStatusMessage = "Apri una cartella del PC."; return; }
-        var what = web && lang ? "Verifica codec e lingua" : web ? "Verifica streaming" : "Controllo lingua";
+        var what = WebStreamCheckerService.CheckName(web, lang, duration);
         var remoteTargets = targets?.Select(t => new SftpRemoteEntry
         {
             Name = t.Name, FullPath = t.EntryPath, IsDirectory = t.IsDirectory, Size = t.Size, Modified = t.Modified
@@ -268,19 +290,19 @@ public partial class SftpTabViewModel
         SftpStatusMessage = remoteTargets == null ? $"{what} dei video in {SftpCurrentLocalPath}..."
             : remoteTargets.Count == 1 ? $"{what} di {remoteTargets[0].Name}..." : $"{what} di {remoteTargets.Count} elementi...";
         VideoCheckPanel = CheckPanel.Local;
-        _ = _webChecker.RunLocalCheckAsync(SftpCurrentLocalPath, web, lang, recheckAll || targets != null, remoteTargets);
+        _ = _webChecker.RunLocalCheckAsync(SftpCurrentLocalPath, web, lang, recheckAll || targets != null, remoteTargets, duration);
     }
 
     /// <param name="web">Codec (colonna Web).</param>
     /// <param name="lang">Lingua dell'audio (colonna Lingua).</param>
-    public void StartVideoCheck(bool web, bool lang, bool recheckAll)
+    public void StartVideoCheck(bool web, bool lang, bool recheckAll, bool duration = false)
     {
         if (!CanStartVideoCheck() || _webChecker == null || RemoteConfig == null) return;
-        var what = web && lang ? "Verifica codec e lingua" : web ? "Verifica streaming" : "Controllo lingua";
+        var what = WebStreamCheckerService.CheckName(web, lang, duration);
         var root = string.IsNullOrWhiteSpace(SftpCurrentRemotePath) ? "/" : SftpCurrentRemotePath;
         SftpStatusMessage = recheckAll ? $"{what} di tutti i video in {root}..." : $"{what} dei video in {root}...";
         VideoCheckPanel = CheckPanel.Right;
-        _ = _webChecker.RunCheckAsync(RemoteConfig, Remote, root, web, lang, recheckAll);
+        _ = _webChecker.RunCheckAsync(RemoteConfig, Remote, root, web, lang, recheckAll, duration: duration);
     }
 
     private void OnWebFileChecked(string serverKey, WebStreamResult result)
@@ -292,6 +314,8 @@ public partial class SftpTabViewModel
             {
                 local.SetWebStream(result.Level, result.ShortText, result.Detail);
                 local.SetLanguage(result.LangLevel, result.LangText, result.LangDetail);
+                var (dl, dt, dd) = DurationOfResult(result);
+                local.SetDuration(dl, dt, dd);
             }
             else if (_webApplyDebounce is { IsEnabled: false }) _webApplyDebounce.Start();
             return;
@@ -305,6 +329,8 @@ public partial class SftpTabViewModel
             {
                 left.SetWebStream(result.Level, result.ShortText, result.Detail);
                 left.SetLanguage(result.LangLevel, result.LangText, result.LangDetail);
+                var (ldl, ldt, ldd) = DurationOfResult(result);
+                left.SetDuration(ldl, ldt, ldd);
             }
             else if (result.FullPath.StartsWith((Server2Path ?? "/").TrimEnd('/') + "/", StringComparison.Ordinal)
                      && _webApplyDebounce is { IsEnabled: false })
@@ -319,6 +345,8 @@ public partial class SftpTabViewModel
         {
             entry.SetWebStream(result.Level, result.ShortText, result.Detail);
             entry.SetLanguage(result.LangLevel, result.LangText, result.LangDetail);
+            var (edl, edt, edd) = DurationOfResult(result);
+            entry.SetDuration(edl, edt, edd);
         }
         else if (result.FullPath.StartsWith(SftpCurrentRemotePath.TrimEnd('/') + "/", StringComparison.Ordinal))
         {
@@ -366,11 +394,14 @@ public partial class SftpTabViewModel
                 {
                     e.SetWebStream(WebStreamLevel.None, "", "");
                     e.SetLanguage(WebStreamLevel.None, "", "");
+                    e.SetDuration(WebStreamLevel.None, "", "");
                 }
                 else if (r.Matches(e.EntrySize, e.EntryModified))
                 {
                     e.SetWebStream(r.Level, r.ShortText, r.Detail);
                     e.SetLanguage(r.LangLevel, r.LangText, r.LangDetail);
+                    var (dl, dt, dd) = DurationOfResult(r);
+                    e.SetDuration(dl, dt, dd);
                 }
                 else
                 {
@@ -379,6 +410,8 @@ public partial class SftpTabViewModel
                         r.Level == WebStreamLevel.None ? "" : "Da ricontrollare", changed);
                     e.SetLanguage(r.LangLevel == WebStreamLevel.None ? WebStreamLevel.None : WebStreamLevel.Stale,
                         r.LangLevel == WebStreamLevel.None ? "" : "Da ricontrollare", changed);
+                    e.SetDuration(r.Duration == null ? WebStreamLevel.None : WebStreamLevel.Stale,
+                        r.Duration == null ? "" : "Da ricontrollare", changed);
                 }
                 continue;
             }
@@ -389,6 +422,8 @@ public partial class SftpTabViewModel
             e.SetWebStream(webLevel, webInfo, webDetail);
             var (langLevel, langInfo, langDetail) = Summarize(inside, r => r.LangLevel, "senza italiano", "", "", "con italiano");
             e.SetLanguage(langLevel, langInfo, langDetail);
+            var (durLevel, durInfo, durDetail) = SummarizeDuration(inside);
+            e.SetDuration(durLevel, durInfo, durDetail);
         }
         UpdateReadingMarks(entries, serverKey);
     }
@@ -435,6 +470,37 @@ public partial class SftpTabViewModel
         return moved.Count == 0 && orphans.Count == 0
             ? results
             : await _webChecker.Repository.GetUnderAsync(serverKey, folder);
+    }
+
+    private double ShortThresholdSeconds => Math.Max(0, MinVideoDurationMinutes) * 60;
+
+    /// <summary>Colonna Durata di un file: "23:41", oppure "3:05 · corto" sotto la soglia.</summary>
+    private (WebStreamLevel Level, string Text, string Detail) DurationOfResult(WebStreamResult r)
+    {
+        if (r.Duration is not { } d || r.Level == WebStreamLevel.Unreadable) return (WebStreamLevel.None, "", "");
+        var text = (r.DurationApprox ? "~" : "") + WebStreamCheckerService.FormatDuration(d);
+        var threshold = ShortThresholdSeconds;
+        var approx = r.DurationApprox ? "\nDurata stimata dalla dimensione del file (formato senza durata scritta)." : "";
+        if (threshold > 0 && d < threshold)
+            return (WebStreamLevel.Warning, text + " · corto",
+                $"Durata {text}: più corto di {WebStreamCheckerService.FormatMinutes(threshold)} (soglia nel menu con l'occhio)." + approx);
+        return (WebStreamLevel.Ok, text, $"Durata {text}" + approx);
+    }
+
+    /// <summary>Colonna Durata di una cartella: "2 sotto 5 min" oppure il numero di video e la durata totale.</summary>
+    private (WebStreamLevel Level, string Text, string Detail) SummarizeDuration(IReadOnlyList<WebStreamResult> inside)
+    {
+        var known = inside.Where(r => r.Duration != null && r.Level != WebStreamLevel.Unreadable
+                                      && r.Size != Persistence.WebStreamCheckRepository.ChangedMarker).ToList();
+        if (known.Count == 0) return (WebStreamLevel.None, "", "");
+        var total = known.Sum(r => r.Duration!.Value);
+        var threshold = ShortThresholdSeconds;
+        int shortCount = threshold > 0 ? known.Count(r => r.Duration < threshold) : 0;
+        var detail = $"{known.Count} video con durata letta, in tutto {WebStreamCheckerService.FormatDuration(total)}"
+                     + (threshold > 0 ? $"\nPiù corti di {WebStreamCheckerService.FormatMinutes(threshold)}: {shortCount}" : "");
+        return shortCount > 0
+            ? (WebStreamLevel.Warning, $"{shortCount} sotto {WebStreamCheckerService.FormatMinutes(threshold)}", detail)
+            : (WebStreamLevel.Ok, $"{known.Count} · {WebStreamCheckerService.FormatDuration(total)}", detail);
     }
 
     /// <summary>Riassunto di una cartella: "3 non idonei · 2 da verificare" oppure "12 video OK".</summary>

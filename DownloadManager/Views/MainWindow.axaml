@@ -1978,7 +1978,7 @@
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">5. Controlli sui file</Run><LineBreak/>
                                         Funzionano nel pannello di destra, in quello di sinistra (server o Locale) e sui singoli elementi.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Lente:</Run> cerca file vuoti (0 byte), di solito upload interrotti, nelle sottocartelle della cartella aperta. I file vuoti e le cartelle che li contengono diventano rossi; la colonna "Contenuto" ne riassume il contenuto.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Pellicola:</Run> controlla i video della cartella e delle sottocartelle. Una finestra chiede cosa controllare: "Solo codec", "Solo lingua" oppure "Codec e lingua" (stessa velocità: ogni file si legge una volta). Tasto destro sulla pellicola: "Ricontrolla tutti i video".<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Pellicola:</Run> controlla i video della cartella e delle sottocartelle. Una finestra chiede cosa controllare: codec web, lingua, durata, anche tutti insieme (stessa velocità: ogni file si legge una volta; l'ultima scelta resta). Tasto destro sulla pellicola: "Ricontrolla tutti i video".<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Singoli elementi:</Run> clic destro su file o cartelle, "Controlla codec / lingua…" oppure "Controlla file vuoti (0 byte)" (solo cartelle). Si rileggono anche se già controllati.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Velocità:</Run> dei video si leggono solo pochi MB (l'intestazione o l'indice), 3 alla volta; la riga di stato dice "Web 125/4421 · nome del file" e la riga del file (o della cartella che lo contiene) mostra "In lettura…".<LineBreak/>
                                         <LineBreak/>
@@ -1995,13 +1995,19 @@
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Senza italiano (rosso):</Run> nessuna traccia italiana. Le lingue trovate sono nel tooltip.<LineBreak/>
                                         • Conta solo quello che è scritto nelle tracce (codice lingua e titolo), non il nome del file.<LineBreak/>
                                         <LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Colonna Durata: troppo corti?</Run><LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Durata:</Run> quanto dura ogni video (es. 23:41); nelle cartelle quanti video e la durata totale.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Corto (giallo):</Run> il video dura meno della soglia: un trailer, un file sbagliato o incompleto. Le cartelle dicono quanti ("2 sotto 5 min").<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Soglia:</Run> occhio → "Durata minima…" (all'inizio 5 minuti, 0 = nessuna segnalazione). Cambiandola le segnalazioni si aggiornano subito, senza ricontrollare i file.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• File .ts e .mpg:</Run> non scrivono la durata nel file: si stima dalla dimensione e compare con "~".<LineBreak/>
+                                        <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">6. Esiti salvati e sempre aggiornati</Run><LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Salvati:</Run> tutti gli esiti (file vuoti, Web, Lingua) restano nel PC anche chiudendo l'app; riaprendo una cartella si vedono subito.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Si salta il già fatto:</Run> rilanciando un controllo si leggono solo i video nuovi o cambiati (dimensione o data diverse). Un file cambiato dopo il controllo è "Da ricontrollare".<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Cartelle:</Run> mostrano il riassunto di ciò che contengono, anche in profondità ("3 non idonei · 2 da verificare"); nel tooltip i numeri e le date dei controlli.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Modifiche dall'app:</Run> rinomine, spostamenti ed eliminazioni portano con sé i loro esiti.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Modifiche da fuori (WinSCP, altri PC):</Run> all'apertura di una cartella (al massimo ogni 5 minuti) e ogni 5 minuti il server elenca tutti i file sotto la cartella aperta, anche migliaia, in un paio di secondi. Gli esiti di file eliminati si tolgono, quelli di file rinominati o spostati li seguono, i file cambiati diventano "Da ricontrollare" e i file vuoti si aggiornano in tutto l'albero. Per farlo subito: occhio → "Riallinea esiti ora".<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Mostra / nascondi:</Run> l'occhio nella barra sceglie quali esiti vedere (file vuoti, codec web, lingua) in tutte le tabelle, colonne ed evidenziazioni comprese. È colorato quando qualcosa è nascosto.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Mostra / nascondi:</Run> l'occhio nella barra sceglie quali esiti vedere (file vuoti, codec web, lingua, durata) in tutte le tabelle, colonne ed evidenziazioni comprese. È colorato quando qualcosa è nascosto.<LineBreak/>
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">7. Altre tab</Run><LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Organizza file:</Run> in modalità Remoto lavora su uno qualsiasi dei server aperti qui (menu "Server").<LineBreak/>
@@ -2259,6 +2265,8 @@
                                                                                 <MenuItem Header="File vuoti (0 byte)" ToggleType="CheckBox" IsChecked="{Binding ShowZeroByteResults, Mode=TwoWay}"/>
                                                                                 <MenuItem Header="Codec web (colonna Web)" ToggleType="CheckBox" IsChecked="{Binding ShowWebResults, Mode=TwoWay}"/>
                                                                                 <MenuItem Header="Lingua (colonna Lingua)" ToggleType="CheckBox" IsChecked="{Binding ShowLanguageResults, Mode=TwoWay}"/>
+                                                                                <MenuItem Header="Durata (colonna Durata)" ToggleType="CheckBox" IsChecked="{Binding ShowDurationResults, Mode=TwoWay}"/>
+                                                                                <MenuItem Header="{Binding MinDurationMenuText}" Click="OnMinDurationClick" ToolTip.Tip="Video più corti di questa durata segnalati come corto"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconClock}"/></MenuItem.Icon></MenuItem>
                                                                                 <Separator/>
                                                                                 <MenuItem Header="Mostra / nascondi tutti" Command="{Binding ToggleAllResultsCommand}"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconEye}"/></MenuItem.Icon></MenuItem>
                                                                                 <MenuItem Header="Riallinea esiti ora" Command="{Binding RealignResultsCommand}" ToolTip.Tip="Confronta gli esiti salvati con i file sul server (anche nelle sottocartelle): toglie quelli di file eliminati, segue quelli rinominati, segna da ricontrollare quelli cambiati"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconRefresh}"/></MenuItem.Icon></MenuItem>
@@ -2389,6 +2397,24 @@
                                                                         </DataTemplate>
                                                                     </DataGridTemplateColumn.CellTemplate>
                                                                 </DataGridTemplateColumn>
+                                                                <DataGridTemplateColumn Header="Durata" Width="120" MinWidth="80">
+                                                                    <DataGridTemplateColumn.CellTemplate>
+                                                                        <DataTemplate x:DataType="models:SftpRemoteEntry">
+                                                                            <StackPanel Classes="bi" Margin="8,0" Background="Transparent" ToolTip.Tip="{Binding DurationDetail}" ToolTip.ShowDelay="300" IsVisible="{Binding DurationText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                                                                <Panel VerticalAlignment="Center">
+                                                                                    <Path Classes="icon muted" Width="13" Height="13" Data="{StaticResource IconClock}" IsVisible="{Binding IsDurationOk}"/>
+                                                                                    <Path Classes="icon warn" Width="13" Height="13" Data="{StaticResource IconAlert}" IsVisible="{Binding IsDurationShort}"/>
+                                                                                    <Path Classes="icon muted" Width="13" Height="13" Data="{StaticResource IconClock}" IsVisible="{Binding IsDurationStale}"/>
+                                                                                </Panel>
+                                                                                <Panel VerticalAlignment="Center">
+                                                                                    <TextBlock Text="{Binding DurationText}" FontSize="12" TextTrimming="CharacterEllipsis" IsVisible="{Binding IsDurationOk}"/>
+                                                                                    <TextBlock Text="{Binding DurationText}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppWarningBrush}" IsVisible="{Binding IsDurationShort}"/>
+                                                                                    <TextBlock Text="{Binding DurationText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding IsDurationStale}"/>
+                                                                                </Panel>
+                                                                            </StackPanel>
+                                                                        </DataTemplate>
+                                                                    </DataGridTemplateColumn.CellTemplate>
+                                                                </DataGridTemplateColumn>
                                                                 <DataGridTextColumn Header="Contenuto" Binding="{Binding ContentsInfo}" Width="190" MinWidth="100"/>
                                                                 <DataGridTextColumn Header="Dim." Binding="{Binding SizeText}" Width="90" MinWidth="70"/>
                                                                 <DataGridTextColumn Header="Ultima modifica" Binding="{Binding Modified, Mode=OneWay, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" Width="130" MinWidth="120"/>
@@ -2424,6 +2450,8 @@
                                                                             <MenuItem Header="File vuoti (0 byte)" ToggleType="CheckBox" IsChecked="{Binding ShowZeroByteResults, Mode=TwoWay}"/>
                                                                             <MenuItem Header="Codec web (colonna Web)" ToggleType="CheckBox" IsChecked="{Binding ShowWebResults, Mode=TwoWay}"/>
                                                                             <MenuItem Header="Lingua (colonna Lingua)" ToggleType="CheckBox" IsChecked="{Binding ShowLanguageResults, Mode=TwoWay}"/>
+                                                                            <MenuItem Header="Durata (colonna Durata)" ToggleType="CheckBox" IsChecked="{Binding ShowDurationResults, Mode=TwoWay}"/>
+                                                                            <MenuItem Header="{Binding MinDurationMenuText}" Click="OnMinDurationClick" ToolTip.Tip="Video più corti di questa durata segnalati come corto"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconClock}"/></MenuItem.Icon></MenuItem>
                                                                             <Separator/>
                                                                             <MenuItem Header="Mostra / nascondi tutti" Command="{Binding ToggleAllResultsCommand}"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconEye}"/></MenuItem.Icon></MenuItem>
                                                                             <MenuItem Header="Riallinea esiti ora" Command="{Binding RealignResultsCommand}" ToolTip.Tip="Confronta gli esiti salvati con i file sul server (anche nelle sottocartelle): toglie quelli di file eliminati, segue quelli rinominati, segna da ricontrollare quelli cambiati"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconRefresh}"/></MenuItem.Icon></MenuItem>
@@ -2552,6 +2580,24 @@
                                                                     </DataTemplate>
                                                                 </DataGridTemplateColumn.CellTemplate>
                                                             </DataGridTemplateColumn>
+                                                            <DataGridTemplateColumn Header="Durata" Width="120" MinWidth="80">
+                                                                <DataGridTemplateColumn.CellTemplate>
+                                                                    <DataTemplate x:DataType="models:LocalFileEntry">
+                                                                        <StackPanel Classes="bi" Margin="8,0" Background="Transparent" ToolTip.Tip="{Binding DurationDetail}" ToolTip.ShowDelay="300" IsVisible="{Binding DurationText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                                                            <Panel VerticalAlignment="Center">
+                                                                                <Path Classes="icon muted" Width="13" Height="13" Data="{StaticResource IconClock}" IsVisible="{Binding IsDurationOk}"/>
+                                                                                <Path Classes="icon warn" Width="13" Height="13" Data="{StaticResource IconAlert}" IsVisible="{Binding IsDurationShort}"/>
+                                                                                <Path Classes="icon muted" Width="13" Height="13" Data="{StaticResource IconClock}" IsVisible="{Binding IsDurationStale}"/>
+                                                                            </Panel>
+                                                                            <Panel VerticalAlignment="Center">
+                                                                                <TextBlock Text="{Binding DurationText}" FontSize="12" TextTrimming="CharacterEllipsis" IsVisible="{Binding IsDurationOk}"/>
+                                                                                <TextBlock Text="{Binding DurationText}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppWarningBrush}" IsVisible="{Binding IsDurationShort}"/>
+                                                                                <TextBlock Text="{Binding DurationText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding IsDurationStale}"/>
+                                                                            </Panel>
+                                                                        </StackPanel>
+                                                                    </DataTemplate>
+                                                                </DataGridTemplateColumn.CellTemplate>
+                                                            </DataGridTemplateColumn>
                                                             <DataGridTextColumn Header="Dim." Binding="{Binding SizeText}" Width="90" MinWidth="70"/>
                                                             <DataGridTextColumn Header="Ultima modifica" Binding="{Binding Modified, Mode=OneWay, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" Width="130" MinWidth="120"/>
                                                         </DataGrid.Columns>
@@ -2657,6 +2703,8 @@
                                                                             <MenuItem Header="File vuoti (0 byte)" ToggleType="CheckBox" IsChecked="{Binding ShowZeroByteResults, Mode=TwoWay}"/>
                                                                             <MenuItem Header="Codec web (colonna Web)" ToggleType="CheckBox" IsChecked="{Binding ShowWebResults, Mode=TwoWay}"/>
                                                                             <MenuItem Header="Lingua (colonna Lingua)" ToggleType="CheckBox" IsChecked="{Binding ShowLanguageResults, Mode=TwoWay}"/>
+                                                                            <MenuItem Header="Durata (colonna Durata)" ToggleType="CheckBox" IsChecked="{Binding ShowDurationResults, Mode=TwoWay}"/>
+                                                                            <MenuItem Header="{Binding MinDurationMenuText}" Click="OnMinDurationClick" ToolTip.Tip="Video più corti di questa durata segnalati come corto"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconClock}"/></MenuItem.Icon></MenuItem>
                                                                             <Separator/>
                                                                             <MenuItem Header="Mostra / nascondi tutti" Command="{Binding ToggleAllResultsCommand}"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconEye}"/></MenuItem.Icon></MenuItem>
                                                                             <MenuItem Header="Riallinea esiti ora" Command="{Binding RealignResultsCommand}" ToolTip.Tip="Confronta gli esiti salvati con i file sul server (anche nelle sottocartelle): toglie quelli di file eliminati, segue quelli rinominati, segna da ricontrollare quelli cambiati"><MenuItem.Icon><Path Classes="icon" Data="{StaticResource IconRefresh}"/></MenuItem.Icon></MenuItem>
@@ -2782,6 +2830,24 @@
                                                                                 <TextBlock Text="{Binding LangInfo}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppDangerBrush}" IsVisible="{Binding IsLangBad}"/>
                                                                                 <TextBlock Text="{Binding LangInfo}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding IsLangUnreadable}"/>
                                                                                 <TextBlock Text="{Binding LangInfo}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding IsLangStale}"/>
+                                                                            </Panel>
+                                                                        </StackPanel>
+                                                                    </DataTemplate>
+                                                                </DataGridTemplateColumn.CellTemplate>
+                                                            </DataGridTemplateColumn>
+                                                            <DataGridTemplateColumn Header="Durata" Width="120" MinWidth="80">
+                                                                <DataGridTemplateColumn.CellTemplate>
+                                                                    <DataTemplate x:DataType="models:SftpRemoteEntry">
+                                                                        <StackPanel Classes="bi" Margin="8,0" Background="Transparent" ToolTip.Tip="{Binding DurationDetail}" ToolTip.ShowDelay="300" IsVisible="{Binding DurationText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                                                            <Panel VerticalAlignment="Center">
+                                                                                <Path Classes="icon muted" Width="13" Height="13" Data="{StaticResource IconClock}" IsVisible="{Binding IsDurationOk}"/>
+                                                                                <Path Classes="icon warn" Width="13" Height="13" Data="{StaticResource IconAlert}" IsVisible="{Binding IsDurationShort}"/>
+                                                                                <Path Classes="icon muted" Width="13" Height="13" Data="{StaticResource IconClock}" IsVisible="{Binding IsDurationStale}"/>
+                                                                            </Panel>
+                                                                            <Panel VerticalAlignment="Center">
+                                                                                <TextBlock Text="{Binding DurationText}" FontSize="12" TextTrimming="CharacterEllipsis" IsVisible="{Binding IsDurationOk}"/>
+                                                                                <TextBlock Text="{Binding DurationText}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppWarningBrush}" IsVisible="{Binding IsDurationShort}"/>
+                                                                                <TextBlock Text="{Binding DurationText}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding IsDurationStale}"/>
                                                                             </Panel>
                                                                         </StackPanel>
                                                                     </DataTemplate>
