@@ -56,6 +56,13 @@ public partial class DownloadItem : ObservableObject
     [ObservableProperty] private double _speedBytesPerSecond;
     [ObservableProperty] private string _errorMessage = string.Empty;
 
+    /// <summary>
+    /// Avviso a download finito su ciò che l'episodio non aveva: qualità più bassa di quella
+    /// scelta, lingue audio o sottotitoli mancanti (es. "720p invece di 1080p · sottotitoli mancanti: eng").
+    /// </summary>
+    [ObservableProperty] private string _trackNote = string.Empty;
+    public bool HasTrackNote => !string.IsNullOrEmpty(TrackNote);
+
     public CancellationTokenSource? CancellationTokenSource { get; set; }
     public bool PauseRequested { get; set; }
 
@@ -73,6 +80,7 @@ public partial class DownloadItem : ObservableObject
         DownloadStatus.Downloading => "In download",
         DownloadStatus.Paused when !string.IsNullOrEmpty(ErrorMessage) => "In pausa: " + ErrorMessage,
         DownloadStatus.Paused => "In pausa",
+        DownloadStatus.Completed when HasTrackNote => "Completato · ⚠ " + TrackNote,
         DownloadStatus.Completed => "Completato",
         DownloadStatus.Failed => string.IsNullOrEmpty(ErrorMessage) ? "Errore" : "Errore: " + ErrorMessage,
         DownloadStatus.Cancelled => "Annullato",
@@ -120,7 +128,16 @@ public partial class DownloadItem : ObservableObject
     /// <summary>Suggerimento sullo stato: per un errore, il messaggio completo e come riprovare.</summary>
     public string StatusTip => IsFailed
         ? $"Download fallito.\n{(string.IsNullOrEmpty(ErrorMessage) ? "Motivo sconosciuto" : ErrorMessage)}\n\nPremi «Riscarica» per riprovare."
-        : StatusText;
+        : IsCompleted && HasTrackNote
+            ? "Completato, ma l'episodio non aveva tutto quello che era stato scelto:\n• " + TrackNote.Replace(" · ", "\n• ")
+            : StatusText;
+
+    partial void OnTrackNoteChanged(string value)
+    {
+        OnPropertyChanged(nameof(HasTrackNote));
+        OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(StatusTip));
+    }
 
     partial void OnErrorMessageChanged(string value)
     {

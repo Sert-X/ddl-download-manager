@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.5.5] — 2026-11-03
+
+### 🎬 Film e Serie TV — Doppiaggi e sottotitoli
+- **Doppiaggi e sottotitoli scelti sempre nel file**: se all'avvio di un episodio la lista delle tracce non si leggeva, il download continuava con il solo audio italiano e senza sottotitoli, risultando "Completato". Ora la lista viene riletta (anche con un link nuovo) e, se hai scelto altre lingue o sottotitoli, l'episodio riprova invece di consegnare un file incompleto.
+- **Più lingue trovate**: se il link dell'episodio porta una sola lingua audio o nessun sottotitolo, si prova anche la versione completa della playlist.
+- **Sottotitoli scaricati prima del video**, con 3 tentativi: se non arrivano si riprova senza buttare il video già scaricato (prima venivano saltati in silenzio).
+- **Nota sugli episodi incompleti**: se un episodio non aveva tutto quello che hai scelto lo stato diventa ad esempio "Completato · ⚠ 720p invece di 1080p · sottotitoli mancanti: eng" (dettagli passando il mouse). La qualità scelta vale come massimo: senza 1080p si prende la migliore disponibile sotto.
+
+### 🌐 Proxy
+- **Cambio proxy fino all'ultimo**: invece di 3 tentativi, a ogni errore il download passa al proxy successivo e riprova subito; fallisce solo dopo aver provato tutti i proxy disponibili della lista (senza proxy restano i 3 nuovi tentativi a tempo).
+- **StreamingCommunity segue il cambio proxy**: dopo una rotazione automatica estrazione dei link e lettura delle tracce restavano sul proxy vecchio ("UrlExtractor vuoto"). Ora ripartono col proxy nuovo.
+- **Niente più "Target page, context or browser has been closed"** dopo un cambio proxy manuale: il browser interno non resta più bloccato chiuso.
+- I download CB01 ora usano anch'essi la propria lista proxy per i nuovi tentativi.
+
+### 📺 Scarica tutta la serie
+- **Nessuna stagione persa in silenzio**: gli episodi di ogni stagione vengono letti fino a 3 volte; se una stagione non si riesce ad accodare il messaggio finale la indica ("Non accodate: Stagione 2").
+
 ## [1.5.4] — 2026-11-03
 
 ### 🔧 Conversione video

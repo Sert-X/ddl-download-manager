@@ -127,6 +127,9 @@ public class DownloadRepository
             if (!cols.Contains("BurnSubtitles", StringComparer.OrdinalIgnoreCase))
                 await conn.ExecuteAsync("ALTER TABLE Downloads ADD COLUMN BurnSubtitles INTEGER NOT NULL DEFAULT 0");
 
+            if (!cols.Contains("TrackNote", StringComparer.OrdinalIgnoreCase))
+                await conn.ExecuteAsync("ALTER TABLE Downloads ADD COLUMN TrackNote TEXT NOT NULL DEFAULT ''");
+
             // Download rimasti in coda dalle versioni precedenti: "Copia in MP4" (4), come facevano prima
             if (!cols.Contains("Conversion", StringComparer.OrdinalIgnoreCase))
                 await conn.ExecuteAsync("ALTER TABLE Downloads ADD COLUMN Conversion INTEGER NOT NULL DEFAULT 4");
@@ -334,7 +337,8 @@ public class DownloadRepository
                 AudioLanguages = @AudioLanguages,
                 SubtitleLanguages = @SubtitleLanguages,
                 BurnSubtitles = @BurnSubtitles,
-                Conversion = @Conversion
+                Conversion = @Conversion,
+                TrackNote = @TrackNote
             WHERE Id = @Id;
         ", new
         {
@@ -359,7 +363,8 @@ public class DownloadRepository
             item.AudioLanguages,
             item.SubtitleLanguages,
             BurnSubtitles = item.BurnSubtitles ? 1 : 0,
-            Conversion = (int)item.Conversion
+            Conversion = (int)item.Conversion,
+            item.TrackNote
         });
     }
 

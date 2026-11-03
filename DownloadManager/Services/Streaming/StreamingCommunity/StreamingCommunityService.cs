@@ -105,8 +105,22 @@ public class StreamingCommunityService : IStreamingCommunityService
     public async Task NotifyAuthChangedAsync()
     {
         _logger.LogWarning("[SC] NotifyAuthChanged: close + reinit");
-        await CloseContextOnlyAsync();
-        await InitializeAsync();
+        await ResetContextAsync();
+    }
+
+    /// <summary>
+    /// Rifà il contesto (proxy o login cambiati) sotto lo stesso lucchetto dell'avvio:
+    /// così nessuno crea un contesto su un browser che si sta chiudendo.
+    /// </summary>
+    private async Task ResetContextAsync()
+    {
+        await _initLock.WaitAsync();
+        try
+        {
+            await CloseContextOnlyAsync();
+            await InitializeCoreAsync(headless: true);
+        }
+        finally { _initLock.Release(); }
     }
 
     public async Task<(bool LoggedIn, bool Premium, string Info)> CheckSessionAsync()
@@ -180,16 +194,41 @@ public class StreamingCommunityService : IStreamingCommunityService
     //  INIZIALIZZAZIONE
     // ============================================================
 
+    /// <summary>Un solo avvio del browser alla volta (i download in parallelo lo chiedono insieme).</summary>
+    private readonly SemaphoreSlim _initLock = new(1, 1);
+
+    private static string ProxyKeyOf(ProxyConfig? p) => p == null
+        ? "(none)"
+        : $"{p.Protocol}|{p.Host}|{p.Port}|{p.Username}";
+
     public async Task InitializeAsync(bool headless = true)
     {
-        if (_initialized && _context != null) return;
+        // Il proxy si controlla sempre: dopo una rotazione automatica (download fallito)
+        // il contesto va rifatto col proxy nuovo, altrimenti si resta su quello che non va.
+        if (_initialized && _context != null && _browser is { IsConnected: true } &&
+            _currentProxyKey == ProxyKeyOf(_proxyProvider.GetActive(ProviderKeys.StreamingCommunity)))
+            return;
 
+        await _initLock.WaitAsync();
+        try { await InitializeCoreAsync(headless); }
+        finally { _initLock.Release(); }
+    }
+
+    private async Task InitializeCoreAsync(bool headless)
+    {
         _playwright ??= await Playwright.CreateAsync();
 
         var active = _proxyProvider.GetActive(ProviderKeys.StreamingCommunity);
-        var proxyKey = active == null
-            ? "(none)"
-            : $"{active.Protocol}|{active.Host}|{active.Port}|{active.Username}";
+        var proxyKey = ProxyKeyOf(active);
+
+        // Browser chiuso o caduto: il contesto è morto, si riparte da capo
+        if (_browser is { IsConnected: false })
+        {
+            _logger.LogWarning("[SC] Browser non più connesso: lo riavvio");
+            _context = null;
+            _browser = null;
+            _initialized = false;
+        }
 
         if (_context != null && _currentProxyKey != proxyKey)
         {
@@ -198,7 +237,14 @@ public class StreamingCommunityService : IStreamingCommunityService
             await CloseContextOnlyAsync();
         }
 
-        if (_context != null) return;
+        if (_context != null) { _initialized = true; return; }
+
+        // Il proxy è del contesto, non del browser: se il browser è ancora aperto si riusa
+        if (_browser is { IsConnected: true })
+        {
+            await CreateContextAsync(active, proxyKey, "riuso");
+            return;
+        }
 
         var launchArgs = new[]
         {
@@ -244,7 +290,11 @@ public class StreamingCommunityService : IStreamingCommunityService
         }
 
         _browser = browser;
+        await CreateContextAsync(active, proxyKey, usedChannel);
+    }
 
+    private async Task CreateContextAsync(ProxyConfig? active, string proxyKey, string usedChannel)
+    {
         var contextOptions = new BrowserNewContextOptions
         {
             UserAgent = RealisticUserAgent,
@@ -269,7 +319,15 @@ public class StreamingCommunityService : IStreamingCommunityService
             _logger.LogWarning("[SC] Proxy applicato: {Server}", proxy.Server);
         }
 
-        _context = await _browser.NewContextAsync(contextOptions);
+        var context = await _browser!.NewContextAsync(contextOptions);
+        // Se il contesto viene chiuso (da qui o dal browser) si dimentica, e il prossimo uso ne crea uno nuovo
+        context.Close += (_, _) =>
+        {
+            if (!ReferenceEquals(_context, context)) return;
+            _context = null;
+            _initialized = false;
+        };
+        _context = context;
         _currentProxyKey = proxyKey;
 
         await InjectSessionCookiesAsync();
@@ -1161,7 +1219,7 @@ public class StreamingCommunityService : IStreamingCommunityService
             return new MasterTracks();
         }
 
-        var tracks = await ParseMasterFullAsync(masterUrl, CancellationToken.None);
+        var tracks = await GetMasterTracksAsync(masterUrl, CancellationToken.None);
         _logger.LogInformation("[SC] Analisi: {V} qualità, audio [{A}], sottotitoli [{S}]",
             tracks.Videos.Count,
             string.Join(", ", tracks.Audios.Select(a => a.DisplayName)),
@@ -1171,8 +1229,24 @@ public class StreamingCommunityService : IStreamingCommunityService
 
     public async Task<MasterTracks> GetMasterTracksAsync(string masterUrl, CancellationToken ct = default)
     {
-        if (_context == null) await InitializeAsync();
-        return await ParseMasterFullAsync(masterUrl, ct);
+        await InitializeAsync();
+        var tracks = await ParseMasterFullAsync(masterUrl, ct);
+
+        // Il player chiede la playlist con "lang=it": se così arriva una sola lingua audio
+        // (o nessun sottotitolo) si prova anche senza, e si tiene quella con più tracce.
+        var withoutLang = Regex.Replace(masterUrl, @"([?&])lang=[^&]*&?", "$1").TrimEnd('&', '?');
+        if (withoutLang != masterUrl && (tracks.Audios.Count <= 1 || tracks.Subtitles.Count == 0))
+        {
+            var alt = await ParseMasterFullAsync(withoutLang, ct);
+            if (alt.Videos.Count > 0 &&
+                alt.Audios.Count + alt.Subtitles.Count > tracks.Audios.Count + tracks.Subtitles.Count)
+            {
+                _logger.LogInformation("[SC] Playlist senza lang: audio {A}, sottotitoli {S} (invece di {A0}/{S0})",
+                    alt.Audios.Count, alt.Subtitles.Count, tracks.Audios.Count, tracks.Subtitles.Count);
+                tracks = alt;
+            }
+        }
+        return tracks;
     }
 
     public async Task<double?> GetPlaylistDurationAsync(string mediaPlaylistUrl, CancellationToken ct = default)
@@ -1226,10 +1300,11 @@ public class StreamingCommunityService : IStreamingCommunityService
     {
         try
         {
-            if (_context == null) await InitializeAsync();
-            if (_context == null) return null;
+            await InitializeAsync();   // rifà il contesto se nel frattempo il proxy è cambiato
+            var context = _context;
+            if (context == null) return null;
 
-            var resp = await _context.APIRequest.GetAsync(url, new APIRequestContextOptions { Timeout = 30000 });
+            var resp = await context.APIRequest.GetAsync(url, new APIRequestContextOptions { Timeout = 30000 });
             if (!resp.Ok)
             {
                 _logger.LogWarning("[SC] GET {Url}: HTTP {Status}", url, resp.Status);
@@ -1339,6 +1414,7 @@ public class StreamingCommunityService : IStreamingCommunityService
 
     public async ValueTask DisposeAsync()
     {
+        await _initLock.WaitAsync();
         try
         {
             if (_context != null)
@@ -1365,14 +1441,16 @@ public class StreamingCommunityService : IStreamingCommunityService
         {
             _logger.LogWarning(ex, "[SC] Errore durante Dispose");
         }
+        finally { _initLock.Release(); }
     }
 
     public async Task NotifyProxyChangedAsync()
     {
         try
         {
-            await DisposeAsync();
-            await InitializeAsync();
+            // Basta rifare il contesto (il proxy è suo): chiudere tutto il browser mentre
+            // una ricerca o un download lo usavano lasciava un contesto morto
+            await ResetContextAsync();
         }
         catch (Exception ex)
         {

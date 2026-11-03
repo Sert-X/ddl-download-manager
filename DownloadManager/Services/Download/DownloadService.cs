@@ -95,64 +95,107 @@ public partial class DownloadService : IDownloadService
         }
     }
 
+    /// <summary>
+    /// Scarica l'elemento; se fallisce per un errore di rete/sito e il provider usa i proxy,
+    /// passa al proxy successivo e riprova subito, senza un numero fisso di tentativi:
+    /// si arrende solo quando sono stati provati tutti i proxy disponibili della lista
+    /// (<see cref="ProxiesExhaustedException"/>). Senza proxy l'errore passa alla coda,
+    /// che riprova da sola più tardi.
+    /// </summary>
     private async Task DownloadItemWithRetryAsync(DownloadItem item, CancellationToken ct)
     {
-        const int maxAttempts = 3;
         const string providerKeyDefault = "Downloads";
 
         var providerKey = string.IsNullOrEmpty(item.ProviderKey)
             ? providerKeyDefault
             : item.ProviderKey;
+        var listKey = ProxyListKey(providerKey);
 
-        for (int attempt = 0; attempt < maxAttempts; attempt++)
+        // Proxy già provati per questo elemento (Host:Port)
+        var tried = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        static string KeyOf(ProxyConfig p) => $"{p.Host}:{p.Port}";
+
+        for (int attempt = 1; ; attempt++)
         {
+            var used = _proxyProvider.GetActive(listKey);
+            if (used != null) tried.Add(KeyOf(used));
+
             try
             {
                 await DownloadItemInternalAsync(item, ct);
+                if (used != null) _proxyProvider.MarkSuccess(used, listKey);
                 return;
             }
             catch (OperationCanceledException)
             {
                 throw;
             }
-            catch (Exception ex) when (
-                !ct.IsCancellationRequested &&
-                IsRetryableNetworkError(ex) &&
-                attempt < maxAttempts - 1)
+            catch (Exception ex) when (!ct.IsCancellationRequested && IsProxyRetryable(ex))
             {
-                var proxy = _proxyProvider.GetActive(providerKey);
-
-                if (proxy == null)
+                if (used == null)
                 {
-                    _logger.LogWarning(ex,
-                        "[RETRY] Errore di rete ma nessun proxy attivo per {P}. Abort.",
-                        providerKey);
+                    _logger.LogWarning(ex, "[RETRY] Errore ma nessun proxy attivo per {P}: lo gestisce la coda.", providerKey);
                     throw;
                 }
 
                 _logger.LogWarning(ex,
-                    "[RETRY] Errore di rete (tentativo {N}/{Max}). " +
-                    "Marco {Host}:{Port} come failed e ruoto per {P}...",
-                    attempt + 1, maxAttempts, proxy.Host, proxy.Port, providerKey);
+                    "[RETRY] Tentativo {N} fallito con {Host}:{Port} ({P}): cambio proxy...",
+                    attempt, used.Host, used.Port, providerKey);
 
-                try
+                try { await _proxyService.MarkFailedAndRotateAsync(used, listKey); }
+                catch (Exception rotateEx) { _logger.LogWarning(rotateEx, "[RETRY] Errore durante rotazione proxy"); }
+
+                // Proxy su cui si riproverebbe: se è già stato provato, si cerca il prossimo libero
+                var next = _proxyProvider.GetActive(listKey);
+                if (next != null && tried.Contains(KeyOf(next)))
                 {
-                    await _proxyService.MarkFailedAndRotateAsync(proxy, providerKey);
-                }
-                catch (Exception rotateEx)
-                {
-                    _logger.LogWarning(rotateEx, "[RETRY] Errore durante rotazione proxy");
+                    try { next = await _proxyService.RotateNextForAsync(listKey) ?? next; }
+                    catch (Exception rotateEx) { _logger.LogWarning(rotateEx, "[RETRY] Errore durante rotazione proxy"); }
                 }
 
+                if (next == null || tried.Contains(KeyOf(next)))
+                {
+                    _logger.LogError("[RETRY] {P}: provati tutti i {N} proxy disponibili, download fallito.", providerKey, tried.Count);
+                    throw new ProxiesExhaustedException(
+                        $"{ex.Message} (provati tutti i {tried.Count} proxy disponibili)", ex);
+                }
+
+                var nextName = $"{next.Host}:{next.Port}";
+                var triedCount = tried.Count;
                 SetUi(() =>
                 {
-                    item.ErrorMessage = $"Retry {attempt + 1}/{maxAttempts}: cambio proxy...";
-                    item.ProxyRetryCount = attempt + 1;
+                    item.ErrorMessage = $"Tentativo {attempt + 1}: cambio proxy ({nextName}, {triedCount} già provati)...";
+                    item.ProxyRetryCount = attempt;
+                    item.SpeedBytesPerSecond = 0;
                 });
 
                 await Task.Delay(2000, ct);
             }
         }
+    }
+
+    /// <summary>Lista proxy usata da un provider (la chiave del download può differire da quella della lista).</summary>
+    private static string ProxyListKey(string providerKey) =>
+        providerKey == "CB01" ? ProviderKeys.Cb01 : providerKey;
+
+    /// <summary>
+    /// Errore per cui ha senso riprovare con un altro proxy: rete, blocchi del sito, link non
+    /// estratto, playlist non leggibile. Non per problemi locali (disco, permessi, ffmpeg)
+    /// o file che non esistono.
+    /// </summary>
+    private static bool IsProxyRetryable(Exception ex)
+    {
+        if (ex is TracksUnavailableException) return true;
+        if (IsRetryableNetworkError(ex)) return true;
+
+        var m = ex.ToString();
+        string[] local =
+        {
+            "404", "Not Found", "captcha", "not enough space", "spazio", "disk full",
+            "Access to the path", "UnauthorizedAccess", "Accesso negato",
+            "Unione delle tracce fallita", "FFmpeg non trovato", "già in corso"
+        };
+        return !local.Any(p => m.Contains(p, StringComparison.OrdinalIgnoreCase));
     }
 
     // ============================================================

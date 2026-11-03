@@ -88,6 +88,7 @@ public partial class DownloadService
         }
 
         PrepareTempDir(tempDir);
+        SetUi(() => item.TrackNote = string.Empty);   // si ricalcola a ogni tentativo
         var cookiesFile = await WriteCookiesFileAsync(item, tempDir, ct);
 
         // === Piano delle tracce ===
@@ -102,9 +103,14 @@ public partial class DownloadService
         MasterTracks? master = null;
         if (sc != null)
         {
-            SetUi(() => item.ErrorMessage = "Analisi tracce...");
-            try { master = await sc.GetMasterTracksAsync(item.Url, ct); }
-            catch (Exception ex) { _logger.LogWarning(ex, "[TRACKS] Lettura playlist master fallita"); }
+            master = await ReadMasterTracksAsync(sc, item, ct);
+
+            // Senza playlist yt-dlp sceglierebbe da solo: una sola lingua (italiano) e nessun
+            // sottotitolo. Se ne erano stati scelti altri si considera un errore (si riprova,
+            // anche cambiando proxy) invece di consegnare un file senza le tracce chieste.
+            if ((master == null || master.Videos.Count == 0) && WantsSpecificTracks(item))
+                throw new TracksUnavailableException(
+                    "Playlist delle tracce non leggibile: impossibile scaricare le lingue audio e i sottotitoli scelti.");
         }
 
         if (sc != null && master != null && master.Videos.Count > 0)
@@ -113,6 +119,11 @@ public partial class DownloadService
             var audios = PickAudios(master.Audios, item.AudioLanguages);
             subtitles = PickSubtitles(master.Subtitles, item.SubtitleLanguages);
             burnSubtitles = item.BurnSubtitles && subtitles.Count > 0;
+
+            var note = BuildTrackNote(item, video, audios, subtitles);
+            SetUi(() => item.TrackNote = note);
+            if (note.Length > 0)
+                _logger.LogWarning("[TRACKS] {Title}: {Note}", Path.GetFileName(item.DestinationPath), note);
 
             duration = await sc.GetPlaylistDurationAsync(video.Url, ct);
             long Planned(long bitsPerSecond) => duration is > 0 ? (long)(bitsPerSecond / 8.0 * duration.Value) : 0;
@@ -145,6 +156,29 @@ public partial class DownloadService
             jobs.Add(new TrackJob { Label = "video+audio", Url = item.Url, OutBase = "video", Format = BuildYtDlpFormat(item.QualityName) });
         }
 
+        // === Sottotitoli (prima del video: sono piccoli e, se mancano, si riprova senza buttare il video) ===
+        var subtitleFiles = new List<(MediaTrack Track, string File)>();
+        foreach (var sub in subtitles)
+        {
+            ct.ThrowIfCancellationRequested();
+            SetUi(() => item.ErrorMessage = $"Sottotitoli {sub.DisplayName}...");
+            string? vtt = null;
+            for (int attempt = 1; attempt <= 3 && string.IsNullOrWhiteSpace(vtt); attempt++)
+            {
+                if (attempt > 1) await Task.Delay(TimeSpan.FromSeconds(3 * attempt), ct);
+                vtt = await sc!.DownloadSubtitleAsync(sub.Url, ct);
+            }
+            if (string.IsNullOrWhiteSpace(vtt))
+            {
+                // Scelti dall'utente: meglio riprovare (anche con un altro proxy) che consegnarli mancanti
+                throw new TracksUnavailableException($"Sottotitoli {sub.DisplayName} non scaricabili.");
+            }
+            var file = Path.Combine(tempDir, $"sub_{subtitleFiles.Count}.vtt");
+            await File.WriteAllTextAsync(file, vtt, new UTF8Encoding(false), ct);
+            subtitleFiles.Add((sub, file));
+        }
+        if (burnSubtitles && subtitleFiles.Count == 0) burnSubtitles = false;
+
         // === Budget di segmenti paralleli ===
         // Il cursore indica il totale per l'intero download: il server limita le connessioni
         // per IP e con 32 segmenti per OGNI traccia rispondeva 503 (traccia audio persa).
@@ -167,24 +201,6 @@ public partial class DownloadService
             try { await progressTask; } catch (OperationCanceledException) { }
         }
 
-        // === Sottotitoli ===
-        var subtitleFiles = new List<(MediaTrack Track, string File)>();
-        foreach (var sub in subtitles)
-        {
-            ct.ThrowIfCancellationRequested();
-            SetUi(() => item.ErrorMessage = $"Sottotitoli {sub.DisplayName}...");
-            var vtt = await sc!.DownloadSubtitleAsync(sub.Url, ct);
-            if (string.IsNullOrWhiteSpace(vtt))
-            {
-                _logger.LogWarning("[TRACKS] Sottotitoli {Name} non scaricabili, li salto", sub.DisplayName);
-                continue;
-            }
-            var file = Path.Combine(tempDir, $"sub_{subtitleFiles.Count}.vtt");
-            await File.WriteAllTextAsync(file, vtt, new UTF8Encoding(false), ct);
-            subtitleFiles.Add((sub, file));
-        }
-        if (burnSubtitles && subtitleFiles.Count == 0) burnSubtitles = false;
-
         // === Unione ===
         string output;
         if (jobs.Count == 1 && subtitleFiles.Count == 0)
@@ -202,6 +218,89 @@ public partial class DownloadService
             _logger.LogWarning("[YT-DLP] File finale senza traccia audio o video: {Path}", output);
 
         CompleteDownload(item, output, tempDir);
+    }
+
+    /// <summary>
+    /// Legge la playlist master riprovando qualche volta; se il link non risponde più
+    /// (token scaduto o legato al proxy di prima) se ne estrae uno nuovo e si riprova.
+    /// </summary>
+    private async Task<MasterTracks?> ReadMasterTracksAsync(IStreamingCommunityService sc, DownloadItem item, CancellationToken ct)
+    {
+        SetUi(() => item.ErrorMessage = "Analisi tracce...");
+        for (int attempt = 1; attempt <= 4; attempt++)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                var master = await sc.GetMasterTracksAsync(item.Url, ct);
+                if (master.Videos.Count > 0) return master;
+                _logger.LogWarning("[TRACKS] Playlist master vuota o non leggibile (tentativo {N}/4)", attempt);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "[TRACKS] Lettura playlist master fallita (tentativo {N}/4)", attempt);
+            }
+
+            if (attempt == 4) break;
+            await Task.Delay(TimeSpan.FromSeconds(2 * attempt), ct);
+
+            // Dal secondo errore: link nuovo
+            if (attempt >= 2 && item.UrlExtractor != null)
+            {
+                SetUi(() => item.ErrorMessage = "Analisi tracce: rinnovo il link...");
+                try
+                {
+                    var fresh = await item.UrlExtractor(ct);
+                    if (!string.IsNullOrEmpty(fresh)) item.Url = fresh;
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex) { _logger.LogWarning(ex, "[TRACKS] Nuovo link non estratto"); }
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Sono state scelte tracce che yt-dlp da solo non prenderebbe: più lingue audio,
+    /// una lingua diversa dall'italiano o dei sottotitoli.
+    /// </summary>
+    private static bool WantsSpecificTracks(DownloadItem item)
+    {
+        var audios = SplitKeys(item.AudioLanguages);
+        if (SplitKeys(item.SubtitleLanguages).Count > 0) return true;
+        if (audios.Count > 1) return true;
+        return audios.Count == 1 && !audios[0].StartsWith("it", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Cosa l'episodio non aveva rispetto alla scelta: qualità più bassa (o diversa),
+    /// lingue audio e sottotitoli mancanti. Vuota se c'era tutto.
+    /// </summary>
+    private static string BuildTrackNote(DownloadItem item, VideoQuality video, List<MediaTrack> audios, List<MediaTrack> subtitles)
+    {
+        var parts = new List<string>();
+
+        var wanted = item.QualityName ?? "";
+        if (wanted.Length > 0 && !wanted.StartsWith("Auto", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(video.Name, wanted, StringComparison.OrdinalIgnoreCase))
+            parts.Add($"{video.Name} invece di {wanted}");
+
+        var audioKeys = SplitKeys(item.AudioLanguages);
+        var missingAudio = audioKeys.Where(k => !audios.Any(a => a.Matches(k))).ToList();
+        if (missingAudio.Count > 0)
+        {
+            // Nessuna delle lingue scelte: si è ripiegato su un'altra traccia
+            parts.Add(missingAudio.Count == audioKeys.Count && audios.Count > 0
+                ? $"audio {string.Join(", ", missingAudio)} assente, usato {string.Join(", ", audios.Select(a => a.Key))}"
+                : $"audio mancante: {string.Join(", ", missingAudio)}");
+        }
+
+        var missingSubs = SplitKeys(item.SubtitleLanguages).Where(k => !subtitles.Any(s => s.Matches(k))).ToList();
+        if (missingSubs.Count > 0)
+            parts.Add($"sottotitoli mancanti: {string.Join(", ", missingSubs)}");
+
+        return string.Join(" · ", parts);
     }
 
     // ------------------------------------------------------------------

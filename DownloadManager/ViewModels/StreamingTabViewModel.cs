@@ -1293,6 +1293,7 @@ public partial class StreamingTabViewModel : ViewModelBase
 
         int totalQueued = 0;
         int seasonIdx = 0;
+        var failedSeasons = new List<string>();
 
         try
         {
@@ -1307,9 +1308,27 @@ public partial class StreamingTabViewModel : ViewModelBase
 
                 try
                 {
-                    var eps = IsCb01
-                        ? await _cb01.GetEpisodesAsync(series.Link, season.Number, season.Variant, season.Group)
-                        : await _service.GetEpisodesAsync(series.Link, season.Number);
+                    // Il sito a volte non risponde (proxy lento, browser che si riavvia): si riprova
+                    // prima di saltare la stagione, e se manca la si segnala
+                    List<StreamingEpisode> eps = new();
+                    for (int attempt = 1; attempt <= 3; attempt++)
+                    {
+                        try
+                        {
+                            eps = IsCb01
+                                ? await _cb01.GetEpisodesAsync(series.Link, season.Number, season.Variant, season.Group)
+                                : await _service.GetEpisodesAsync(series.Link, season.Number);
+                            if (eps.Count > 0) break;
+                        }
+                        catch (OperationCanceledException) { throw; }
+                        catch (Exception ex) when (attempt < 3)
+                        {
+                            _logger.LogWarning(ex, "[STREAMING-TAB] Episodi stagione {N}: tentativo {A}/3 fallito", season.Number, attempt);
+                        }
+                        if (attempt < 3) await Task.Delay(TimeSpan.FromSeconds(3 * attempt), token);
+                    }
+                    if (eps.Count == 0) throw new InvalidOperationException("nessun episodio letto dal sito");
+
                     var toAdd = IsCb01
                         ? eps.Where(ep => int.TryParse(ep.Number, out var n) && n > 0).ToList()
                         : eps.Where(ep => ep.EpisodeId > 0).ToList();
@@ -1323,11 +1342,15 @@ public partial class StreamingTabViewModel : ViewModelBase
                 catch (OperationCanceledException) { throw; }
                 catch (Exception ex)
                 {
+                    failedSeasons.Add(season.DisplayName);
                     _logger.LogWarning(ex, "[STREAMING-TAB] Errore stagione {N}", season.Number);
                 }
             }
 
-            StatusMessage = $"Tutta la serie: {totalQueued} episodi accodati{_guard?.Note}.";
+            StatusMessage = $"Tutta la serie: {totalQueued} episodi accodati{_guard?.Note}." +
+                (failedSeasons.Count > 0
+                    ? $" ⚠ Non accodate (riprova con «Scarica stagione»): {string.Join(", ", failedSeasons)}."
+                    : "");
         }
         catch (OperationCanceledException) { StatusMessage = $"Annullato dopo {totalQueued}."; }
         catch (Exception ex)

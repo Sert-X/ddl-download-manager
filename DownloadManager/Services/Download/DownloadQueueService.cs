@@ -1164,7 +1164,8 @@ public class DownloadQueueService
         }
         catch (Exception ex)
         {
-            if (item.AutoRetryCount < MaxAutoRetries && IsTransient(ex))
+            // Provati già tutti i proxy: fallito subito, senza altri tentativi a tempo
+            if (ex is not ProxiesExhaustedException && item.AutoRetryCount < MaxAutoRetries && IsTransient(ex))
             {
                 // Errore temporaneo: si riprova da solo dopo un'attesa crescente (30 s, 2 min, 5 min)
                 int attempt = ++item.AutoRetryCount;
