@@ -29,13 +29,14 @@ public static class VideoTranscoder
     /// ("In attesa...", "Conversione H.264: 37%"). True se riuscito; altrimenti il file resta com'era.
     /// </summary>
     public static async Task<bool> ConvertAsync(string ffmpeg, string file, VideoConversion mode,
-        ILogger logger, Action<string> progress, CancellationToken ct, Func<bool>? isPriority = null)
+        ILogger logger, Action<string> progress, CancellationToken ct, Func<bool>? isPriority = null, int itemId = 0)
     {
         if (mode is VideoConversion.Original or VideoConversion.Mp4Copy) return true;
 
         progress("In coda per conversione");
-        // Una alla volta; i forzati (fulmine) passano davanti a quelli in attesa
-        await ConversionQueue.EnterAsync(isPriority ?? (() => false), ct);
+        // Una alla volta; i forzati (fulmine) passano davanti a quelli in attesa.
+        // itemId preserva l'ordine della lista download (chi ha l'Id più basso passa prima).
+        await ConversionQueue.EnterAsync(isPriority ?? (() => false), ct, itemId);
         try
         {
             var duration = await ProbeDurationAsync(ffmpeg, file, ct);
@@ -112,10 +113,22 @@ public static class VideoTranscoder
         if (!File.Exists(ffprobe)) return 0;
         var psi = new ProcessStartInfo { FileName = ffprobe, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
         foreach (var a in new[] { "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", file }) psi.ArgumentList.Add(a);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
         using var p = Process.Start(psi)!;
-        var output = await p.StandardOutput.ReadToEndAsync(ct);
-        await p.WaitForExitAsync(ct);
-        return double.TryParse(output.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : 0;
+        try
+        {
+            var stderr = p.StandardError.ReadToEndAsync(timeout.Token);
+            var output = await p.StandardOutput.ReadToEndAsync(timeout.Token);
+            await p.WaitForExitAsync(timeout.Token);
+            await stderr;
+            return double.TryParse(output.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : 0;
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            try { p.Kill(entireProcessTree: true); } catch { }
+            return 0;
+        }
     }
 
     /// <summary>ffmpeg con "-progress pipe:1": legge out_time_us e riporta la percentuale.</summary>

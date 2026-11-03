@@ -22,7 +22,8 @@ public static class ConversionQueue
 
     /// <summary>Aspetta il proprio turno. Va sempre seguito da <see cref="Release"/>.</summary>
     /// <param name="isPriority">Letto ogni volta che si sceglie il prossimo (il fulmine può arrivare dopo).</param>
-    public static async Task EnterAsync(Func<bool> isPriority, CancellationToken ct)
+    /// <param name="order">Ordine nella lista di download: chi ha il numero più basso passa prima (a parità di priorità).</param>
+    public static async Task EnterAsync(Func<bool> isPriority, CancellationToken ct, long order = 0)
     {
         Waiter waiter;
         lock (Lock)
@@ -36,7 +37,7 @@ public static class ConversionQueue
             {
                 Ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously),
                 IsPriority = isPriority,
-                Order = _nextOrder++
+                Order = order != 0 ? order : _nextOrder++
             };
             Waiting.Add(waiter);
         }

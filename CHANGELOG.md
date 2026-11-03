@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.5.4] — 2026-11-03
+
+### 🔧 Conversione video
+- **Conversione in ordine**: gli episodi ora vengono convertiti nell'ordine della lista di download (E01 → E02 → E03…), non più nell'ordine in cui finiscono di scaricarsi. I forzati (fulmine) continuano a passare davanti.
+
 ## [1.5.3] — 2026-11-01
 
 ### 📡 SFTP — Un solo pulsante "Controlla…"

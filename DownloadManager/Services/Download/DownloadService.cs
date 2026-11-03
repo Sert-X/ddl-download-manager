@@ -392,7 +392,7 @@ public partial class DownloadService : IDownloadService
                 _logger.LogWarning("[CONVERSIONE] ffmpeg non trovato: {File} resta com'è", finalPath);
             else
                 await VideoTranscoder.ConvertAsync(ffmpegPath, finalPath, conversion, _logger,
-                    msg => SetUi(() => item.ErrorMessage = msg), ct, () => item.IsPriority);
+                    msg => SetUi(() => item.ErrorMessage = msg), ct, () => item.IsPriority, item.Id);
             SetUi(() => item.ErrorMessage = string.Empty);
         }
 
