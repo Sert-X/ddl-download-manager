@@ -82,6 +82,7 @@ public partial class MainWindowViewModel : ViewModelBase
             if (s.UseProxyForStreamingCommunity && Active(ProviderKeys.StreamingCommunity)) providers.Add("SC");
             if (s.UseProxyForDownloads && Active(ProviderKeys.Downloads)) providers.Add("DL");
             if (s.UseProxyForCb01 && Active(ProviderKeys.Cb01)) providers.Add("CB");
+            if (s.UseProxyForLoonex && Active(ProviderKeys.Loonex)) providers.Add("LX");
 
             if (providers.Count == 0) return "🌐 Off";
             return $"🌐 {string.Join("+", providers)}";
@@ -98,7 +99,8 @@ public partial class MainWindowViewModel : ViewModelBase
                    (s.UseProxyForAnimeSaturn && Active(ProviderKeys.AnimeSaturn)) ||
                    (s.UseProxyForStreamingCommunity && Active(ProviderKeys.StreamingCommunity)) ||
                    (s.UseProxyForDownloads && Active(ProviderKeys.Downloads)) ||
-                   (s.UseProxyForCb01 && Active(ProviderKeys.Cb01));
+                   (s.UseProxyForCb01 && Active(ProviderKeys.Cb01)) ||
+                   (s.UseProxyForLoonex && Active(ProviderKeys.Loonex));
         }
     }
 
@@ -128,6 +130,7 @@ public partial class MainWindowViewModel : ViewModelBase
         ILogger<StreamingTabViewModel> streamingLogger,
         IStreamingCommunityService streamingCommunityService,
         DownloadManager.Services.Streaming.Cb01.ICb01Service cb01Service,
+        DownloadManager.Services.Streaming.Loonex.ILoonexService loonexService,
         AccountTabViewModel accountVm,
         VideoboxTabViewModel videobox,
         SftpRelayQueueService sftpRelayQueue,
@@ -165,6 +168,7 @@ public partial class MainWindowViewModel : ViewModelBase
         Streaming = new StreamingTabViewModel(
             _streamingCommunityService,
             cb01Service,
+            loonexService,
             _queueService,
             _fileNameBuilder,
             _settings,

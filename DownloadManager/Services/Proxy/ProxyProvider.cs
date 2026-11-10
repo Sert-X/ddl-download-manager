@@ -24,6 +24,7 @@ public class ProxyProvider : IProxyProvider
             ProviderKeys.StreamingCommunity => s.UseProxyForStreamingCommunity,
             ProviderKeys.Downloads => s.UseProxyForDownloads,
             ProviderKeys.Cb01 => s.UseProxyForCb01,
+            ProviderKeys.Loonex => s.UseProxyForLoonex,
             _ => true
         };
     }

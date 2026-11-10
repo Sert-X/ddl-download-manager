@@ -31,6 +31,8 @@ public partial class CategoryItem : ObservableObject
     public string Name { get; set; } = string.Empty;
     /// <summary>Voce "Tutti i media" (Id 0): nella tendina ha un'icona diversa.</summary>
     public bool IsAll => Id == 0;
+    /// <summary>Spuntata nel menu delle categorie da caricare (se ne possono spuntare più di una).</summary>
+    [ObservableProperty] private bool isSelected;
 }
 
 public partial class EpisodeMappingItem : ObservableObject
@@ -221,7 +223,89 @@ public partial class VideoboxTabViewModel : ObservableObject
     
     // CATEGORIE
     public ObservableCollection<CategoryItem> AvailableCategories { get; } = new();
-    [ObservableProperty] private CategoryItem? selectedCategory;
+
+    /// <summary>Id delle categorie spuntate (vuoto = "Tutti i media").</summary>
+    public List<int> SelectedCategoryIds =>
+        AvailableCategories.Where(c => c.IsSelected && !c.IsAll).Select(c => c.Id).ToList();
+
+    /// <summary>Testo del menu delle categorie: "Tutti i media", il nome o "N categorie".</summary>
+    public string CategoriesSelectionText
+    {
+        get
+        {
+            var sel = AvailableCategories.Where(c => c.IsSelected && !c.IsAll).ToList();
+            return sel.Count switch
+            {
+                0 => "Tutti i media",
+                1 => sel[0].Name,
+                _ => $"{sel.Count} categorie"
+            };
+        }
+    }
+
+    /// <summary>Nomi delle categorie spuntate (tooltip del menu).</summary>
+    public string CategoriesSelectionTip
+    {
+        get
+        {
+            var names = AvailableCategories.Where(c => c.IsSelected && !c.IsAll).Select(c => c.Name).ToList();
+            return names.Count == 0 ? "Tutti i media" : string.Join(", ", names);
+        }
+    }
+
+    private bool _updatingCategorySelection;
+    private bool _categoriesLoaded;
+
+    private void AddCategory(CategoryItem item)
+    {
+        item.PropertyChanged += OnCategoryItemChanged;
+        AvailableCategories.Add(item);
+    }
+
+    private void ClearCategories()
+    {
+        foreach (var c in AvailableCategories) c.PropertyChanged -= OnCategoryItemChanged;
+        AvailableCategories.Clear();
+    }
+
+    /// <summary>
+    /// "Tutti i media" esclude le altre: spuntarla toglie le altre spunte, spuntare una categoria
+    /// toglie "Tutti i media", e togliendo l'ultima spunta si torna a "Tutti i media".
+    /// </summary>
+    private void OnCategoryItemChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(CategoryItem.IsSelected) || _updatingCategorySelection || sender is not CategoryItem item) return;
+        _updatingCategorySelection = true;
+        try
+        {
+            var all = AvailableCategories.FirstOrDefault(c => c.IsAll);
+            if (item.IsSelected)
+            {
+                if (item.IsAll) { foreach (var c in AvailableCategories) if (!c.IsAll) c.IsSelected = false; }
+                else if (all != null) all.IsSelected = false;
+            }
+            else if (!AvailableCategories.Any(c => c.IsSelected) && all != null)
+                all.IsSelected = true;
+        }
+        finally { _updatingCategorySelection = false; }
+        OnCategorySelectionChanged(save: true);
+    }
+
+    private void OnCategorySelectionChanged(bool save)
+    {
+        OnPropertyChanged(nameof(CategoriesSelectionText));
+        OnPropertyChanged(nameof(CategoriesSelectionTip));
+        if (!save) return;
+        _settingsService.Current.VideoboxSelectedCategoryIds = SelectedCategoryIds;
+        _settingsService.Save();
+    }
+
+    [RelayCommand]
+    private void SelectAllMediaCategory()
+    {
+        var all = AvailableCategories.FirstOrDefault(c => c.IsAll);
+        if (all is { IsSelected: false }) all.IsSelected = true;
+    }
 
     [ObservableProperty] private ObservableCollection<VideoboxPostItem> categoryPosts = new();
     [ObservableProperty] private VideoboxPostItem? selectedPost;
@@ -455,9 +539,8 @@ public partial class VideoboxTabViewModel : ObservableObject
 
         SecondaryDomains.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasSecondaryDomains));
 
-        // Inizializza l'opzione "Tutti"
-        AvailableCategories.Add(new CategoryItem { Id = 0, Name = "Tutti i media" });
-        SelectedCategory = AvailableCategories[0];
+        // Inizializza l'opzione "Tutti" (le categorie salvate si rispuntano quando arriva l'elenco)
+        AddCategory(new CategoryItem { Id = 0, Name = "Tutti i media", IsSelected = true });
         _ = LoadCategoriesAsync();
     }
 
@@ -637,7 +720,7 @@ public partial class VideoboxTabViewModel : ObservableObject
         var s = _settingsService.Current;
         var key = s.VideoboxCategoryDisabledSources.ContainsKey(SourcesKey) || s.VideoboxCategorySources.ContainsKey(SourcesKey)
             ? SourcesKey
-            : (SelectedCategory?.Id ?? 0).ToString();
+            : SelectedCategoryIds.FirstOrDefault().ToString();
         _applyingCategorySources = true;
         try
         {
@@ -676,23 +759,28 @@ public partial class VideoboxTabViewModel : ObservableObject
             StatusMessage = "Caricamento categorie...";
             var cats = await _apiService.GetCategoriesAsync();
             
-            var selectedId = SelectedCategory?.Id ?? 0;
-            AvailableCategories.Clear();
-            
-            AvailableCategories.Add(new CategoryItem { Id = 0, Name = "Tutti i media" });
-            
+            // Al primo caricamento si rispuntano le categorie salvate, poi si tiene la scelta attuale
+            var selectedIds = (_categoriesLoaded ? SelectedCategoryIds : _settingsService.Current.VideoboxSelectedCategoryIds).ToHashSet();
+
             // FILTRO: Solo "IPS\\videobox\\Category" e "perm_2" = "*"
             var filteredCats = cats
                 .Where(c => c.@class == "IPS\\videobox\\Category" && c.permissions?.perm_2 == "*")
-                .OrderBy(x => x.name);
+                .OrderBy(x => x.name)
+                .ToList();
 
-            foreach (var c in filteredCats)
+            _updatingCategorySelection = true;
+            try
             {
-                AvailableCategories.Add(new CategoryItem { Id = c.id, Name = c.name });
+                ClearCategories();
+                bool anySelected = filteredCats.Any(c => selectedIds.Contains(c.id));
+                AddCategory(new CategoryItem { Id = 0, Name = "Tutti i media", IsSelected = !anySelected });
+                foreach (var c in filteredCats)
+                    AddCategory(new CategoryItem { Id = c.id, Name = c.name, IsSelected = selectedIds.Contains(c.id) });
             }
-
-            SelectedCategory = AvailableCategories.FirstOrDefault(c => c.Id == selectedId) ?? AvailableCategories[0];
-            StatusMessage = $"Caricate {filteredCats.Count()} categorie.";
+            finally { _updatingCategorySelection = false; }
+            _categoriesLoaded = true;
+            OnCategorySelectionChanged(save: false);
+            StatusMessage = $"Caricate {filteredCats.Count} categorie.";
         }
         catch (Exception ex) { StatusMessage = $"Errore categorie: {ex.Message}"; }
         finally { IsBusy = false; }
@@ -839,10 +927,10 @@ public partial class VideoboxTabViewModel : ObservableObject
             PostsProgressText = "Caricamento pagina 1...";
             _allPosts.Clear();
             _forumMaxId = 0;
-            _postsCategoryId = SelectedCategory?.Id;
-            var pagedData = await _apiService.GetVideosByCategoryAsync(_postsCategoryId, 1, cts.Token);
+            _postsCategoryIds = SelectedCategoryIds;
+            var pagedData = await _apiService.GetVideosByCategoriesAsync(_postsCategoryIds, 1, cts.Token);
             ProcessPagedData(pagedData);
-            try { _forumMaxId = await GetForumMaxIdAsync(SelectedCategory?.Id, pagedData, cts.Token); } catch (OperationCanceledException) { throw; } catch { }
+            try { _forumMaxId = await GetForumMaxIdAsync(_postsCategoryIds, pagedData, cts.Token); } catch (OperationCanceledException) { throw; } catch { }
             _currentPage = 1;
             UpdateSftpTreeColors();
             StatusMessage = $"Caricata pagina 1.";
@@ -871,17 +959,17 @@ public partial class VideoboxTabViewModel : ObservableObject
             PostsProgressText = "Caricamento pagina 1...";
             _allPosts.Clear();
             _forumMaxId = 0;
-            _postsCategoryId = SelectedCategory?.Id;
-            var firstPage = await _apiService.GetVideosByCategoryAsync(_postsCategoryId, 1, cts.Token);
+            var categoryIds = _postsCategoryIds = SelectedCategoryIds;
+            var firstPage = await _apiService.GetVideosByCategoriesAsync(categoryIds, 1, cts.Token);
             ProcessPagedData(firstPage);
-            try { _forumMaxId = await GetForumMaxIdAsync(SelectedCategory?.Id, firstPage, cts.Token); } catch (OperationCanceledException) { throw; } catch { }
+            try { _forumMaxId = await GetForumMaxIdAsync(categoryIds, firstPage, cts.Token); } catch (OperationCanceledException) { throw; } catch { }
 
             for (int i = 2; i <= firstPage.totalPages; i++)
             {
                 PostsProgressText = $"Pagina {i} di {firstPage.totalPages} · {_allPosts.Count} post";
                 StatusMessage = $"Caricamento pagina {i} di {firstPage.totalPages}...";
                 await Task.Delay(250, cts.Token);
-                var pageData = await _apiService.GetVideosByCategoryAsync(SelectedCategory?.Id, i, cts.Token);
+                var pageData = await _apiService.GetVideosByCategoriesAsync(categoryIds, i, cts.Token);
                 ProcessPagedData(pageData);
             }
 
@@ -1047,7 +1135,7 @@ public partial class VideoboxTabViewModel : ObservableObject
             foreach (var page in pages)
             {
                 VideoboxPagedDto data;
-                try { data = await _apiService.GetVideosByCategoryAsync(_postsCategoryId, page); }
+                try { data = await _apiService.GetVideosByCategoriesAsync(_postsCategoryIds, page); }
                 catch { return; }   // forum lento o non raggiungibile: si riprova al prossimo giro
                 if (IsLoadingPosts) return;
 
@@ -1105,19 +1193,19 @@ public partial class VideoboxTabViewModel : ObservableObject
 
     private bool _checkingNewPosts;
     private bool _restoringSelection;
-    /// <summary>Categoria con cui sono stati caricati i post (gli aggiornamenti automatici usano questa).</summary>
-    private int? _postsCategoryId;
+    /// <summary>Categorie con cui sono stati caricati i post (gli aggiornamenti automatici usano queste; vuoto = tutti i media).</summary>
+    private List<int> _postsCategoryIds = new();
     /// <summary>Numero del post più recente sul forum al momento del caricamento (0 = non noto).</summary>
     private int _forumMaxId;
 
     /// <summary>Numero del post più recente della categoria sul forum (l'API va dal più vecchio al più nuovo).</summary>
-    private async Task<int> GetForumMaxIdAsync(int? category, VideoboxPagedDto first, CancellationToken ct = default)
+    private async Task<int> GetForumMaxIdAsync(IReadOnlyCollection<int> categories, VideoboxPagedDto first, CancellationToken ct = default)
     {
         if (first.results.Count == 0) return 0;
         bool ascending = first.results.Count < 2 || first.results[0].id < first.results[^1].id;
         if (!ascending) return first.results.Max(r => r.id);
         if (first.totalPages <= 1) return first.results.Max(r => r.id);
-        var last = await _apiService.GetVideosByCategoryAsync(category, first.totalPages, ct);
+        var last = await _apiService.GetVideosByCategoriesAsync(categories, first.totalPages, ct);
         return last.results.Count > 0 ? last.results.Max(r => r.id) : first.results.Max(r => r.id);
     }
 
@@ -1133,10 +1221,10 @@ public partial class VideoboxTabViewModel : ObservableObject
         try
         {
             int maxKnownId = _forumMaxId;
-            var category = _postsCategoryId;
+            var category = _postsCategoryIds;
 
             VideoboxPagedDto first;
-            try { first = await _apiService.GetVideosByCategoryAsync(category, 1); }
+            try { first = await _apiService.GetVideosByCategoriesAsync(category, 1); }
             catch { return; }
 
             var candidates = first.results.ToList();
@@ -1144,7 +1232,7 @@ public partial class VideoboxTabViewModel : ObservableObject
             bool ascending = first.results.Count < 2 || first.results[0].id < first.results[^1].id;
             if (ascending && first.totalPages > 1)
             {
-                try { candidates.AddRange((await _apiService.GetVideosByCategoryAsync(category, first.totalPages)).results); }
+                try { candidates.AddRange((await _apiService.GetVideosByCategoriesAsync(category, first.totalPages)).results); }
                 catch { return; }
             }
 
@@ -1152,7 +1240,7 @@ public partial class VideoboxTabViewModel : ObservableObject
                                   .GroupBy(d => d.id).Select(g => g.First())
                                   .OrderBy(d => d.id)
                                   .ToList();
-            if (fresh.Count == 0 || IsLoadingPosts || _postsCategoryId != category) return;
+            if (fresh.Count == 0 || IsLoadingPosts || !ReferenceEquals(_postsCategoryIds, category)) return;
             _forumMaxId = fresh.Max(d => d.id);
 
             foreach (var dto in fresh)
@@ -2033,10 +2121,12 @@ public partial class VideoboxTabViewModel : ObservableObject
             
             var finalUrls = MappingItems.Where(x => x.IsSelectedForUpdate).Select(x => !string.IsNullOrEmpty(x.NewUrl) ? x.NewUrl : x.OldUrl).ToList();
 
-            // Usa la categoria selezionata se valida, altrimenti quella originale del post
-            int catId = (SelectedCategory != null && SelectedCategory.Id > 0) 
-                        ? SelectedCategory.Id 
-                        : _currentPostOriginalCategoryId;
+            // Il post resta nella sua categoria (con più categorie spuntate non si sa quale sarebbe
+            // quella "scelta"); se il forum non la indica, quella spuntata se è una sola
+            var selectedIds = SelectedCategoryIds;
+            int catId = _currentPostOriginalCategoryId > 0
+                        ? _currentPostOriginalCategoryId
+                        : selectedIds.Count == 1 ? selectedIds[0] : 0;
 
             // Il forum (PHP) accetta al massimo "max_input_vars" campi per richiesta, di
             // solito 1000: titolo, categoria e autore + un campo per link. Oltre, i link in
@@ -2169,7 +2259,8 @@ public partial class VideoboxTabViewModel : ObservableObject
                 StatusMessage = $"Rinomina non eseguita: il post ha {links.Count} link e il forum potrebbe salvarne solo ~{MaxLinksPerRequest} (limite max_input_vars di PHP).";
                 return;
             }
-            int catId = origCat > 0 ? origCat : SelectedCategory?.Id ?? 0;
+            var selectedIds = SelectedCategoryIds;
+            int catId = origCat > 0 ? origCat : selectedIds.Count == 1 ? selectedIds[0] : 0;
             var old = post.title;
 
             await _apiService.UpdateVideoUrlsAsync(postId, serverId, title, catId, authorId, links);

@@ -11,6 +11,7 @@ using DownloadManager.Services.Anime.AnimeWorld;
 using DownloadManager.Services.Anime.AnimeSaturn;
 using DownloadManager.Services.Streaming;
 using DownloadManager.Services.Streaming.Cb01;
+using DownloadManager.Services.Streaming.Loonex;
 using DownloadManager.Services.Streaming.StreamingCommunity;
 using DownloadManager.Services.Download;
 using DownloadManager.Services.FileOrganizer;
@@ -103,6 +104,7 @@ public partial class App : Application
         services.AddSingleton<IStreamingCommunityService, StreamingCommunityService>();
         services.AddSingleton<ICb01Service, Cb01Service>();
         services.AddSingleton<MaxstreamService>();
+        services.AddSingleton<ILoonexService, LoonexService>();
         services.AddSingleton<StreamingProviderRegistry>();
         services.AddSingleton<FfmpegLocator>();
         services.AddSingleton<DownloadManager.Services.Download.YtDlpLocator>();

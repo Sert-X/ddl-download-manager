@@ -16,7 +16,7 @@ public class ProxyConfigRepository
     private readonly string _dbPath;
 
     /// <summary>Chiavi delle liste provider (ProviderKeys.*), nell'ordine mostrato nella tab.</summary>
-    public static readonly string[] ListKeys = { "AnimeWorld", "AnimeSaturn", "StreamingCommunity", "Cb01", "Downloads" };
+    public static readonly string[] ListKeys = { "AnimeWorld", "AnimeSaturn", "StreamingCommunity", "Cb01", "Loonex", "Downloads" };
 
     public ProxyConfigRepository(string? dbPath = null)
     {

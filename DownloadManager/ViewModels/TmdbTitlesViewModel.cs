@@ -162,7 +162,7 @@ public partial class TmdbTitlesViewModel : ObservableObject
     [ObservableProperty] private TmdbRowViewModel? _selectedRow;
     [ObservableProperty] private bool _isAnalyzing;
     [ObservableProperty] private double _progress;
-    [ObservableProperty] private string _progressText = "Carica i post di una categoria (Carica Tutti) e premi «Analizza».";
+    [ObservableProperty] private string _progressText = "Carica i post di una o più categorie (Carica Tutti) e premi «Analizza».";
     [ObservableProperty] private TmdbFilter _filter = TmdbFilter.All;
     [ObservableProperty] private string _searchText = "";
     [ObservableProperty] private string _seriesPattern;
@@ -240,7 +240,7 @@ public partial class TmdbTitlesViewModel : ObservableObject
         {
             if (IsAnalyzing || HasRows) return ProgressText;
             if (!HasTmdbKey) return "Prima inserisci la chiave TMDB: apri «Impostazioni (forum e TMDB)» qui sopra.";
-            if (PostsLoaded == 0) return "Prima carica i post: scegli una categoria al passo 1 e premi «Carica Tutti».";
+            if (PostsLoaded == 0) return "Prima carica i post: scegli una o più categorie al passo 1 e premi «Carica Tutti».";
             return $"{PostsLoaded} post pronti: premi «Analizza». Il forum non viene modificato.";
         }
     }
@@ -249,7 +249,7 @@ public partial class TmdbTitlesViewModel : ObservableObject
     public string EmptyText => !HasTmdbKey
         ? "Apri «Impostazioni (forum e TMDB)» qui sopra e incolla la chiave del tuo account TMDB (si crea gratis su themoviedb.org)."
         : PostsLoaded == 0
-            ? "Scegli una categoria in alto e premi «Carica Tutti». Poi premi «Analizza»: per ogni post si legge il codice TMDB dalla sua pagina, si controlla il numero di episodi e si propone il titolo secondo il pattern."
+            ? "Scegli una o più categorie in alto e premi «Carica Tutti». Poi premi «Analizza»: per ogni post si legge il codice TMDB dalla sua pagina, si controlla il numero di episodi e si propone il titolo secondo il pattern."
             : $"Hai caricato {PostsLoaded} post. Premi «Analizza»: la prima volta si legge la pagina di ogni post (circa mezzo secondo l'uno), le volte dopo è istantaneo. Il forum non viene modificato.";
 
     private static readonly string[] StepProps =
@@ -400,7 +400,7 @@ public partial class TmdbTitlesViewModel : ObservableObject
         _key = _keyRepo.Load();
         if (string.IsNullOrWhiteSpace(_key)) { ProgressText = "Manca la chiave TMDB: inseriscila in «Impostazioni» qui sopra."; return; }
         var posts = _posts().ToList();
-        if (posts.Count == 0) { ProgressText = "Nessun post caricato: scegli una categoria e premi «Carica Tutti»."; return; }
+        if (posts.Count == 0) { ProgressText = "Nessun post caricato: scegli una o più categorie e premi «Carica Tutti»."; return; }
 
         if (IsRenaming) return;
         _analyzer.SeriesPattern = SeriesPattern;

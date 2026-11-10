@@ -192,6 +192,7 @@ public class ProxyService
         ProviderKeys.AnimeSaturn => _domains.GetBaseUrl("AnimeSaturn"),
         ProviderKeys.StreamingCommunity => _domains.GetBaseUrl("StreamingCommunity") + "/it",
         ProviderKeys.Cb01 => _domains.GetBaseUrl(DomainResolver.Maxstream) + "/",
+        ProviderKeys.Loonex => _domains.GetBaseUrl(DomainResolver.Loonex) + "/cartoni/",
         // Download diretti: un endpoint neutro e leggerissimo
         _ => "https://www.google.com/generate_204",
     };

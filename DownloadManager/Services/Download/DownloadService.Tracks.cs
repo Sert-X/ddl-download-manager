@@ -397,15 +397,25 @@ public partial class DownloadService
             WorkingDirectory = tempDir
         };
         var a = psi.ArgumentList;
-        a.Add("--impersonate"); a.Add("chrome");
         a.Add("-o"); a.Add(Path.Combine(tempDir, job.OutBase + ".%(ext)s"));
         a.Add("--ffmpeg-location"); a.Add(ffmpegDir);
         if (cookiesFile != null) { a.Add("--cookies"); a.Add(cookiesFile); }
-        a.Add("--add-header"); a.Add("Referer:https://streamingcommunityz.rip/");
-        a.Add("--add-header"); a.Add($"sec-ch-ua:{StreamingCommunityService.SecChUa}");
-        a.Add("--add-header"); a.Add("sec-ch-ua-mobile:?0");
-        a.Add("--add-header"); a.Add("sec-ch-ua-platform:\"Windows\"");
-        a.Add("--user-agent"); a.Add(StreamingCommunityService.RealisticUserAgent);
+
+        var isStreamingCommunity = item.ProviderKey == "StreamingCommunity";
+        if (isStreamingCommunity)
+        {
+            a.Add("--impersonate"); a.Add("chrome");
+            a.Add("--add-header"); a.Add("Referer:https://streamingcommunityz.rip/");
+            a.Add("--add-header"); a.Add($"sec-ch-ua:{StreamingCommunityService.SecChUa}");
+            a.Add("--add-header"); a.Add("sec-ch-ua-mobile:?0");
+            a.Add("--add-header"); a.Add("sec-ch-ua-platform:\"Windows\"");
+            a.Add("--user-agent"); a.Add(StreamingCommunityService.RealisticUserAgent);
+        }
+        else
+        {
+            var referer = ExtractReferer(job.Url);
+            if (referer != null) { a.Add("--add-header"); a.Add($"Referer:{referer}"); }
+        }
         if (job.Format != null)
         {
             a.Add("-f"); a.Add(job.Format);
@@ -715,6 +725,14 @@ public partial class DownloadService
     // ------------------------------------------------------------------
     //  Utilità
     // ------------------------------------------------------------------
+
+    /// <summary>Derive il Referer dall'URL della playlist (origin del CDN).</summary>
+    private static string? ExtractReferer(string url)
+    {
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            return $"{uri.Scheme}://{uri.Host}/";
+        return null;
+    }
 
     /// <summary>
     /// Svuota la cartella temporanea prima di (ri)partire: yt-dlp non sa riprendere gli HLS

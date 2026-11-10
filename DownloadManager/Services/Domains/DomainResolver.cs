@@ -27,11 +27,13 @@ public class DomainResolver
         { "AnimeSaturn", "https://www.animesaturn.net" },
         { "StreamingCommunity", "https://streamingcommunity.rip" },
         { Cb01, "https://cb01one.com" },
-        { Maxstream, "https://maxstream.video" }
+        { Maxstream, "https://maxstream.video" },
+        { Loonex, "https://loonex.eu" }
     };
 
     public const string Cb01 = "CB01";
     public const string Maxstream = "Maxstream";
+    public const string Loonex = "Loonex";
 
     /// <summary>"https://www.maxstream.video/x" → "maxstream.video": confronto tra host senza "www.".</summary>
     public static string HostOf(string url)

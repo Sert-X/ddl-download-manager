@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.6.0] — 2026-11-11
+
+### 🧸 Nuovo provider: Loonex (cartoni animati)
+- **Loonex in Film e Serie TV**: nel menu dei provider c'è ora "Loonex", l'archivio di cartoni animati. Ricerca (tutte le pagine di risultati), film e serie si usano come per gli altri provider; non serve nessun account.
+- **Più serie nella stessa pagina**: se la pagina contiene più serie (es. Ben 10 (2005), Ben 10 (2017), Forza Aliena, Ultimate Alien, Omniverse, Film Vari) nel Dettaglio compare il menu **Serie**: scegli la serie, poi la stagione. Le sezioni "Serie Completa" vengono divise nelle loro vere stagioni (1x.., 2x..); gli episodi senza numero finiscono in "Extra".
+- **Scarica tutta la serie scelta**: con più serie nella pagina il pulsante diventa "Scarica tutta «Ben 10 (2005)»" e accoda solo quella. In coda e nelle cartelle ogni serie ha il suo nome ("Ben 10 (2005) S01").
+- **Film e speciali** (es. "Film Vari" o episodi 1x05.5) vengono accodati come video a sé, con il loro titolo.
+- **Qualità migliore, senza scelta**: si scarica sempre il flusso migliore disponibile, quindi per Loonex il menu "Qualità" non compare.
+- **Nome file dedicato**: in "Nome file e cartella" ci sono i pattern **Film · Loonex** (predefinito `{Series}`, il sito non indica l'anno) e **Serie · Loonex** (predefinito `{Series} S{Season:D2}E{Episode:D2}`).
+- **Proxy e Domini**: Loonex ha la sua lista proxy nella tab Proxy e il suo indirizzo nella tab Domini.
+- **Download veloci e senza errore 403**: il download di HLS dai provider diversi da StreamingCommunity non manda più l'intestazione di StreamingCommunity (il server rispondeva 403 e il download ripiegava su FFmpeg, molto più lento); ora parte subito con i segmenti in parallelo. I link con scadenza vengono richiesti di nuovo quando stanno per scadere.
+
+### 🔗 Videobox Corrector
+- **Più categorie insieme**: il menu delle categorie (Mappatura e Titoli TMDB) ora ha le spunte: puoi caricare i post di più categorie in una volta. "Tutti i media" esclude le altre; togliendo l'ultima spunta si torna a "Tutti i media". La scelta resta salvata e vale anche per gli aggiornamenti automatici dei post.
+
 ## [1.5.5] — 2026-11-03
 
 ### 🎬 Film e Serie TV — Doppiaggi e sottotitoli

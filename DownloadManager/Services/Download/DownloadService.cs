@@ -788,16 +788,12 @@ public partial class DownloadService : IDownloadService
     {
         if (string.IsNullOrEmpty(url)) return true;
 
-        if (url.Contains("vixcloud", StringComparison.OrdinalIgnoreCase) ||
-            url.Contains("host-cdn", StringComparison.OrdinalIgnoreCase))
+        // Token con scadenza (vixcloud, host-cdn, Loonex CDN e qualsiasi altro HLS firmato)
+        var m = Regex.Match(url, @"[?&]expires?=(\d+)", RegexOptions.IgnoreCase);
+        if (m.Success && long.TryParse(m.Groups[1].Value, out var exp))
         {
-            var m = Regex.Match(url, @"[?&]expires=(\d+)");
-            if (m.Success && long.TryParse(m.Groups[1].Value, out var exp))
-            {
-                var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                // Considera scaduto se mancano meno di 60 secondi
-                if (exp - now < 60) return true;
-            }
+            var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            if (exp - now < 60) return true;
         }
 
         return false;
@@ -964,6 +960,13 @@ public partial class DownloadService : IDownloadService
         psi.ArgumentList.Add("-nostats");
         psi.ArgumentList.Add("-progress");
         psi.ArgumentList.Add("pipe:1");
+
+        // Referer dal CDN dell'URL (evita 403 su Loonex e altri provider non-vixcloud)
+        if (!isVixcloud && Uri.TryCreate(item.Url, UriKind.Absolute, out var hlsUri))
+        {
+            psi.ArgumentList.Add("-headers");
+            psi.ArgumentList.Add($"Referer: {hlsUri.Scheme}://{hlsUri.Host}/\r\n");
+        }
 
         psi.ArgumentList.Add("-i");
         psi.ArgumentList.Add(item.Url);

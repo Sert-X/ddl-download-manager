@@ -8,6 +8,7 @@ using DownloadManager.Models;
 using DownloadManager.Persistence;
 using DownloadManager.Services.Download;
 using DownloadManager.Services.Streaming.Cb01;
+using DownloadManager.Services.Streaming.Loonex;
 using DownloadManager.Services.Streaming.StreamingCommunity;
 using Microsoft.Extensions.Logging;
 using System.IO;
@@ -20,6 +21,7 @@ public partial class StreamingTabViewModel : ViewModelBase
 {
     private readonly IStreamingCommunityService _service;
     private readonly ICb01Service _cb01;
+    private readonly ILoonexService _loonex;
     private readonly DownloadQueueService _queueService;
     private readonly FileNameBuilder _fileNameBuilder;
     private readonly SettingsService _settings;
@@ -83,9 +85,10 @@ public partial class StreamingTabViewModel : ViewModelBase
     // ============================================================
 
     // === Provider selector ===
-    public string[] AvailableProviders { get; } = ["StreamingCommunity", "CB01"];
+    public string[] AvailableProviders { get; } = ["StreamingCommunity", "CB01", "Loonex"];
     [ObservableProperty] private string _selectedProvider = "StreamingCommunity";
     public bool IsCb01 => SelectedProvider == "CB01";
+    public bool IsLoonex => SelectedProvider == "Loonex";
 
     [ObservableProperty] private string _searchQuery = string.Empty;
     [ObservableProperty] private string _statusMessage = "Provider StreamingCommunity selezionato. Cerca un film o una serie TV per iniziare.";
@@ -93,6 +96,56 @@ public partial class StreamingTabViewModel : ViewModelBase
     [ObservableProperty] private MovieSearchResult? _selectedResult;
     [ObservableProperty] private ObservableCollection<Season> _seasons = new();
     [ObservableProperty] private Season? _selectedSeason;
+
+    /// <summary>
+    /// Loonex: serie diverse nella stessa pagina (es. Ben 10 (2005), Ben 10 Omniverse). Si sceglie
+    /// prima la serie, poi la stagione tra le sue (<see cref="VisibleSeasons"/>).
+    /// </summary>
+    public ObservableCollection<string> SeasonGroups { get; } = new();
+    [ObservableProperty] private string? _selectedSeasonGroup;
+    /// <summary>Stagioni nel menu: quelle della serie scelta, oppure tutte.</summary>
+    public ObservableCollection<Season> VisibleSeasons { get; } = new();
+    public bool HasSeasonGroups => SeasonGroups.Count > 1;
+    public string DownloadAllText => HasSeasonGroups && SelectedSeasonGroup is { Length: > 0 } g
+        ? $"Scarica tutta «{g}»" : "Scarica tutta la serie";
+
+    /// <summary>Nome della serie a cui appartiene la stagione nel menu "Serie" (quella del titolo se vuoto).</summary>
+    private string GroupLabel(Season s) => s.GroupTitle.Length > 0 ? s.GroupTitle : (SelectedResult?.Title ?? "Serie");
+
+    private void RebuildSeasonGroups()
+    {
+        SeasonGroups.Clear();
+        if (IsLoonex)
+            foreach (var g in Seasons.Select(GroupLabel).Distinct()) SeasonGroups.Add(g);
+        OnPropertyChanged(nameof(HasSeasonGroups));
+
+        if (HasSeasonGroups)
+        {
+            // Imposta anche VisibleSeasons e la stagione scelta
+            if (SelectedSeasonGroup == SeasonGroups[0]) OnSelectedSeasonGroupChanged(SeasonGroups[0]);
+            else SelectedSeasonGroup = SeasonGroups[0];
+        }
+        else
+        {
+            SelectedSeasonGroup = null;
+            VisibleSeasons.Clear();
+            foreach (var s in Seasons) VisibleSeasons.Add(s);
+            SelectedSeason = VisibleSeasons.FirstOrDefault();
+        }
+        OnPropertyChanged(nameof(DownloadAllText));
+    }
+
+    partial void OnSelectedSeasonGroupChanged(string? value)
+    {
+        OnPropertyChanged(nameof(DownloadAllText));
+        if (value == null || !HasSeasonGroups) return;
+        VisibleSeasons.Clear();
+        foreach (var s in Seasons.Where(s => GroupLabel(s) == value)) VisibleSeasons.Add(s);
+        SelectedSeason = VisibleSeasons.FirstOrDefault();
+    }
+
+    /// <summary>Riquadro "Qualità": Loonex e CB01 scaricano sempre il flusso migliore, senza scelta.</summary>
+    public bool ShowQualityPicker => !IsCb01 && !IsLoonex;
     [ObservableProperty] private ObservableCollection<StreamingEpisode> _episodes = new();
     [ObservableProperty] private bool _isQualitiesLoading;
     [ObservableProperty] private bool _isLoadingSearchResults;
@@ -104,6 +157,16 @@ public partial class StreamingTabViewModel : ViewModelBase
     [ObservableProperty] private string _seriesNamingPattern = "{Episode}";
     [ObservableProperty] private string _cb01MovieNamingPattern = "{OriginalFileName}";
     [ObservableProperty] private string _cb01SeriesNamingPattern = "{OriginalFileName}";
+    [ObservableProperty] private string _loonexMovieNamingPattern = "{Series}";
+    [ObservableProperty] private string _loonexSeriesNamingPattern = "{Series} S{Season:D2}E{Episode:D2}";
+
+    /// <summary>Pattern del provider scelto (il nome file si calcola all'accodamento).</summary>
+    private string PatternFor(string providerKey, bool isSeries) => providerKey switch
+    {
+        "CB01" => isSeries ? Cb01SeriesNamingPattern : Cb01MovieNamingPattern,
+        "Loonex" => isSeries ? LoonexSeriesNamingPattern : LoonexMovieNamingPattern,
+        _ => isSeries ? SeriesNamingPattern : MovieNamingPattern,
+    };
     [ObservableProperty] private string _seasonFolderPattern = "Stagione {number}";
 
     [ObservableProperty] private ObservableCollection<VideoQuality> _availableQualities = new();
@@ -212,7 +275,7 @@ public partial class StreamingTabViewModel : ViewModelBase
     public string SelectedResultYear => SelectedResult?.Year ?? "";
     public bool SelectedResultIsSubIta => SelectedResult?.IsSubIta == true;
     public bool HasSelectedResultYear => !string.IsNullOrWhiteSpace(SelectedResult?.Year);
-    public string ProviderDisplayName => IsCb01 ? "CB01 · Maxstream" : "StreamingCommunity";
+    public string ProviderDisplayName => IsCb01 ? "CB01 · Maxstream" : IsLoonex ? "Loonex · Cartoni" : "StreamingCommunity";
     /// <summary>Trama, se il provider la fornisce (CB01 mette solo "Film"/"Serie TV": non conta).</summary>
     public string SelectedResultDescription =>
         SelectedResult?.Description is { } d && d.Trim().Length > 12 ? d.Trim() : "";
@@ -220,7 +283,9 @@ public partial class StreamingTabViewModel : ViewModelBase
     [ObservableProperty] private string _detailFileName = "";
     [ObservableProperty] private string _detailFolder = "";
     public string DetailFileLabel => IsSelectedResultSeries ? "Esempio file" : "File";
-    public string SeasonsCountText => Seasons.Count switch { 0 => "", 1 => "1 stagione", var n => $"{n} stagioni" };
+    public string SeasonsCountText => HasSeasonGroups
+        ? $"{SeasonGroups.Count} serie · {Seasons.Count} stagioni"
+        : Seasons.Count switch { 0 => "", 1 => "1 stagione", var n => $"{n} stagioni" };
     public bool HasSeasonsCount => Seasons.Count > 0;
     public string SeasonEpisodesText => SelectedSeason == null || Episodes.Count == 0
         ? "" : SelectedSeason.IsFilm ? "Film" : $"Stagione {SelectedSeason.Number} · {Episodes.Count} episodi";
@@ -233,6 +298,8 @@ public partial class StreamingTabViewModel : ViewModelBase
         : "Scegli la stagione in alto, spunta gli episodi e premi \"Scarica selezionati\" (oppure stagione o serie intera).";
     public string MovieReadyHint => IsCb01
         ? (IsLoadingEpisodes ? "Analisi del post in corso..." : "Il link migliore (HD/SD) viene scelto al via del download.")
+        : IsLoonex
+        ? (IsLoadingEpisodes ? "Analisi in corso..." : "Pronto: il video viene estratto al via del download.")
         : (IsQualitiesLoading ? "Analisi delle qualità e delle tracce in corso..."
            : AvailableQualities.Count > 0 ? "Pronto: scegli qualità, audio e sottotitoli qui sopra."
            : "Fai doppio clic sul film a sinistra per analizzarlo.");
@@ -252,9 +319,7 @@ public partial class StreamingTabViewModel : ViewModelBase
         try
         {
             bool series = m.IsSeries;
-            var pattern = IsCb01
-                ? (series ? Cb01SeriesNamingPattern : Cb01MovieNamingPattern)
-                : (series ? SeriesNamingPattern : MovieNamingPattern);
+            var pattern = PatternFor(SelectedProvider, series);
             var firstEp = series ? Episodes.FirstOrDefault() : null;
             var epTitle = series ? (firstEp?.Title is { Length: > 0 } t ? t : "Episodio 1") : m.Title;
             var probe = new DownloadItem
@@ -310,7 +375,7 @@ public partial class StreamingTabViewModel : ViewModelBase
     /// (almeno un elemento in AvailableQualities). Blocca il pulsante
     /// "Scarica film" sia durante il caricamento sia in caso di errore.
     /// </summary>
-    public bool CanDownloadMovie => IsCb01
+    public bool CanDownloadMovie => IsCb01 || IsLoonex
         ? (HasSelectedResult && !IsLoadingEpisodes)
         : (!IsQualitiesLoading && AvailableQualities.Count > 0);
 
@@ -374,6 +439,13 @@ public partial class StreamingTabViewModel : ViewModelBase
 
     public string Cb01SeriesPatternPreview => SafePreview(() => FileNameBuilder.ApplyPattern(
         Cb01SeriesNamingPattern, "Nome Serie", 5, "Episodio 5", "Nome.Serie.01x05.Titolo", season: 1) + ".mp4");
+
+    // Anteprime Loonex: niente anno; gli episodi hanno sempre stagione e numero (1x05)
+    public string LoonexMoviePatternPreview => SafePreview(() => FileNameBuilder.ApplyPattern(
+        LoonexMovieNamingPattern, "Nome Film", 1, "Nome Film", "file") + ".mp4");
+
+    public string LoonexSeriesPatternPreview => SafePreview(() => FileNameBuilder.ApplyPattern(
+        LoonexSeriesNamingPattern, "Nome Serie", 5, "Episodio 1x05", "file", season: 1) + ".mp4");
 
     private static string SafePreview(Func<string> build)
     {
@@ -475,6 +547,7 @@ public partial class StreamingTabViewModel : ViewModelBase
     public StreamingTabViewModel(
         IStreamingCommunityService service,
         ICb01Service cb01,
+        ILoonexService loonex,
         DownloadQueueService queueService,
         FileNameBuilder fileNameBuilder,
         SettingsService settings,
@@ -483,6 +556,7 @@ public partial class StreamingTabViewModel : ViewModelBase
     {
         _service = service;
         _cb01 = cb01;
+        _loonex = loonex;
         _queueService = queueService;
         _fileNameBuilder = fileNameBuilder;
         _settings = settings;
@@ -494,6 +568,8 @@ public partial class StreamingTabViewModel : ViewModelBase
         SeriesNamingPattern = _settings.Current.StreamingSeriesNamingPattern;
         Cb01MovieNamingPattern = _settings.Current.Cb01MovieNamingPattern;
         Cb01SeriesNamingPattern = _settings.Current.Cb01SeriesNamingPattern;
+        LoonexMovieNamingPattern = _settings.Current.LoonexMovieNamingPattern;
+        LoonexSeriesNamingPattern = _settings.Current.LoonexSeriesNamingPattern;
         SeasonFolderPattern = _settings.Current.SeasonFolderPattern;
         // Slot propri: prima questa riga forzava a 1 il limite di TUTTA la coda,
         // rallentando anche gli anime.
@@ -671,10 +747,13 @@ public partial class StreamingTabViewModel : ViewModelBase
         Seasons.Clear();
         SelectedResult = null;
         SelectedSeason = null;
+        RebuildSeasonGroups();
         AvailableQualities.Clear();
         SelectedQuality = null;
         ClearTracks();
         OnPropertyChanged(nameof(IsCb01));
+        OnPropertyChanged(nameof(IsLoonex));
+        OnPropertyChanged(nameof(ShowQualityPicker));
         StatusMessage = $"Provider {value} selezionato. Cerca un film o una serie TV per iniziare.";
     }
 
@@ -700,6 +779,7 @@ public partial class StreamingTabViewModel : ViewModelBase
         Episodes.Clear();
         Seasons.Clear();
         SelectedSeason = null;
+        RebuildSeasonGroups();
         AvailableQualities.Clear();
         SelectedQuality = null;
         ClearTracks();
@@ -716,7 +796,7 @@ public partial class StreamingTabViewModel : ViewModelBase
         if (SelectedResult == null || !SelectedResult.IsSeries) return;
 
         _ = LoadEpisodesForSeasonAsync(SelectedResult.Link, value);
-        if (!IsCb01)
+        if (!IsCb01 && !IsLoonex)
             _ = LoadQualitiesForCurrentSelectionAsync();
     }
 
@@ -749,6 +829,22 @@ public partial class StreamingTabViewModel : ViewModelBase
         _settings.Current.Cb01SeriesNamingPattern = value;
         _settings.Save();
         OnPropertyChanged(nameof(Cb01SeriesPatternPreview));
+        UpdateMoviePreview();
+    }
+
+    partial void OnLoonexMovieNamingPatternChanged(string value)
+    {
+        _settings.Current.LoonexMovieNamingPattern = value;
+        _settings.Save();
+        OnPropertyChanged(nameof(LoonexMoviePatternPreview));
+        UpdateMoviePreview();
+    }
+
+    partial void OnLoonexSeriesNamingPatternChanged(string value)
+    {
+        _settings.Current.LoonexSeriesNamingPattern = value;
+        _settings.Save();
+        OnPropertyChanged(nameof(LoonexSeriesPatternPreview));
         UpdateMoviePreview();
     }
 
@@ -798,6 +894,8 @@ public partial class StreamingTabViewModel : ViewModelBase
             List<MovieSearchResult> results;
             if (IsCb01)
                 results = await _cb01.SearchAsync(term);
+            else if (IsLoonex)
+                results = await _loonex.SearchAsync(term);
             else
                 results = await _service.SearchAsync(term);
 
@@ -907,6 +1005,8 @@ public partial class StreamingTabViewModel : ViewModelBase
             StatusMessage = $"Analisi di '{result.Title}'...";
             var seasons = IsCb01
                 ? await _cb01.GetSeasonsAsync(result.Link)
+                : IsLoonex
+                ? await _loonex.GetSeasonsAsync(result.Link)
                 : await _service.GetSeasonsAsync(result.Link);
             if (seq != _seasonsSeq || !ReferenceEquals(SelectedResult, result)) return;
 
@@ -920,7 +1020,7 @@ public partial class StreamingTabViewModel : ViewModelBase
                 StatusMessage = IsCb01
                     ? $"Film selezionato: '{result.Title}'. Clicca 'Scarica film' per procedere (Maxstream)."
                     : $"Film selezionato: '{result.Title}'. Clicca 'Scarica film' per procedere.";
-                if (!IsCb01) _ = LoadQualitiesForCurrentSelectionAsync();
+                if (!IsCb01 && !IsLoonex) _ = LoadQualitiesForCurrentSelectionAsync();
                 return;
             }
 
@@ -933,8 +1033,10 @@ public partial class StreamingTabViewModel : ViewModelBase
             foreach (var s in seasons) Seasons.Add(s);
             OnPropertyChanged(nameof(HasSeasons)); OnPropertyChanged(nameof(HasItaAndSubSeasons));
 
-            SelectedSeason = Seasons[0];
-            StatusMessage = $"'{result.Title}': {seasons.Count} stagioni caricate.";
+            RebuildSeasonGroups();
+            StatusMessage = HasSeasonGroups
+                ? $"'{result.Title}': {SeasonGroups.Count} serie, {seasons.Count} stagioni caricate."
+                : $"'{result.Title}': {seasons.Count} stagioni caricate.";
         }
         catch (Exception ex)
         {
@@ -954,6 +1056,8 @@ public partial class StreamingTabViewModel : ViewModelBase
             StatusMessage = $"Caricamento episodi stagione {seasonNumber}...";
             var episodes = IsCb01
                 ? await _cb01.GetEpisodesAsync(seriesLink, seasonNumber, season.Variant, season.Group)
+                : IsLoonex
+                ? await _loonex.GetEpisodesAsync(seriesLink, Seasons.IndexOf(season))
                 : await _service.GetEpisodesAsync(seriesLink, seasonNumber);
             if (seq != _episodesSeq) return;
 
@@ -1134,6 +1238,27 @@ public partial class StreamingTabViewModel : ViewModelBase
 
                 await _queueService.EnqueueAsync(item);
             }
+            else if (IsLoonex)
+            {
+                // Loonex: film = un solo "episodio" nella prima stagione. videoId nel Link.
+                var episodes = await _loonex.GetEpisodesAsync(movie.Link, 0);
+                var videoId = episodes.Count > 0 ? episodes[0].Link : null;
+                if (string.IsNullOrEmpty(videoId)) { StatusMessage = "Nessun video trovato."; return; }
+
+                var vid = videoId;
+                Func<CancellationToken, Task<string?>> extractor = ct => _loonex.GetVideoUrlAsync(vid, ct);
+
+                var item = BuildDownloadItem(
+                    "", movie.Title, 1, movie.Title,
+                    urlExtractor: extractor,
+                    contentLink: movie.Link,
+                    episodeId: 0,
+                    isSeries: false,
+                    year: movie.Year ?? "",
+                    providerKey: "Loonex");
+
+                await _queueService.EnqueueAsync(item);
+            }
             else
             {
                 var link = movie.Link;
@@ -1281,7 +1406,9 @@ public partial class StreamingTabViewModel : ViewModelBase
         if (SelectedResult == null) return;
         if (Seasons.Count == 0) { StatusMessage = "Nessuna stagione."; return; }
         // "ita" = tutte le stagioni in italiano, "sub" = solo quelle sottotitolate, null = tutte
-        var chosen = Seasons.Where(s => only switch { "sub" => s.IsSubVariant, "ita" => !s.IsSubVariant, _ => true }).ToList();
+        // Più serie nella pagina (Loonex): solo quella scelta nel menu "Serie"
+        var pool = HasSeasonGroups ? VisibleSeasons.ToList() : Seasons.ToList();
+        var chosen = pool.Where(s => only switch { "sub" => s.IsSubVariant, "ita" => !s.IsSubVariant, _ => true }).ToList();
         if (chosen.Count == 0) { StatusMessage = "Nessuna stagione in questa lingua."; return; }
         if (IsBatchActive) { StatusMessage = "Accodamento già in corso."; return; }
 
@@ -1317,6 +1444,8 @@ public partial class StreamingTabViewModel : ViewModelBase
                         {
                             eps = IsCb01
                                 ? await _cb01.GetEpisodesAsync(series.Link, season.Number, season.Variant, season.Group)
+                                : IsLoonex
+                                ? await _loonex.GetEpisodesAsync(series.Link, Seasons.IndexOf(season))
                                 : await _service.GetEpisodesAsync(series.Link, season.Number);
                             if (eps.Count > 0) break;
                         }
@@ -1329,7 +1458,9 @@ public partial class StreamingTabViewModel : ViewModelBase
                     }
                     if (eps.Count == 0) throw new InvalidOperationException("nessun episodio letto dal sito");
 
-                    var toAdd = IsCb01
+                    var toAdd = IsLoonex
+                        ? eps.Where(ep => ep.IsMovie || (int.TryParse(ep.Number, out var n) && n > 0)).ToList()
+                        : IsCb01
                         ? eps.Where(ep => int.TryParse(ep.Number, out var n) && n > 0).ToList()
                         : eps.Where(ep => ep.EpisodeId > 0).ToList();
 
@@ -1337,7 +1468,7 @@ public partial class StreamingTabViewModel : ViewModelBase
                         series.Link, season.Number, seriesName, toAdd, token, season.Group);
 
                     totalQueued += queued;
-                    StatusMessage = $"Accodati: {totalQueued} episodi ({seasonIdx}/{Seasons.Count} stagioni)";
+                    StatusMessage = $"Accodati: {totalQueued} episodi ({seasonIdx}/{chosen.Count} stagioni)";
                 }
                 catch (OperationCanceledException) { throw; }
                 catch (Exception ex)
@@ -1386,7 +1517,7 @@ public partial class StreamingTabViewModel : ViewModelBase
 
         _guard ??= new EnqueueGuard(_queueService.Repository, CategoryName);
         var filtered = await _guard.FilterAsync(episodes,
-            e => IsCb01 && e.IsMovie ? 0 : (int.TryParse(e.Number, out var k) ? k : 0),
+            e => (IsCb01 || IsLoonex) && e.IsMovie ? 0 : (int.TryParse(e.Number, out var k) ? k : 0),
             seriesName, seasonNumber, BaseDownloadFolder);
         if (filtered == null) throw new OperationCanceledException();
         episodes = filtered;
@@ -1413,6 +1544,23 @@ public partial class StreamingTabViewModel : ViewModelBase
                 continue;
             }
 
+            // Loonex: speciali senza numero intero (es. "Episodio 1x05.5") → video a sé col titolo della puntata
+            if (IsLoonex && ep.IsMovie)
+            {
+                var specialLink = ep.Link;
+                // "Episodio 1x05.5" ha senso solo col nome della serie; un film ("Ben 10 - Alien X Tinction") ha già il suo
+                var rootTitle = SelectedResult?.Title ?? seriesName;
+                var specialName = ep.Title.StartsWith("Episodio", StringComparison.OrdinalIgnoreCase)
+                    ? $"{seriesName} - {ep.Title}"
+                    : ep.Title.Contains(rootTitle, StringComparison.OrdinalIgnoreCase) ? ep.Title : $"{rootTitle} - {ep.Title}";
+                items.Add(BuildDownloadItem(
+                    "", specialName, 1, ep.Title,
+                    urlExtractor: ct => _loonex.GetVideoUrlAsync(specialLink, ct),
+                    contentLink: seriesLink, episodeId: 0, isSeries: false,
+                    providerKey: "Loonex"));
+                continue;
+            }
+
             if (epNum <= 0 || !existing.Add(epNum)) continue;
 
             Func<CancellationToken, Task<string?>>? extractor = null;
@@ -1421,6 +1569,12 @@ public partial class StreamingTabViewModel : ViewModelBase
             if (IsCb01)
             {
                 provKey = "CB01";
+            }
+            else if (IsLoonex)
+            {
+                var videoId = ep.Link;
+                extractor = ct => _loonex.GetVideoUrlAsync(videoId, ct);
+                provKey = "Loonex";
             }
             else
             {
@@ -1469,7 +1623,9 @@ public partial class StreamingTabViewModel : ViewModelBase
     {
         // Pagine con più serie (es. Beyblade): ogni serie col suo nome, "Beyblade V-Force S01"
         var title = season.GroupTitle.Length > 0 ? season.GroupTitle : series.Title;
-        var name = Seasons.Count > 1 ? $"{title} S{season.Number:D2}" : title;
+        // Loonex: conta le stagioni della sola serie (una serie con una stagione resta senza "S01")
+        var count = IsLoonex ? Seasons.Count(s => s.GroupTitle == season.GroupTitle) : Seasons.Count;
+        var name = count > 1 ? $"{title} S{season.Number:D2}" : title;
         return season.IsSubVariant ? $"{name} Sub ITA" : name;
     }
 
@@ -1488,9 +1644,8 @@ public partial class StreamingTabViewModel : ViewModelBase
         string cb01Group = "")
     {
         var isCb01Provider = providerKey == "CB01";
-        var pattern = isCb01Provider
-            ? (isSeries ? Cb01SeriesNamingPattern : Cb01MovieNamingPattern)
-            : (isSeries ? SeriesNamingPattern : MovieNamingPattern);
+        var isLoonexProvider = providerKey == "Loonex";
+        var pattern = PatternFor(providerKey, isSeries);
 
         var item = new DownloadItem
         {
@@ -1504,20 +1659,19 @@ public partial class StreamingTabViewModel : ViewModelBase
             Category = CategoryName,
             UrlExtractor = urlExtractor,
             AudioExtractor = audioExtractor,
-            CookieExtractor = isCb01Provider ? null : async token =>
+            CookieExtractor = (isCb01Provider || isLoonexProvider) ? null : async token =>
             {
                 return await _service.GetSessionCookiesNetscapeAsync();
             },
-            QualityName = isCb01Provider ? "" : (SelectedQuality?.Name ?? ""),
+            QualityName = (isCb01Provider || isLoonexProvider) ? "" : (SelectedQuality?.Name ?? ""),
             ProviderKey = providerKey,
-            // CB01: conversione scelta nel Dettaglio (salvata nel download, vale anche dopo un riavvio)
             Conversion = isCb01Provider ? (SelectedConversion?.Mode ?? VideoConversion.Original) : VideoConversion.Original,
-            // CB01: qui si ricorda se scaricare la versione sottotitolata (vedi Cb01Service.SubItaTag)
             AudioLanguages = isCb01Provider
                 ? Cb01Service.EncodeTag(subIta, cb01Group)
+                : isLoonexProvider ? ""
                 : string.Join("|", AudioTracks.Where(t => t.IsSelected).Select(t => t.Key)),
-            SubtitleLanguages = isCb01Provider ? "" : string.Join("|", SubtitleTracks.Where(t => t.IsSelected).Select(t => t.Key)),
-            BurnSubtitles = isCb01Provider ? false : (BurnSubtitles && SubtitleTracks.Any(t => t.IsSelected)),
+            SubtitleLanguages = (isCb01Provider || isLoonexProvider) ? "" : string.Join("|", SubtitleTracks.Where(t => t.IsSelected).Select(t => t.Key)),
+            BurnSubtitles = (isCb01Provider || isLoonexProvider) ? false : (BurnSubtitles && SubtitleTracks.Any(t => t.IsSelected)),
 
             ContentLink = contentLink,
             EpisodeId = episodeId,

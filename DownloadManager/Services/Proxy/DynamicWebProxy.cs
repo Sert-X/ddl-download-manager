@@ -48,6 +48,7 @@ public class DynamicWebProxy : IWebProxy
             h.Contains("vix-content")) return ProviderKeys.StreamingCommunity;
         if (h.Contains("maxstream") || h.Contains("host-cdn") || h.Contains("cb01") ||
             h.Contains("stayonline") || h.Contains("uprot")) return ProviderKeys.Cb01;
+        if (h.Contains("loonex")) return ProviderKeys.Loonex;
         return ProviderKeys.Downloads;
     }
 }
@@ -67,6 +68,7 @@ internal class DynamicProxyCredentials : ICredentials
             var h when h.Contains("streamingcommunity") || h.Contains("vixcloud") => ProviderKeys.StreamingCommunity,
             var h when h.Contains("maxstream") || h.Contains("host-cdn") || h.Contains("cb01") ||
                        h.Contains("stayonline") || h.Contains("uprot") => ProviderKeys.Cb01,
+            var h when h.Contains("loonex") => ProviderKeys.Loonex,
             _ => ProviderKeys.Downloads
         };
 

@@ -686,7 +686,7 @@
                                     <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
                                     <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource AppTextMutedBrush}">
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Come si usa</Run><LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 1. Provider:</Run> scegli StreamingCommunity o CB01 (Maxstream) dal menu a sinistra della ricerca.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 1. Provider:</Run> scegli StreamingCommunity, CB01 (Maxstream) o Loonex (cartoni animati) dal menu a sinistra della ricerca.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 2. Cerca:</Run> scrivi il titolo e premi Cerca o Invio.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 3. Dettaglio:</Run> fai doppio clic su un risultato, o passaci sopra e premi "Analizza": a destra compaiono locandina, informazioni e stagioni con gli episodi (serie) oppure il pulsante "Scarica film".<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 4. Scarica:</Run> "Scarica selezionati" per gli episodi spuntati, "Scarica stagione" per la stagione aperta, "Scarica tutta la serie" per tutte le stagioni.<LineBreak/>
@@ -715,11 +715,18 @@
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Audio e sottotitoli:</Run> con tutte le opzioni MP4 restano tutte le tracce audio e i sottotitoli testuali, con l'italiano sempre come prima traccia audio (predefinita). Le conversioni AAC e H.264 regolano anche il volume (dialoghi in primo piano, -16 LUFS).<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Proxy:</Run> per CB01 funzionano solo proxy residenziali (vedi tab Proxy); con la connessione di casa non serve nessun proxy.<LineBreak/>
                                         <LineBreak/>
+                                        <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Loonex · Cartoni</Run><LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Account:</Run> non serve. Il link del video viene estratto al via di ogni download e si scarica sempre la qualità migliore disponibile (nessuna scelta di qualità, audio o sottotitoli).<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Più serie nella stessa pagina:</Run> se la pagina contiene più serie (es. Ben 10 (2005), Ben 10 Forza Aliena, Ben 10 Omniverse) nel Dettaglio compare il menu "Serie": scegli la serie, poi la stagione. Le sezioni "Serie Completa" vengono divise nelle loro stagioni (1x.., 2x..), gli episodi senza numero finiscono in "Extra".<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Scarica tutta:</Run> con più serie nella pagina il pulsante diventa "Scarica tutta «nome serie»" e accoda solo la serie scelta nel menu.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Film e speciali:</Run> i film (es. sezione "Film Vari") e gli episodi speciali (es. 1x05.5) vengono accodati come video a sé, con il loro titolo.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Nome dei file:</Run> Loonex ha i suoi pattern in "Nome file e cartella": il sito non indica l'anno dei film, quindi {Anno} resta vuoto.<LineBreak/>
+                                        <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Come funziona l'accodamento</Run><LineBreak/>
                                         Gli episodi vengono accodati subito. Il link video di ogni episodio viene estratto quando parte il suo download, perché i link scadono dopo pochi minuti: così anche le code lunghe non falliscono per link scaduti.<LineBreak/>
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Suggerimenti</Run><LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Nome dei file:</Run> in "Nome file e cartella" ci sono pattern separati per StreamingCommunity e CB01, con {Series}, {Episode:D2}, {Title}, {Anno} e, per CB01, {OriginalFileName} (nome del file su Maxstream). Le stagioni possono finire in sottocartelle dedicate.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Nome dei file:</Run> in "Nome file e cartella" ci sono pattern separati per StreamingCommunity, CB01 e Loonex, con {Series}, {Season:D2}, {Episode:D2}, {Title}, {Anno} e, per CB01, {OriginalFileName} (nome del file su Maxstream). Le stagioni possono finire in sottocartelle dedicate.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Apri nel browser:</Run> dal Dettaglio, o con il clic destro su un risultato, apre la pagina originale sul sito.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Sito non raggiungibile:</Run> controlla nella tab Domini che l'indirizzo del provider sia aggiornato.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Problemi:</Run> filtra il Log globale sulla sezione "Streaming" per vedere i dettagli di ogni estrazione e conversione.
@@ -731,7 +738,7 @@
 
                         <Border Classes="cardElevated" Margin="0,0,0,12">
                             <Grid ColumnDefinitions="Auto, *, Auto, Auto, Auto" RowDefinitions="Auto">
-                                <ComboBox Grid.Column="0" ItemsSource="{Binding AvailableProviders}" SelectedItem="{Binding SelectedProvider, Mode=TwoWay}" MinWidth="170" Margin="0,0,8,0" MinHeight="40" ToolTip.Tip="Scegli il provider: StreamingCommunity (HLS) o CB01 (Maxstream)"/>
+                                <ComboBox Grid.Column="0" ItemsSource="{Binding AvailableProviders}" SelectedItem="{Binding SelectedProvider, Mode=TwoWay}" MinWidth="170" Margin="0,0,8,0" MinHeight="40" ToolTip.Tip="Scegli il provider: StreamingCommunity (HLS), CB01 (Maxstream) o Loonex (cartoni animati)"/>
                                 <ComboBox Grid.Column="1" Name="StreamingSearchComboBox" IsEditable="True" ItemsSource="{Binding SearchHistory}" PlaceholderText="Cerca un film o una serie TV..." KeyDown="OnStreamingSearchKeyDown" HorizontalAlignment="Stretch" Margin="0,0,8,0" MinHeight="40"/>
                                 <Button ToolTip.Tip="Cerca film o serie TV (o premi Invio nel campo di ricerca)" Grid.Column="2" Classes="accent" Click="OnStreamingSearchButtonClick" MinWidth="110" Height="40" Margin="0,0,8,0">
                                     <StackPanel Classes="bi" HorizontalAlignment="Center">
@@ -768,7 +775,7 @@
                                     </Grid>
                                 </ToggleButton>
                                 <Border IsVisible="{Binding #ToggleNamingStreaming.IsChecked}" Margin="16,0,16,16">
-                                    <Grid ColumnDefinitions="Auto, *, Auto, Auto, Auto" RowDefinitions="Auto, Auto, Auto, Auto, Auto, Auto, Auto">
+                                    <Grid ColumnDefinitions="Auto, *, Auto, Auto, Auto" RowDefinitions="Auto, Auto, Auto, Auto, Auto, Auto, Auto, Auto, Auto">
                                         <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0" ToolTip.Tip="Nome dei film scaricati da StreamingCommunity"><TextBlock Text="Film · StreamingCommunity" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="Movie" Target="{Binding #MoviePatternBox}"/></StackPanel>
                                         <ComboBox x:Name="MoviePatternBox" Grid.Row="0" Grid.Column="1" IsEditable="True" ItemsSource="{Binding MovieNamingPresets}" Text="{Binding MovieNamingPattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,0,10,0"/>
                                         <Border Grid.Row="0" Grid.Column="2" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,0,10,0" MaxWidth="380">
@@ -793,18 +800,30 @@
                                             <TextBlock Text="{Binding Cb01SeriesPatternPreview}" FontFamily="Consolas,Menlo,monospace" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                                         </Border>
 
-                                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Cartella base" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,10,10,0"/>
-                                        <TextBox Grid.Row="4" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding BaseDownloadFolder, Mode=TwoWay}" Margin="0,10,10,0"/>
-                                        <Button Grid.Row="4" Grid.Column="3" Classes="iconCircle" Click="OnStreamingBrowseBaseFolderClick" Margin="0,10,8,0" ToolTip.Tip="Sfoglia">
+                                        <StackPanel Grid.Row="4" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,10,4,0" ToolTip.Tip="Nome dei film scaricati da Loonex (il sito non indica l'anno)"><TextBlock Text="Film · Loonex" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="Movie" Target="{Binding #LoonexMoviePatternBox}"/></StackPanel>
+                                        <ComboBox x:Name="LoonexMoviePatternBox" Grid.Row="4" Grid.Column="1" IsEditable="True" ItemsSource="{Binding MovieNamingPresets}" Text="{Binding LoonexMovieNamingPattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,10,10,0"/>
+                                        <Border Grid.Row="4" Grid.Column="2" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,10,10,0" MaxWidth="380">
+                                            <TextBlock Text="{Binding LoonexMoviePatternPreview}" FontFamily="Consolas,Menlo,monospace" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                        </Border>
+
+                                        <StackPanel Grid.Row="5" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,10,4,0" ToolTip.Tip="Nome degli episodi scaricati da Loonex"><TextBlock Text="Serie · Loonex" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="Series" Target="{Binding #LoonexSeriesPatternBox}"/></StackPanel>
+                                        <ComboBox x:Name="LoonexSeriesPatternBox" Grid.Row="5" Grid.Column="1" IsEditable="True" ItemsSource="{Binding SeriesNamingPresets}" Text="{Binding LoonexSeriesNamingPattern, Mode=TwoWay}" HorizontalAlignment="Stretch" Margin="0,10,10,0"/>
+                                        <Border Grid.Row="5" Grid.Column="2" Background="{DynamicResource AppSurface2Brush}" BorderBrush="{DynamicResource AppAccentBrush}" BorderThickness="1" CornerRadius="6" Padding="10,4" Margin="0,10,10,0" MaxWidth="380">
+                                            <TextBlock Text="{Binding LoonexSeriesPatternPreview}" FontFamily="Consolas,Menlo,monospace" Foreground="{DynamicResource AppAccentBrush}" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                        </Border>
+
+                                        <TextBlock Grid.Row="6" Grid.Column="0" Text="Cartella base" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,10,10,0"/>
+                                        <TextBox Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding BaseDownloadFolder, Mode=TwoWay}" Margin="0,10,10,0"/>
+                                        <Button Grid.Row="6" Grid.Column="3" Classes="iconCircle" Click="OnStreamingBrowseBaseFolderClick" Margin="0,10,8,0" ToolTip.Tip="Sfoglia">
                                             <Path Classes="icon" Data="{StaticResource IconFolder}"/>
                                         </Button>
-                                        <CheckBox ToolTip.Tip="Salva ogni serie in una sottocartella con il suo nome dentro la cartella base" Grid.Row="4" Grid.Column="4" Content="Crea sottocartella per serie" IsChecked="{Binding CreateSeriesFolder, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                                        <CheckBox ToolTip.Tip="Salva ogni serie in una sottocartella con il suo nome dentro la cartella base" Grid.Row="6" Grid.Column="4" Content="Crea sottocartella per serie" IsChecked="{Binding CreateSeriesFolder, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,10,0,0"/>
 
-                                        <StackPanel Grid.Row="5" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,10,4,0"><TextBlock Text="Sottocartella stagione" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="SeasonFolder" Target="{Binding #SeasonFolderBox}"/></StackPanel>
-                                        <TextBox x:Name="SeasonFolderBox" Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding SeasonFolderPattern}" PlaceholderText="Stagione {number} (vuoto = nessuna)" Margin="0,10,10,0"/>
+                                        <StackPanel Grid.Row="7" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,10,4,0"><TextBlock Text="Sottocartella stagione" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,6,0"/><h:PatternLegendButton Kind="SeasonFolder" Target="{Binding #SeasonFolderBox}"/></StackPanel>
+                                        <TextBox x:Name="SeasonFolderBox" Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding SeasonFolderPattern}" PlaceholderText="Stagione {number} (vuoto = nessuna)" Margin="0,10,10,0"/>
 
-                                        <TextBlock Grid.Row="6" Grid.Column="0" Text="Conversione CB01" VerticalAlignment="Top" FontWeight="SemiBold" Margin="0,16,10,0" ToolTip.Tip="Scelta proposta per ogni download CB01: si può cambiare ogni volta nel Dettaglio"/>
-                                        <StackPanel Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="4" Spacing="4" Margin="0,10,0,0">
+                                        <TextBlock Grid.Row="8" Grid.Column="0" Text="Conversione CB01" VerticalAlignment="Top" FontWeight="SemiBold" Margin="0,16,10,0" ToolTip.Tip="Scelta proposta per ogni download CB01: si può cambiare ogni volta nel Dettaglio"/>
+                                        <StackPanel Grid.Row="8" Grid.Column="1" Grid.ColumnSpan="4" Spacing="4" Margin="0,10,0,0">
                                             <ComboBox ItemsSource="{Binding ConversionOptions}" SelectedItem="{Binding DefaultConversion, Mode=TwoWay}" HorizontalAlignment="Left" MinWidth="320">
                                                 <ComboBox.ItemTemplate>
                                                     <DataTemplate x:DataType="models:VideoConversionOption">
@@ -921,7 +940,8 @@
                                                 <ProgressBar IsIndeterminate="True" Width="80" Height="4" VerticalAlignment="Center"/>
                                                 <TextBlock Text="Caricamento..." FontSize="11" FontStyle="Italic" Foreground="{DynamicResource AppTextMutedBrush}" VerticalAlignment="Center"/>
                                             </StackPanel>
-                                            <ComboBox ItemsSource="{Binding Seasons}" SelectedItem="{Binding SelectedSeason, Mode=TwoWay}" MinWidth="160" IsVisible="{Binding IsSelectedResultSeries}" ToolTip.Tip="Seleziona stagione">
+                                            <ComboBox ItemsSource="{Binding SeasonGroups}" SelectedItem="{Binding SelectedSeasonGroup, Mode=TwoWay}" MinWidth="180" MaxWidth="320" IsVisible="{Binding HasSeasonGroups}" ToolTip.Tip="La pagina contiene più serie: scegli quale"/>
+                                            <ComboBox ItemsSource="{Binding VisibleSeasons}" SelectedItem="{Binding SelectedSeason, Mode=TwoWay}" MinWidth="160" IsVisible="{Binding IsSelectedResultSeries}" ToolTip.Tip="Seleziona stagione">
                                                 <ComboBox.ItemTemplate>
                                                     <DataTemplate x:DataType="models:Season">
                                                         <TextBlock Text="{Binding DisplayName}"/>
@@ -962,7 +982,7 @@
                                         </Grid>
                                     </Border>
                                     <WrapPanel DockPanel.Dock="Top" Orientation="Horizontal" ItemSpacing="14" LineSpacing="8" Margin="0,0,0,8" IsVisible="{Binding HasSelectedResult}">
-                                        <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding !IsCb01}">
+                                        <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding ShowQualityPicker}">
                                             <TextBlock Text="Qualità:" VerticalAlignment="Center" FontWeight="SemiBold"/>
                                             <ComboBox ItemsSource="{Binding AvailableQualities}" SelectedItem="{Binding SelectedQuality, Mode=TwoWay}" MinWidth="160" ToolTip.Tip="Auto seleziona la qualità migliore disponibile. 1080p richiede l'account Premium.">
                                                 <ComboBox.ItemTemplate>
@@ -1101,7 +1121,7 @@
                                     <WrapPanel DockPanel.Dock="Top" Orientation="Horizontal" ItemSpacing="6" LineSpacing="6" Margin="0,0,0,8" IsVisible="{Binding IsSelectedResultSeries}">
                                         <Button ToolTip.Tip="Accoda tutti gli episodi spuntati (quelli già in coda vengono saltati)" Classes="success" Command="{Binding DownloadSelectedEpisodesCommand}" IsEnabled="{Binding CanInteractWithEpisodes}"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconDownload}"/><TextBlock Text="Scarica selezionati"/></StackPanel></Button>
                                         <Button Classes="accent" Command="{Binding DownloadCurrentSeasonCommand}" IsEnabled="{Binding CanInteractWithEpisodes}" ToolTip.Tip="Accoda tutti gli episodi della stagione corrente"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconDownload}"/><TextBlock Text="Scarica stagione"/></StackPanel></Button>
-                                        <Button Classes="info" Command="{Binding DownloadAllSeasonsCommand}" IsEnabled="{Binding CanInteractWithEpisodes}" IsVisible="{Binding !HasItaAndSubSeasons}" ToolTip.Tip="Accoda tutti gli episodi di tutte le stagioni"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconLayers}"/><TextBlock Text="Scarica tutta la serie"/></StackPanel></Button>
+                                        <Button Classes="info" Command="{Binding DownloadAllSeasonsCommand}" IsEnabled="{Binding CanInteractWithEpisodes}" IsVisible="{Binding !HasItaAndSubSeasons}" ToolTip.Tip="Accoda tutti gli episodi di tutte le stagioni (della serie scelta, se la pagina ne ha più d'una)"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconLayers}"/><TextBlock Text="{Binding DownloadAllText}" MaxWidth="320" TextTrimming="CharacterEllipsis"/></StackPanel></Button>
                                         <Button Classes="info" Command="{Binding DownloadAllSeasonsCommand}" CommandParameter="ita" IsEnabled="{Binding CanInteractWithEpisodes}" IsVisible="{Binding HasItaAndSubSeasons}" ToolTip.Tip="Accoda tutte le stagioni in italiano"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconLayers}"/><TextBlock Text="Scarica tutta la serie ITA"/></StackPanel></Button>
                                         <Button Classes="warning" Command="{Binding DownloadAllSeasonsCommand}" CommandParameter="sub" IsEnabled="{Binding CanInteractWithEpisodes}" IsVisible="{Binding HasItaAndSubSeasons}" ToolTip.Tip="Accoda tutte le stagioni sottotitolate in italiano"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconLayers}"/><TextBlock Text="Scarica tutta la serie Sub ITA"/></StackPanel></Button>
                                         <Button ToolTip.Tip="Seleziona tutti gli episodi della lista" Content="Seleziona tutti" Click="OnStreamingSelectAllEpisodesClick" IsEnabled="{Binding CanInteractWithEpisodes}"/>
@@ -3361,7 +3381,7 @@
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Mappatura: come si usa</Run><LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 1. Configura:</Run> in "Impostazioni e Domini" inserisci URL e API Key del forum e aggiungi le sorgenti SFTP: per ognuna il profilo (della tab SFTP, anche su server diversi), la cartella sul server, il dominio e il percorso pubblico. L'anteprima mostra il link che verrà generato. Salva.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 2. Carica i post:</Run> scegli una categoria. "Carica Pag." carica 50 post, "Carica Tutti" li carica tutti a blocchi. Ricerca e filtri colorati (clic su un colore per mostrarlo o nasconderlo; "Da sistemare" nasconde i verdi) lasciano solo i post che ti interessano.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 2. Carica i post:</Run> dal menu delle categorie spunta una o più categorie (o "Tutti i media"). "Carica Pag." carica 50 post, "Carica Tutti" li carica tutti a blocchi. Ricerca e filtri colorati (clic su un colore per mostrarlo o nasconderlo; "Da sistemare" nasconde i verdi) lasciano solo i post che ti interessano.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 3. Carica l'albero:</Run> dal menu "Sorgenti" scegli quali caricare (la scelta resta salvata e vale per tutte le categorie) e premi "Carica". Ogni sorgente è una radice dell'albero; i colori confrontano i post con i file di tutte.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 4. Mappa:</Run> seleziona un post, clicca la cartella con i suoi episodi (o un singolo file, per i film) e premi "Mappa": i link si abbinano ai file in ordine naturale, col dominio della sorgente. Funziona anche con i post senza link (una riga per file). Per un film in più parti mappa un file alla volta.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• 5. Controlla:</Run> ogni riga mostra il file attuale sul forum e quello nuovo (nome in grande, sotto server e cartella; l'indirizzo completo col mouse). Sopra la tabella conteggi e riepilogo: verde se file e link coincidono, arancione se no. Le frecce di "Ordine" scambiano gli abbinamenti.<LineBreak/>
@@ -3385,7 +3405,7 @@
                                         <LineBreak/>
                                         <Run FontWeight="Bold" Foreground="{DynamicResource AppTextBrush}">Titoli TMDB (beta)</Run><LineBreak/>
                                         Funzione ancora in prova: controlla sempre i titoli proposti prima di rinominare. Serve una chiave TMDB, da inserire in "Impostazioni" quando sei in Titoli TMDB.<LineBreak/>
-                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Passi:</Run> 1 carica i post di una categoria, 2 analizza, 3 controlla con filtri e ricerca. Il passo da fare è blu, quelli fatti sono verdi.<LineBreak/>
+                                        <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Passi:</Run> 1 carica i post di una o più categorie, 2 analizza, 3 controlla con filtri e ricerca. Il passo da fare è blu, quelli fatti sono verdi.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Analizza:</Run> il codice TMDB si legge dalla pagina del post, a ritmo calmo; se manca si cerca per titolo e il post va "da confermare". La seconda volta è immediata (codici e pagine sono in memoria). L'analisi non modifica niente sul forum.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Stagione:</Run> dalla pagina del post, poi dal titolo, poi dal numero di episodi (da confermare). Gli speciali usano la stagione 0 di TMDB.<LineBreak/>
                                         <Run FontWeight="SemiBold" Foreground="{DynamicResource AppTextBrush}">• Filtri:</Run> Da rinominare, Episodi diversi da TMDB (mancanti o in più), In corso (stagione in onda o link cresciuti negli ultimi 30 giorni), Da confermare, Non trovati, Già corretti, Titolo manuale, Saltati.<LineBreak/>
@@ -3629,27 +3649,52 @@
                                     <StackPanel Spacing="10">
                                         <TextBlock Text="Categorie" FontWeight="Bold"/>
                                         <Grid ColumnDefinitions="*, Auto">
-                                            <ComboBox Grid.Column="0"
-                                                      ItemsSource="{Binding AvailableCategories}"
-                                                      SelectedItem="{Binding SelectedCategory, Mode=TwoWay}"
-                                                      Margin="0,0,5,0"
-                                                      HorizontalAlignment="Stretch"
-                                                      ToolTip.Tip="Seleziona la categoria di Videobox di cui caricare i post">
-                                                <ComboBox.ItemTemplate>
-                                                    <DataTemplate x:DataType="vm:CategoryItem">
-                                                        <StackPanel Classes="bi">
-                                                            <Path Classes="icon accent" Data="{StaticResource IconLayers}" IsVisible="{Binding IsAll}"/>
-                                                            <Path Classes="icon" Data="{StaticResource IconFolder}" Stroke="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding !IsAll}"/>
-                                                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                            <!-- Categorie da caricare: se ne possono spuntare più di una -->
+                                            <DropDownButton Grid.Column="0" Classes="trackPicker" Margin="0,0,5,0" HorizontalAlignment="Stretch"
+                                                            ToolTip.Tip="{Binding CategoriesSelectionTip}">
+                                                <StackPanel Classes="bi">
+                                                    <Path Classes="icon accent" Data="{StaticResource IconLayers}"/>
+                                                    <TextBlock Text="{Binding CategoriesSelectionText}" TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                                <DropDownButton.Flyout>
+                                                    <Flyout Placement="BottomEdgeAlignedLeft" FlyoutPresenterClasses="trackFlyout">
+                                                        <StackPanel Spacing="6" Width="300">
+                                                            <StackPanel Classes="bi" Margin="4,2,4,2">
+                                                                <Path Classes="icon accent" Data="{StaticResource IconLayers}"/>
+                                                                <TextBlock Text="Categorie da caricare" FontWeight="Bold"/>
+                                                            </StackPanel>
+                                                            <Border Height="1" Background="{DynamicResource AppBorderBrush}"/>
+                                                            <ScrollViewer MaxHeight="420" HorizontalScrollBarVisibility="Disabled">
+                                                                <ItemsControl ItemsSource="{Binding AvailableCategories}">
+                                                                    <ItemsControl.ItemTemplate>
+                                                                        <DataTemplate x:DataType="vm:CategoryItem">
+                                                                            <Border Classes="trackRow">
+                                                                                <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                                                                    <StackPanel Classes="bi">
+                                                                                        <Path Classes="icon accent" Data="{StaticResource IconLayers}" IsVisible="{Binding IsAll}"/>
+                                                                                        <Path Classes="icon" Data="{StaticResource IconFolder}" Stroke="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding !IsAll}"/>
+                                                                                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                                                    </StackPanel>
+                                                                                </CheckBox>
+                                                                            </Border>
+                                                                        </DataTemplate>
+                                                                    </ItemsControl.ItemTemplate>
+                                                                </ItemsControl>
+                                                            </ScrollViewer>
+                                                            <Border Height="1" Background="{DynamicResource AppBorderBrush}"/>
+                                                            <Grid ColumnDefinitions="*, Auto" Margin="4,0,0,0">
+                                                                <TextBlock Text="Spunta una o più categorie, poi premi Carica" FontSize="11" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                                                <Button Grid.Column="1" Classes="ghost" Padding="10,4" FontSize="11" Command="{Binding SelectAllMediaCategoryCommand}">Tutti i media</Button>
+                                                            </Grid>
                                                         </StackPanel>
-                                                    </DataTemplate>
-                                                </ComboBox.ItemTemplate>
-                                            </ComboBox>
+                                                    </Flyout>
+                                                </DropDownButton.Flyout>
+                                            </DropDownButton>
                                             <Button Grid.Column="1" Classes="iconCircle" Command="{Binding LoadCategoriesCommand}" ToolTip.Tip="Ricarica l'elenco delle categorie dal sito"><Path Classes="icon" Data="{StaticResource IconRefresh}"/></Button>
                                         </Grid>
                                         <Grid ColumnDefinitions="*, *" IsVisible="{Binding !IsLoadingPosts}">
                                             <Button Grid.Column="0" Command="{Binding LoadCategoryCommand}" Margin="0,0,5,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" ToolTip.Tip="Carica solo la prima pagina (50 post)"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconRefresh}"/><TextBlock Text="Carica Pag."/></StackPanel></Button>
-                                            <Button Grid.Column="1" Classes="accent" Command="{Binding LoadAllCategoryCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" ToolTip.Tip="Carica tutti i post della categoria a blocchi di 50"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconDownload}"/><TextBlock Text="Carica Tutti"/></StackPanel></Button>
+                                            <Button Grid.Column="1" Classes="accent" Command="{Binding LoadAllCategoryCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" ToolTip.Tip="Carica tutti i post delle categorie scelte a blocchi di 50"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconDownload}"/><TextBlock Text="Carica Tutti"/></StackPanel></Button>
                                         </Grid>
                                         <!-- Durante il caricamento: avanzamento + Stop al posto dei pulsanti -->
                                         <Grid ColumnDefinitions="*, Auto" IsVisible="{Binding IsLoadingPosts}">
@@ -3784,7 +3829,7 @@
                                                             <Path Classes="icon accent" Data="{StaticResource IconLayers}"/>
                                                             <TextBlock Text="Sorgenti" FontWeight="Bold"/>
                                                         </StackPanel>
-                                                        <TextBlock Grid.Column="1" Text="{Binding SelectedCategory.Name}" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource AppTextMutedBrush}" MaxWidth="140" TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Grid.Column="1" Text="{Binding CategoriesSelectionText}" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource AppTextMutedBrush}" MaxWidth="140" TextTrimming="CharacterEllipsis"/>
                                                     </Grid>
                                                     <Border Height="1" Background="{DynamicResource AppBorderBrush}"/>
                                                     <ItemsControl ItemsSource="{Binding Sources}">
@@ -4102,26 +4147,54 @@
                         <!-- Categoria da caricare (stessi comandi della Mappatura) -->
                         <Border Grid.Row="0" Classes="cardElevated" Padding="12,10" Margin="0,0,0,10">
                             <Grid ColumnDefinitions="Auto, 300, Auto, Auto, *">
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" ToolTip.Tip="Passo 1: scegli la categoria e carica i suoi post">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" ToolTip.Tip="Passo 1: scegli una o più categorie e carica i loro post">
                                     <Border Classes="step" Classes.current="{Binding Tmdb.IsStep1Current}" Classes.done="{Binding Tmdb.IsStep1Done}"><TextBlock Text="1"/></Border>
                                     <TextBlock Classes="stepLabel" Text="Carica i post"/>
                                 </StackPanel>
-                                <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableCategories}" SelectedItem="{Binding SelectedCategory, Mode=TwoWay}"
-                                          HorizontalAlignment="Stretch" ToolTip.Tip="Categoria di Videobox di cui caricare i post da analizzare">
-                                    <ComboBox.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:CategoryItem">
-                                            <StackPanel Classes="bi">
-                                                <Path Classes="icon accent" Data="{StaticResource IconLayers}" IsVisible="{Binding IsAll}"/>
-                                                <Path Classes="icon" Data="{StaticResource IconFolder}" Stroke="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding !IsAll}"/>
-                                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                <!-- Categorie da caricare: se ne possono spuntare più di una (stessa scelta della Mappatura) -->
+                                <DropDownButton Grid.Column="1" Classes="trackPicker" HorizontalAlignment="Stretch" ToolTip.Tip="{Binding CategoriesSelectionTip}">
+                                    <StackPanel Classes="bi">
+                                        <Path Classes="icon accent" Data="{StaticResource IconLayers}"/>
+                                        <TextBlock Text="{Binding CategoriesSelectionText}" TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                    <DropDownButton.Flyout>
+                                        <Flyout Placement="BottomEdgeAlignedLeft" FlyoutPresenterClasses="trackFlyout">
+                                            <StackPanel Spacing="6" Width="300">
+                                                <StackPanel Classes="bi" Margin="4,2,4,2">
+                                                    <Path Classes="icon accent" Data="{StaticResource IconLayers}"/>
+                                                    <TextBlock Text="Categorie da caricare" FontWeight="Bold"/>
+                                                </StackPanel>
+                                                <Border Height="1" Background="{DynamicResource AppBorderBrush}"/>
+                                                <ScrollViewer MaxHeight="420" HorizontalScrollBarVisibility="Disabled">
+                                                    <ItemsControl ItemsSource="{Binding AvailableCategories}">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate x:DataType="vm:CategoryItem">
+                                                                <Border Classes="trackRow">
+                                                                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                                                                        <StackPanel Classes="bi">
+                                                                            <Path Classes="icon accent" Data="{StaticResource IconLayers}" IsVisible="{Binding IsAll}"/>
+                                                                            <Path Classes="icon" Data="{StaticResource IconFolder}" Stroke="{DynamicResource AppTextMutedBrush}" IsVisible="{Binding !IsAll}"/>
+                                                                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                                        </StackPanel>
+                                                                    </CheckBox>
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </ScrollViewer>
+                                                <Border Height="1" Background="{DynamicResource AppBorderBrush}"/>
+                                                <Grid ColumnDefinitions="*, Auto" Margin="4,0,0,0">
+                                                    <TextBlock Text="Spunta una o più categorie, poi premi Carica" FontSize="11" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource AppTextMutedBrush}"/>
+                                                    <Button Grid.Column="1" Classes="ghost" Padding="10,4" FontSize="11" Command="{Binding SelectAllMediaCategoryCommand}">Tutti i media</Button>
+                                                </Grid>
                                             </StackPanel>
-                                        </DataTemplate>
-                                    </ComboBox.ItemTemplate>
-                                </ComboBox>
+                                        </Flyout>
+                                    </DropDownButton.Flyout>
+                                </DropDownButton>
                                 <Button Grid.Column="2" Classes="iconCircle" Margin="6,0,0,0" Command="{Binding LoadCategoriesCommand}" ToolTip.Tip="Ricarica l'elenco delle categorie dal sito"><Path Classes="icon" Data="{StaticResource IconRefresh}"/></Button>
                                 <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="8" Margin="10,0,0,0" IsVisible="{Binding !IsLoadingPosts}">
                                     <Button Command="{Binding LoadCategoryCommand}" ToolTip.Tip="Carica solo la prima pagina (50 post)"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconRefresh}"/><TextBlock Text="Carica Pag."/></StackPanel></Button>
-                                    <Button Classes="accent" Command="{Binding LoadAllCategoryCommand}" ToolTip.Tip="Carica tutti i post della categoria a blocchi di 50"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconDownload}"/><TextBlock Text="Carica Tutti"/></StackPanel></Button>
+                                    <Button Classes="accent" Command="{Binding LoadAllCategoryCommand}" ToolTip.Tip="Carica tutti i post delle categorie scelte a blocchi di 50"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconDownload}"/><TextBlock Text="Carica Tutti"/></StackPanel></Button>
                                 </StackPanel>
                                 <Button Grid.Column="3" Classes="danger" Margin="10,0,0,0" Command="{Binding StopLoadingPostsCommand}" IsVisible="{Binding IsLoadingPosts}" ToolTip.Tip="Ferma il caricamento dei post (quelli già scaricati restano)"><StackPanel Classes="bi"><Path Classes="icon" Data="{StaticResource IconStop}"/><TextBlock Text="Stop"/></StackPanel></Button>
                                 <StackPanel Grid.Column="4" Spacing="4" Margin="14,0,0,0" VerticalAlignment="Center">

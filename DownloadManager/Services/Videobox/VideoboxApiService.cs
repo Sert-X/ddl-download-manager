@@ -61,14 +61,18 @@ public class VideoboxApiService
         return await response.Content.ReadAsStringAsync(ct);
     }
 
-    // Ripristinato int? (nullable) per far funzionare la selezione "Tutti i Media" (che passa null/0)
-    public async Task<VideoboxPagedDto> GetVideosByCategoryAsync(int? categoryId, int page = 1, CancellationToken ct = default)
+    public Task<VideoboxPagedDto> GetVideosByCategoryAsync(int? categoryId, int page = 1, CancellationToken ct = default)
+        => GetVideosByCategoriesAsync(categoryId is > 0 ? new[] { categoryId.Value } : null, page, ct);
+
+    /// <summary>Post di una o più categorie insieme (l'API IPS accetta gli Id separati da virgola). Vuoto/null = tutti i media.</summary>
+    public async Task<VideoboxPagedDto> GetVideosByCategoriesAsync(IReadOnlyCollection<int>? categoryIds, int page = 1, CancellationToken ct = default)
     {
         ConfigureAuth();
         var settings = _settingsService.Current;
-        
-        // Se categoryId è 0 o null, omettiamo il parametro per caricare tutti i media
-        string catFilter = (categoryId.HasValue && categoryId.Value > 0) ? $"categories={categoryId.Value}&" : "";
+
+        // Nessuna categoria: si omette il parametro per caricare tutti i media
+        var ids = categoryIds?.Where(id => id > 0).Distinct().ToList();
+        string catFilter = ids is { Count: > 0 } ? $"categories={string.Join(",", ids)}&" : "";
         // sortDir=desc: dal post più nuovo (di default il forum li dà dal più vecchio)
         var url = $"{settings.IpsBaseUrl.TrimEnd('/')}/api/videobox/videos?{catFilter}page={page}&perPage=50&sortDir=desc";
         

@@ -69,6 +69,7 @@ public partial class ProxyTabViewModel : ViewModelBase
         (ProviderKeys.AnimeSaturn, "AnimeSaturn", "AS"),
         (ProviderKeys.StreamingCommunity, "StreamingCommunity", "SC"),
         (ProviderKeys.Cb01, "CB01 · Maxstream", "CB"),
+        (ProviderKeys.Loonex, "Loonex · Cartoni", "LX"),
         (ProviderKeys.Downloads, "Download diretti", "DL"),
     };
 
@@ -128,6 +129,7 @@ public partial class ProxyTabViewModel : ViewModelBase
             ProviderKeys.AnimeSaturn => UseProxyAnimeSaturn,
             ProviderKeys.StreamingCommunity => UseProxyStreamingCommunity,
             ProviderKeys.Cb01 => UseProxyCb01,
+            ProviderKeys.Loonex => UseProxyLoonex,
             ProviderKeys.Downloads => UseProxyDownloads,
             _ => false
         };
@@ -139,6 +141,7 @@ public partial class ProxyTabViewModel : ViewModelBase
                 case ProviderKeys.AnimeSaturn: UseProxyAnimeSaturn = value; break;
                 case ProviderKeys.StreamingCommunity: UseProxyStreamingCommunity = value; break;
                 case ProviderKeys.Cb01: UseProxyCb01 = value; break;
+                case ProviderKeys.Loonex: UseProxyLoonex = value; break;
                 case ProviderKeys.Downloads: UseProxyDownloads = value; break;
             }
             OnPropertyChanged();
@@ -194,6 +197,11 @@ public partial class ProxyTabViewModel : ViewModelBase
     {
         get => _settings.Current.UseProxyForCb01;
         set { _settings.Current.UseProxyForCb01 = value; _settings.Save(); OnPropertyChanged(); _shared.NotifyActiveProxyChanged(); }
+    }
+    public bool UseProxyLoonex
+    {
+        get => _settings.Current.UseProxyForLoonex;
+        set { _settings.Current.UseProxyForLoonex = value; _settings.Save(); OnPropertyChanged(); _shared.NotifyActiveProxyChanged(); }
     }
 
     public ProxyTabViewModel(

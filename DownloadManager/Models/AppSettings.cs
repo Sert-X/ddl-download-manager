@@ -16,6 +16,9 @@ public class AppSettings
     /// <summary>Pattern per i download da CB01: {OriginalFileName} è il nome del file su Maxstream.</summary>
     public string Cb01MovieNamingPattern { get; set; } = "{OriginalFileName}";
     public string Cb01SeriesNamingPattern { get; set; } = "{OriginalFileName}";
+    /// <summary>Pattern per i download da Loonex: il sito non indica l'anno dei film.</summary>
+    public string LoonexMovieNamingPattern { get; set; } = "{Series}";
+    public string LoonexSeriesNamingPattern { get; set; } = "{Series} S{Season:D2}E{Episode:D2}";
     public string SeasonFolderPattern { get; set; } = "Stagione {number}";
 
     /// <summary>Download simultanei della tab Anime.</summary>
@@ -53,6 +56,7 @@ public class AppSettings
     public bool UseProxyForStreamingCommunity { get; set; } = true;
     public bool UseProxyForDownloads { get; set; } = true;
     public bool UseProxyForCb01 { get; set; }
+    public bool UseProxyForLoonex { get; set; }
 
     /// <summary>Dopo un test fallito il proxy viene escluso dalla lista del provider (non si ritesta più).</summary>
     public bool ProxyAutoExcludeFailed { get; set; } = true;
@@ -100,6 +104,8 @@ public class AppSettings
     /// dopo parte attiva in tutte le categorie, invece di risultare spenta.
     /// </summary>
     public Dictionary<string, List<string>> VideoboxCategoryDisabledSources { get; set; } = new();
+    /// <summary>Categorie spuntate di cui caricare i post (vuoto = tutti i media).</summary>
+    public List<int> VideoboxSelectedCategoryIds { get; set; } = new();
 
     /// <summary>Domini considerati validi: quelli delle sorgenti, il primario storico e i secondari.</summary>
     public IEnumerable<string> AllValidStorageDomains =>
