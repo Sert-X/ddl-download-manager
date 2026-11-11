@@ -145,6 +145,7 @@ public class DownloadQueueService
         {
             RewireStreamingExtractors(item);
             RewireCb01Extractors(item);
+            RewireLoonexExtractors(item);
             RewireAnimeExtractors(item);
             item.Status = DownloadStatus.Pending;
             await AddToListAsync(item);
@@ -185,6 +186,27 @@ public class DownloadQueueService
             return;
         }
         cb01.AttachExtractor(item);
+    }
+
+    private void RewireLoonexExtractors(DownloadItem item)
+    {
+        if (item.ProviderKey != "Loonex") return;
+        if (string.IsNullOrEmpty(item.ContentLink)) return;
+
+        var loonex = _serviceProvider.GetService<Services.Streaming.Loonex.ILoonexService>();
+        if (loonex == null)
+        {
+            _logger.LogWarning("[REWIRE] ILoonexService non disponibile");
+            return;
+        }
+
+        if (item.UrlExtractor == null)
+        {
+            var capturedLink = item.ContentLink;
+            item.UrlExtractor = ct => loonex.GetVideoUrlAsync(capturedLink, ct);
+        }
+
+        item.CookieExtractor = ct => loonex.GetSessionCookiesNetscapeAsync(ct);
     }
 
     private void RewireStreamingExtractors(DownloadItem item)

@@ -53,7 +53,8 @@ public partial class DownloadService : IDownloadService
 
         var handler = new HttpClientHandler
         {
-            MaxConnectionsPerServer = 16,
+            // Margine oltre ConnectionsPerHost per HEAD e download senza Range
+            MaxConnectionsPerServer = ConnectionsPerHost + 8,
             AutomaticDecompression = DecompressionMethods.All,
             Proxy = new DynamicWebProxy(proxyProvider),
             UseProxy = true
@@ -310,8 +311,20 @@ public partial class DownloadService : IDownloadService
             return;
         }
 
-        var head = await _http.SendAsync(
-            new HttpRequestMessage(HttpMethod.Head, item.Url), ct);
+        HttpResponseMessage head;
+        using (var headTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct))
+        {
+            headTimeout.CancelAfter(TimeSpan.FromSeconds(60));
+            try
+            {
+                head = await _http.SendAsync(new HttpRequestMessage(HttpMethod.Head, item.Url), headTimeout.Token);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                throw new TimeoutException("Il server non risponde (dimensione del file non letta entro 60 s).");
+            }
+        }
+        using var headResponse = head;
         head.EnsureSuccessStatusCode();
 
         var totalSize = head.Content.Headers.ContentLength
@@ -676,6 +689,19 @@ public partial class DownloadService : IDownloadService
     private const int ChunkAttempts = 4;
 
     /// <summary>
+    /// Pezzi scaricati insieme verso lo stesso server, per tutti i download. Con molti download
+    /// (20 × 4 pezzi) i pezzi in più aspettano qui, prima che parta il controllo ChunkIdleTimeout:
+    /// prima aspettavano nel pool dell'HttpClient e l'attesa contava come "nessun dato", così i
+    /// pezzi fallivano a ripetizione e i download si fermavano.
+    /// </summary>
+    private const int ConnectionsPerHost = 16;
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, SemaphoreSlim> _hostSlots =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    private static SemaphoreSlim HostSlots(string url) =>
+        _hostSlots.GetOrAdd(new Uri(url).Host, _ => new SemaphoreSlim(ConnectionsPerHost));
+
+    /// <summary>
     /// Scarica un pezzo del file. Se la connessione si blocca (il server smette di mandare dati senza
     /// chiuderla: con molti download insieme da Maxstream capitava e il download restava fermo per
     /// sempre) o si interrompe, si riprende dal punto raggiunto, fino a <see cref="ChunkAttempts"/> volte.
@@ -712,6 +738,18 @@ public partial class DownloadService : IDownloadService
 
     /// <summary>Una richiesta per il tratto [pos, end]; pos avanza con ogni blocco scritto.</summary>
     private async Task DownloadRangeOnceAsync(string url, FileStream fs, System.Runtime.CompilerServices.StrongBox<long> pos, long end,
+        Action<long> onBytes, CancellationToken ct)
+    {
+        var slots = HostSlots(url);
+        await slots.WaitAsync(ct);
+        try
+        {
+            await DownloadRangeWithSlotAsync(url, fs, pos, end, onBytes, ct);
+        }
+        finally { slots.Release(); }
+    }
+
+    private async Task DownloadRangeWithSlotAsync(string url, FileStream fs, System.Runtime.CompilerServices.StrongBox<long> pos, long end,
         Action<long> onBytes, CancellationToken ct)
     {
         long from = pos.Value;

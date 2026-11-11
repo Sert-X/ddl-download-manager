@@ -1251,7 +1251,7 @@ public partial class StreamingTabViewModel : ViewModelBase
                 var item = BuildDownloadItem(
                     "", movie.Title, 1, movie.Title,
                     urlExtractor: extractor,
-                    contentLink: movie.Link,
+                    contentLink: vid,
                     episodeId: 0,
                     isSeries: false,
                     year: movie.Year ?? "",
@@ -1556,7 +1556,7 @@ public partial class StreamingTabViewModel : ViewModelBase
                 items.Add(BuildDownloadItem(
                     "", specialName, 1, ep.Title,
                     urlExtractor: ct => _loonex.GetVideoUrlAsync(specialLink, ct),
-                    contentLink: seriesLink, episodeId: 0, isSeries: false,
+                    contentLink: specialLink, episodeId: 0, isSeries: false,
                     providerKey: "Loonex"));
                 continue;
             }
@@ -1589,7 +1589,7 @@ public partial class StreamingTabViewModel : ViewModelBase
             items.Add(BuildDownloadItem(
                 "", seriesName, epNum, ep.Title, seasonNumber,
                 extractor, null,
-                contentLink: seriesLink,
+                contentLink: IsLoonex ? ep.Link : seriesLink,
                 episodeId: ep.EpisodeId,
                 isSeries: true,
                 providerKey: provKey,
@@ -1659,10 +1659,9 @@ public partial class StreamingTabViewModel : ViewModelBase
             Category = CategoryName,
             UrlExtractor = urlExtractor,
             AudioExtractor = audioExtractor,
-            CookieExtractor = (isCb01Provider || isLoonexProvider) ? null : async token =>
-            {
-                return await _service.GetSessionCookiesNetscapeAsync();
-            },
+            CookieExtractor = isCb01Provider ? null
+                : isLoonexProvider ? (async token => await _loonex.GetSessionCookiesNetscapeAsync(token))
+                : (async token => await _service.GetSessionCookiesNetscapeAsync()),
             QualityName = (isCb01Provider || isLoonexProvider) ? "" : (SelectedQuality?.Name ?? ""),
             ProviderKey = providerKey,
             Conversion = isCb01Provider ? (SelectedConversion?.Mode ?? VideoConversion.Original) : VideoConversion.Original,

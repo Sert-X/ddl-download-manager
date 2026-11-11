@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.6.1] — 2026-11-11
+
+### 🧸 Loonex
+- **Niente più errore 403 nei download**: i cookie della verifica anti-bot ottenuti aprendo il player vengono passati al download, compresi quelli del server video.
+- **Download in coda dopo il riavvio**: chiudendo e riaprendo l'app, i download Loonex in coda ripartono correttamente (prima cercavano il video nella pagina della serie invece che in quella dell'episodio e fallivano). I download accodati con la versione 1.6.0 vanno riaccodati dalla ricerca.
+- **Ricerca più veloce**: il browser si apre solo se il sito risponde 403, non più a ogni prima ricerca.
+
+### 🎬 CB01 — Molti download insieme
+- **I download non si fermano più con tanti download paralleli** (es. 20): i pezzi in attesa di una connessione libera venivano scambiati per connessioni bloccate ("nessun dato da 60 s"), fallivano a ripetizione e alcuni file smettevano di scaricare. Ora i pezzi aspettano il loro turno (16 connessioni per server, divise tra tutti i download) e il controllo dei 60 s parte solo quando la connessione è davvero aperta.
+- **Avvio del download**: la lettura della dimensione del file ha un tempo massimo di 60 s (prima poteva restare ferma fino a 30 minuti).
+
 ## [1.6.0] — 2026-11-11
 
 ### 🧸 Nuovo provider: Loonex (cartoni animati)

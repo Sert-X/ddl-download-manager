@@ -17,7 +17,7 @@ namespace DownloadManager.Services.Streaming.Loonex;
 public sealed class LoonexService : ILoonexService
 {
     private const string UserAgent =
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
     private const int MaxSearchPages = 5;
 
     private readonly ILogger<LoonexService> _logger;
@@ -26,7 +26,10 @@ public sealed class LoonexService : ILoonexService
 
     private readonly object _httpLock = new();
     private HttpClient? _http;
+    private HttpClientHandler? _httpHandler;
     private string _httpProxyKey = "";
+    private readonly SemaphoreSlim _warmUpLock = new(1, 1);
+    private DateTime _warmedUpAt = DateTime.MinValue;
 
     private readonly SemaphoreSlim _browserLock = new(1, 1);
     private IPlaywright? _playwright;
@@ -59,47 +62,117 @@ public sealed class LoonexService : ILoonexService
     //  HTTP
     // ============================================================
 
-    private HttpClient Http
+    private (HttpClient Client, HttpClientHandler Handler) EnsureHttp()
     {
-        get
+        var proxy = _proxyProvider.GetActive(ProviderKeys.Loonex);
+        var key = ProxyKeyOf(proxy);
+        lock (_httpLock)
         {
-            var proxy = _proxyProvider.GetActive(ProviderKeys.Loonex);
-            var key = ProxyKeyOf(proxy);
-            lock (_httpLock)
+            if (_http != null && _httpHandler != null && _httpProxyKey == key)
+                return (_http, _httpHandler);
+
+            var handler = new HttpClientHandler
             {
-                if (_http != null && _httpProxyKey == key) return _http;
-
-                var handler = new HttpClientHandler
-                {
-                    AllowAutoRedirect = true,
-                    AutomaticDecompression = DecompressionMethods.All,
-                };
-                if (proxy != null)
-                {
-                    var scheme = proxy.Protocol == ProxyProtocol.Socks5 ? "socks5" : "http";
-                    handler.Proxy = new WebProxy($"{scheme}://{proxy.Host}:{proxy.Port}");
-                    if (proxy.Auth == ProxyAuthType.UserPassword)
-                        handler.Proxy.Credentials = new NetworkCredential(proxy.Username, proxy.Password);
-                    handler.UseProxy = true;
-                }
-
-                var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
-                http.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
-                http.DefaultRequestHeaders.AcceptLanguage.ParseAdd("it-IT,it;q=0.9");
-
-                _http?.Dispose();
-                _http = http;
-                _httpProxyKey = key;
-                return http;
+                AllowAutoRedirect = true,
+                AutomaticDecompression = DecompressionMethods.All,
+                UseCookies = true,
+                CookieContainer = new CookieContainer(),
+            };
+            if (proxy != null)
+            {
+                var scheme = proxy.Protocol == ProxyProtocol.Socks5 ? "socks5" : "http";
+                handler.Proxy = new WebProxy($"{scheme}://{proxy.Host}:{proxy.Port}");
+                if (proxy.Auth == ProxyAuthType.UserPassword)
+                    handler.Proxy.Credentials = new NetworkCredential(proxy.Username, proxy.Password);
+                handler.UseProxy = true;
             }
+
+            var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
+            http.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
+            http.DefaultRequestHeaders.AcceptLanguage.ParseAdd("it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7");
+            http.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+            http.DefaultRequestHeaders.Add("Sec-Fetch-Dest", "document");
+            http.DefaultRequestHeaders.Add("Sec-Fetch-Mode", "navigate");
+            http.DefaultRequestHeaders.Add("Sec-Fetch-Site", "none");
+            http.DefaultRequestHeaders.Add("Sec-Fetch-User", "?1");
+            http.DefaultRequestHeaders.Add("Upgrade-Insecure-Requests", "1");
+            http.DefaultRequestHeaders.Add("Sec-CH-UA", "\"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"");
+            http.DefaultRequestHeaders.Add("Sec-CH-UA-Mobile", "?0");
+            http.DefaultRequestHeaders.Add("Sec-CH-UA-Platform", "\"Windows\"");
+
+            _http?.Dispose();
+            _http = http;
+            _httpHandler = handler;
+            _httpProxyKey = key;
+            return (http, handler);
         }
+    }
+
+    /// <summary>
+    /// Dopo un 403: apre la home con Playwright (supera la verifica anti-bot) e copia i cookie
+    /// nell'HttpClient. Le pagine lette in parallelo che ricevono 403 insieme lo fanno una volta sola.
+    /// </summary>
+    private async Task WarmUpAsync(DateTime failedAt, CancellationToken ct)
+    {
+        await _warmUpLock.WaitAsync(ct);
+        try
+        {
+            if (_warmedUpAt >= failedAt) return;
+
+            _logger.LogInformation("[LOONEX] 403 dal sito: apro la home col browser per ottenere i cookie...");
+            var context = await GetBrowserContextAsync();
+            var page = await context.NewPageAsync();
+            try
+            {
+                await page.GotoAsync(Root + "/", new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle, Timeout = 30000 });
+                await page.WaitForTimeoutAsync(3000);
+
+                var cookies = await context.CookiesAsync([Root]);
+                var (_, handler) = EnsureHttp();
+                var uri = new Uri(Root);
+                foreach (var c in cookies)
+                {
+                    try { handler.CookieContainer.Add(uri, new System.Net.Cookie(c.Name, c.Value, c.Path, c.Domain)); }
+                    catch (CookieException) { }
+                }
+                _logger.LogInformation("[LOONEX] Cookie del browser copiati: {Count}", cookies.Count);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "[LOONEX] Apertura della home col browser fallita");
+            }
+            finally
+            {
+                try { await page.CloseAsync(); } catch { }
+            }
+            _warmedUpAt = DateTime.UtcNow;
+        }
+        finally { _warmUpLock.Release(); }
+    }
+
+    private async Task<HttpResponseMessage> SendGetAsync(string url, CancellationToken ct)
+    {
+        var (http, _) = EnsureHttp();
+        using var req = new HttpRequestMessage(HttpMethod.Get, url);
+        req.Headers.Referrer = new Uri(Root + "/");
+        return await http.SendAsync(req, ct);
     }
 
     private async Task<string> GetHtmlAsync(string url, CancellationToken ct)
     {
-        using var resp = await Http.GetAsync(url, ct);
-        resp.EnsureSuccessStatusCode();
-        return await resp.Content.ReadAsStringAsync(ct);
+        var sentAt = DateTime.UtcNow;
+        var resp = await SendGetAsync(url, ct);
+        if (resp.StatusCode == HttpStatusCode.Forbidden)
+        {
+            resp.Dispose();
+            await WarmUpAsync(sentAt, ct);
+            resp = await SendGetAsync(url, ct);
+        }
+        using (resp)
+        {
+            resp.EnsureSuccessStatusCode();
+            return await resp.Content.ReadAsStringAsync(ct);
+        }
     }
 
     /// <summary>Pagina di una scheda (anche 2-3 MB): in cache per non riscaricarla a ogni cambio stagione.</summary>
@@ -553,6 +626,38 @@ public sealed class LoonexService : ILoonexService
         {
             try { await page.CloseAsync(); } catch { }
         }
+    }
+
+    // ============================================================
+    //  COOKIE EXPORT (per yt-dlp / FFmpeg)
+    // ============================================================
+
+    public async Task<string?> GetSessionCookiesNetscapeAsync(CancellationToken ct = default)
+    {
+        await _browserLock.WaitAsync(ct);
+        try
+        {
+            if (_context == null) return null;
+            // Tutti i domini: servono anche quelli del CDN della playlist, non solo di loonex
+            var cookies = await _context.CookiesAsync();
+            if (cookies.Count == 0) return null;
+
+            var sb = new StringBuilder();
+            sb.AppendLine("# Netscape HTTP Cookie File");
+            foreach (var c in cookies)
+            {
+                var domain = c.Domain.StartsWith('.') ? c.Domain : "." + c.Domain;
+                var expiry = c.Expires > 0 ? (long)c.Expires : DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds();
+                sb.AppendLine($"{domain}\tTRUE\t{c.Path}\t{(c.Secure ? "TRUE" : "FALSE")}\t{expiry}\t{c.Name}\t{c.Value}");
+            }
+            return sb.ToString();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[LOONEX] Impossibile esportare i cookie");
+            return null;
+        }
+        finally { _browserLock.Release(); }
     }
 
     // ============================================================
